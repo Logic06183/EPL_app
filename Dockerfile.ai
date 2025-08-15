@@ -1,0 +1,19 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements_ai.txt .
+RUN pip install --no-cache-dir -r requirements_ai.txt
+
+# Copy application
+COPY api_ai_enhanced.py .
+
+# Set environment variables (will be overridden by Cloud Run)
+ENV PORT=8080
+ENV GOOGLE_API_KEY=""
+
+EXPOSE 8080
+
+# Start the server
+CMD exec uvicorn api_ai_enhanced:app --host 0.0.0.0 --port ${PORT}

@@ -6,7 +6,8 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:8000/:path*',
+        // Temporarily using localhost - will update with Cloud Run URL
+        destination: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/:path*',
       },
     ]
   },
