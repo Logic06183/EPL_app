@@ -1,0 +1,13 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Copy only what we need
+COPY requirements_cloud.txt .
+RUN pip install --no-cache-dir -r requirements_cloud.txt
+
+COPY api_lightweight.py .
+
+EXPOSE 8080
+
+CMD ["uvicorn", "api_lightweight:app", "--host", "0.0.0.0", "--port", "8080"]

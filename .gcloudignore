@@ -1,0 +1,53 @@
+# This file specifies files that are *not* uploaded to Google Cloud
+# using gcloud. It follows the same syntax as .gitignore
+
+.gcloudignore
+.git
+.gitignore
+
+# Python pycache:
+__pycache__/
+*.pyc
+
+# Environments
+venv/
+env/
+ENV/
+
+# Node modules (for frontend)
+node_modules/
+frontend/node_modules/
+frontend/.next/
+
+# Local data
+*.db
+*.log
+logs/
+data/cache/
+data/local_fpl.db
+
+# Models (too large, will need to handle separately)
+models/pytorch_model.pth
+*.pkl
+
+# Tests
+tests/
+pytest.ini
+test_*.py
+
+# Documentation
+*.md
+README.md
+
+# Frontend (deployed separately)
+frontend/
+mobile/
+web/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
