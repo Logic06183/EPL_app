@@ -144,21 +144,34 @@ export default function PlayerPredictionsEPL() {
             </select>
           </div>
 
-          {/* AI Toggle */}
+          {/* AI Enhancement Toggle */}
           <div className="space-y-2">
-            <label className="text-white font-medium text-sm uppercase tracking-wide">Analysis</label>
-            <label className="flex items-center space-x-3 p-3 rounded-lg bg-white/10 border border-green-400/30 cursor-pointer hover:bg-white/20 transition-colors">
-              <input
-                type="checkbox"
-                checked={useAI}
-                onChange={(e) => setUseAI(e.target.checked)}
-                className="w-5 h-5 text-green-400 bg-transparent border-2 border-green-400 rounded focus:ring-green-400"
-              />
-              <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4" />
-                <span>AI Enhanced</span>
+            <label className="text-white font-medium text-sm uppercase tracking-wide">AI Mode</label>
+            <button
+              onClick={() => setUseAI(!useAI)}
+              className={`w-full p-3 rounded-lg font-medium transition-all duration-300 border-2 ${
+                useAI 
+                  ? 'bg-gradient-to-r from-purple-500 to-indigo-500 border-purple-400 text-white shadow-lg' 
+                  : 'bg-white/10 border-white/30 text-white/70 hover:bg-white/20'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                {useAI ? (
+                  <>
+                    <span className="text-lg">🤖</span>
+                    <span>AI Enhanced</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-lg">📊</span>
+                    <span>Standard</span>
+                  </>
+                )}
               </div>
-            </label>
+              <div className="text-xs mt-1 opacity-80">
+                {useAI ? 'Machine Learning Active' : 'Click to Enable AI'}
+              </div>
+            </button>
           </div>
 
           {/* Refresh Button */}
