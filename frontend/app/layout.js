@@ -1,21 +1,23 @@
 import './globals.css'
+import './epl-theme.css'
 import { Inter } from 'next/font/google'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'FPL Prediction Dashboard',
-  description: 'AI-Powered Fantasy Premier League Optimization and Predictions',
-  keywords: 'FPL, Fantasy Premier League, AI, predictions, optimization, football',
+  title: 'FPL AI Pro - Premier League Predictions',
+  description: 'AI-Powered Fantasy Premier League predictions and optimization with real-time data',
+  keywords: 'FPL, Fantasy Premier League, AI, predictions, optimization, football, EPL',
 }
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="⚽" />
+      </head>
       <body className={inter.className}>
-        <div className="min-h-screen bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500">
-          {children}
-        </div>
+        {children}
       </body>
     </html>
   )

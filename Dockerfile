@@ -1,26 +1,16 @@
-# Use Python slim image for smaller size
 FROM python:3.9-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+# Copy AI requirements
+COPY requirements_ai_simple.txt .
+RUN pip install --no-cache-dir -r requirements_ai_simple.txt
 
-# Copy requirements first for better caching
-COPY requirements_local.txt .
+# Copy the enhanced API
+COPY api_enhanced_final.py .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements_local.txt
+ENV PORT=8080
 
-# Copy application code
-COPY . .
+EXPOSE 8080
 
-# Expose port
-EXPOSE 8000
-
-# Start the FastAPI server
-CMD ["python", "-m", "uvicorn", "src.api.local_main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD exec uvicorn api_enhanced_final:app --host 0.0.0.0 --port $PORT

@@ -6,8 +6,8 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        // Temporarily using localhost - will update with Cloud Run URL
-        destination: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/:path*',
+        // Using US region for now - will migrate to Africa region once deployed
+        destination: process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app/:path*',
       },
     ]
   },
