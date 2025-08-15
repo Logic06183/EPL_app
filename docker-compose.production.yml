@@ -1,0 +1,55 @@
+# Production deployment with Redis and optimizations
+version: '3.8'
+
+services:
+  # Main API service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - HOST=0.0.0.0
+      - PORT=8000
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - fpl-network
+    volumes:
+      - ./logs:/app/logs
+
+  # Redis for caching (optimized for SA latency)
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - fpl-network
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/out:/usr/share/nginx/html/frontend:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - fpl-network
+
+volumes:
+  redis_data:
+
+networks:
+  fpl-network:
+    driver: bridge
