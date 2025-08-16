@@ -10,21 +10,65 @@ export default function PlayerPredictionsEPL() {
   const [topN, setTopN] = useState(20)
   const [useAI, setUseAI] = useState(false)
   const [filter, setFilter] = useState('all')
+  const [modelType, setModelType] = useState('basic')
+  const [availableModels, setAvailableModels] = useState({})
+
+  useEffect(() => {
+    fetchAvailableModels()
+  }, [])
 
   useEffect(() => {
     fetchPredictions()
-  }, [topN, useAI])
+  }, [topN, useAI, modelType])
+
+  const fetchAvailableModels = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/models/available`)
+      console.log('Models API response status:', response.status)
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Available models data:', data)
+        setAvailableModels(data.available_models || {})
+      } else {
+        console.error('Models API failed:', response.status, response.statusText)
+      }
+    } catch (error) {
+      console.error('Error fetching available models:', error)
+    }
+  }
 
   const fetchPredictions = async () => {
     setLoading(true)
     setError(null)
     
     try {
-      const response = await fetch(`http://localhost:8001/api/players/predictions?top_n=${topN}&use_ai=${useAI}`)
+      const params = new URLSearchParams({
+        top_n: topN,
+        use_ai: useAI || modelType !== 'basic',
+        model_type: modelType
+      })
+      
+      const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/players/predictions?${params}`
+      console.log('Fetching predictions from:', url)
+      
+      const controller = new AbortController()
+      // Longer timeout for ML model predictions (30 seconds)
+      const timeoutDuration = (modelType !== 'basic') ? 30000 : 10000
+      const timeoutId = setTimeout(() => controller.abort(), timeoutDuration)
+      
+      const response = await fetch(url, {
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
+      console.log('Response status:', response.status, response.statusText)
+      
       if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Error response body:', errorText)
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
       const data = await response.json()
+      console.log('Predictions data:', data)
       setPredictions(data.predictions || [])
     } catch (error) {
       console.error('Error fetching predictions:', error)
@@ -112,7 +156,7 @@ export default function PlayerPredictionsEPL() {
         </div>
 
         {/* Controls Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           {/* Top N Players */}
           <div className="space-y-2">
             <label className="text-white font-medium text-sm uppercase tracking-wide">Show Top</label>
@@ -144,22 +188,56 @@ export default function PlayerPredictionsEPL() {
             </select>
           </div>
 
+          {/* AI Model Selection */}
+          <div className="space-y-2">
+            <label className="text-white font-medium text-sm uppercase tracking-wide">AI Model</label>
+            <select 
+              value={modelType} 
+              onChange={(e) => setModelType(e.target.value)}
+              className="w-full p-3 rounded-lg bg-white/20 text-white border border-green-400/30 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 backdrop-blur-lg"
+            >
+              <option value="basic" className="text-black">Basic (Form-based)</option>
+              {Object.keys(availableModels).length > 0 ? (
+                <>
+                  {availableModels.random_forest?.available && (
+                    <option value="random_forest" className="text-black">🌲 Random Forest ML</option>
+                  )}
+                  {availableModels.deep_learning?.available && (
+                    <option value="deep_learning" className="text-black">🧠 Deep Learning CNN</option>
+                  )}
+                  {availableModels.ensemble?.available && (
+                    <option value="ensemble" className="text-black">🚀 Multi-Model Ensemble</option>
+                  )}
+                </>
+              ) : (
+                <>
+                  <option value="random_forest" className="text-black">🌲 Random Forest ML</option>
+                  <option value="deep_learning" className="text-black">🧠 Deep Learning CNN</option>
+                  <option value="ensemble" className="text-black">🚀 Multi-Model Ensemble</option>
+                </>
+              )}
+            </select>
+            <div className="text-xs text-white/60">
+              {availableModels[modelType]?.accuracy || 'Standard accuracy'}
+            </div>
+          </div>
+
           {/* AI Enhancement Toggle */}
           <div className="space-y-2">
             <label className="text-white font-medium text-sm uppercase tracking-wide">AI Mode</label>
             <button
               onClick={() => setUseAI(!useAI)}
               className={`w-full p-3 rounded-lg font-medium transition-all duration-300 border-2 ${
-                useAI 
+                useAI || modelType !== 'basic'
                   ? 'bg-gradient-to-r from-purple-500 to-indigo-500 border-purple-400 text-white shadow-lg' 
                   : 'bg-white/10 border-white/30 text-white/70 hover:bg-white/20'
               }`}
             >
               <div className="flex items-center justify-center gap-2">
-                {useAI ? (
+                {useAI || modelType !== 'basic' ? (
                   <>
                     <span className="text-lg">🤖</span>
-                    <span>AI Enhanced</span>
+                    <span>AI Active</span>
                   </>
                 ) : (
                   <>
@@ -169,7 +247,7 @@ export default function PlayerPredictionsEPL() {
                 )}
               </div>
               <div className="text-xs mt-1 opacity-80">
-                {useAI ? 'Machine Learning Active' : 'Click to Enable AI'}
+                {modelType !== 'basic' ? availableModels[modelType]?.name : 'Click to Enable AI'}
               </div>
             </button>
           </div>

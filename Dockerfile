@@ -23,6 +23,7 @@ COPY api_production.py .
 COPY sportmonks_integration.py .
 COPY paystack_integration.py .
 COPY news_sentiment_analyzer.py .
+COPY multi_model_predictor.py .
 
 # Set environment variables for production
 ENV NEWS_API_KEY=e36350769b6341bb81b832a84442e6ad
@@ -34,4 +35,3 @@ EXPOSE 8080
 
 # Run the application
 CMD ["python", "-m", "uvicorn", "api_production:app", "--host", "0.0.0.0", "--port", "8080"]
-EOF < /dev/null

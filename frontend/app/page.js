@@ -7,7 +7,7 @@ import SquadOptimizer from '../components/SquadOptimizer'
 import PlayerAnalysisEnhanced from '../components/PlayerAnalysisEnhanced'
 import GameweekInfo from '../components/GameweekInfo'
 import PaymentModal from '../components/PaymentModal'
-import LiveScores from '../components/LiveScores'
+import LiveScoresEPL from '../components/LiveScoresEPL'
 import MLMethodology from '../components/MLMethodology'
 
 export default function EPLDashboard() {
@@ -78,7 +78,7 @@ export default function EPLDashboard() {
       case 'predictions':
         return <PlayerPredictionsEPL />
       case 'live':
-        return <LiveScores />
+        return <LiveScoresEPL />
       case 'optimizer':
         return <SquadOptimizer />
       case 'analysis':

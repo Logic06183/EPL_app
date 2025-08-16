@@ -8,14 +8,9 @@ const nextConfig = {
   images: {
     unoptimized: true
   },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'https://epl-backend-77913915885.us-central1.run.app/:path*',
-      },
-    ]
-  },
+  env: {
+    NEXT_PUBLIC_API_URL: 'https://epl-backend-77913915885.us-central1.run.app'
+  }
 }
 
 module.exports = nextConfig
