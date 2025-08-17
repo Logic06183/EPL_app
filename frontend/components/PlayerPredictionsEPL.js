@@ -24,7 +24,7 @@ export default function PlayerPredictionsEPL() {
 
   const fetchAvailableModels = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/models/available`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/models/available`)
       console.log('Models API response status:', response.status)
       if (response.ok) {
         const data = await response.json()
@@ -55,7 +55,7 @@ export default function PlayerPredictionsEPL() {
         model_type: actualModelType
       })
       
-      const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/players/predictions?${params}`
+      const url = `${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/players/predictions?${params}`
       console.log('Fetching predictions from:', url)
       
       const controller = new AbortController()

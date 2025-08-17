@@ -20,7 +20,7 @@ export default function GameweekInfo() {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/gameweek/current`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/gameweek/current`, {
         signal: controller.signal
       })
       clearTimeout(timeoutId)

@@ -20,7 +20,7 @@ export default function PredictionTracker() {
 
   const fetchCurrentGameweek = async () => {
     try {
-      const response = await fetch('http://localhost:8001/api/gameweek/current')
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/gameweek/current`)
       if (response.ok) {
         const data = await response.json()
         setCurrentGameweek(data)

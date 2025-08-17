@@ -10,30 +10,57 @@ export default function HybridForecaster() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    console.log('🏁 HybridForecaster component mounted - starting prediction fetch')
     fetchMatchPredictions()
+    
+    // Also try fetching after a short delay in case of timing issues
+    const timer = setTimeout(() => {
+      if (predictions.length === 0 && !loading) {
+        console.log('⏰ Backup fetch triggered after 2 seconds')
+        fetchMatchPredictions()
+      }
+    }, 2000)
+    
+    return () => clearTimeout(timer)
   }, [])
 
   const fetchMatchPredictions = async () => {
+    console.log('🚀 fetchMatchPredictions called - setting loading to true')
     setLoading(true)
     setError(null)
     
     try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'
+      const fullUrl = `${apiUrl}/api/match-predictions?limit=8`
+      console.log('🔍 Fetching predictions from:', fullUrl)
+      console.log('📊 Environment API URL:', process.env.NEXT_PUBLIC_API_URL)
+      console.log('📊 Actual API URL used:', apiUrl)
+      
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout for AI analysis
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'}/api/match-predictions?limit=8`, {
-        signal: controller.signal
+      const response = await fetch(fullUrl, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
       })
       clearTimeout(timeoutId)
+      
+      console.log('📊 Response status:', response.status, response.statusText)
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
       
       const data = await response.json()
+      console.log('✅ Predictions received:', data.predictions?.length || 0, 'matches')
+      console.log('📋 Full response:', data)
+      console.log('📊 Setting predictions to:', data.predictions)
       setPredictions(data.predictions || [])
     } catch (error) {
-      console.error('Error fetching hybrid predictions:', error)
+      console.error('❌ Error fetching hybrid predictions:', error)
       setError(error.message)
     } finally {
       setLoading(false)
@@ -45,7 +72,7 @@ export default function HybridForecaster() {
     
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'}/api/hybrid-forecast/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}?match_date=${encodeURIComponent(matchDate)}`
+        `${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/hybrid-forecast/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}?match_date=${encodeURIComponent(matchDate)}`
       )
       
       if (!response.ok) {
@@ -130,6 +157,20 @@ export default function HybridForecaster() {
               <Brain className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-3xl font-bold text-white">🔮 Hybrid AI Forecaster</h2>
+            {predictions.length === 0 && !loading && !error && (
+              <button 
+                onClick={() => {
+                  console.log('🔄 Force refresh triggered by user')
+                  fetchMatchPredictions()
+                }}
+                className="ml-4 px-3 py-1 bg-blue-500 text-white text-sm rounded animate-pulse"
+              >
+                🔄 Debug Refresh
+              </button>
+            )}
+            <div className="ml-4 text-xs text-white/50">
+              {loading ? 'Loading...' : error ? 'Error' : predictions.length > 0 ? `${predictions.length} predictions` : 'No data'}
+            </div>
           </div>
           <p className="text-white/80 text-lg text-center">
             Advanced match predictions combining statistical models with contextual AI analysis
@@ -162,6 +203,9 @@ export default function HybridForecaster() {
           <div className="stat-card-epl">
             <div className="text-2xl font-bold text-purple-400 mb-1">{predictions.length}</div>
             <div className="text-white/70 text-sm">Matches Analyzed</div>
+            <div className="text-xs text-purple-300 mt-1">
+              {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
+            </div>
           </div>
           <div className="stat-card-epl">
             <div className="text-2xl font-bold text-green-400 mb-1">

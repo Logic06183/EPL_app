@@ -1,0 +1,47 @@
+# Page snapshot
+
+```yaml
+- img
+- heading "⚽ FPL AI Pro" [level=1]
+- text: Premier League • Predictions • Performance
+- paragraph: Advanced Fantasy Premier League predictions powered by artificial intelligence. Get real player insights, optimal squad suggestions, and live gameweek data.
+- text: ❌ Offline 500+ Players 87% Accuracy 2.5K+ Users 15K+ Predictions ⚽
+- button "Top Players AI-powered player predictions and rankings":
+  - img
+  - text: Top Players AI-powered player predictions and rankings
+- button "Live Scores Real-time matches and league standings":
+  - img
+  - text: Live Scores Real-time matches and league standings
+- button "Squad Builder Build the perfect squad within budget and formation":
+  - img
+  - text: Squad Builder Build the perfect squad within budget and formation
+- button "Player Intel Deep dive analysis with comprehensive statistics":
+  - img
+  - text: Player Intel Deep dive analysis with comprehensive statistics
+- button "Live Info Current gameweek status and key information":
+  - img
+  - text: Live Info Current gameweek status and key information
+- button "AI Forecaster Advanced match predictions with contextual AI":
+  - img
+  - text: AI Forecaster Advanced match predictions with contextual AI
+- button "Prediction Tracker Track prediction accuracy and model improvements":
+  - img
+  - text: Prediction Tracker Track prediction accuracy and model improvements
+- img
+- heading "AI/ML Methodology" [level=3]
+- paragraph: How our predictions work
+- text: 85-90% Accuracy
+- img
+- img
+- heading "Analysis Error" [level=3]
+- paragraph: signal is aborted without reason
+- button "Retry Analysis"
+- img
+- text: FPL AI Pro
+- paragraph: Powered by real-time FPL data, machine learning algorithms, and Google's Gemini AI. Built for managers who want to dominate their leagues.
+- text: 🏆 Premier League • 🤖 AI Powered • ⚡ Real-time Data
+- button "Upgrade to Pro - From $9.99/month":
+  - img
+  - text: Upgrade to Pro - From $9.99/month
+- alert
+```

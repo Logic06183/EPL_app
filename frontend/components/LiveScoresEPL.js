@@ -26,7 +26,7 @@ export default function LiveScoresEPL() {
 
   const fetchGameweekInfo = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/gameweek/current`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/gameweek/current`)
       if (response.ok) {
         const data = await response.json()
         setGameweekInfo(data)
@@ -41,7 +41,7 @@ export default function LiveScoresEPL() {
     setError(null)
     
     try {
-      const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/fixtures?filter=${filterType}`
+      const url = `${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/fixtures?filter=${filterType}`
       console.log('Fetching fixtures from:', url)
       
       const controller = new AbortController()

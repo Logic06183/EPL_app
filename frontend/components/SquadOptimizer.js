@@ -20,7 +20,7 @@ export default function SquadOptimizer() {
       // Get formation constraints
       const formation = formations.find(f => f.name === selectedFormation)
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/optimize/squad`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/optimize/squad`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
