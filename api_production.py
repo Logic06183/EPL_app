@@ -1212,11 +1212,14 @@ async def get_upcoming_match_predictions(limit: int = 10):
         teams = {team["id"]: team for team in bootstrap_data.get("teams", [])}
         
         # Filter for upcoming fixtures
-        now = datetime.utcnow()
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
         upcoming_fixtures = []
         
         for fixture in all_fixtures:
             try:
+                if not fixture.get("kickoff_time"):
+                    continue
                 kickoff_time = datetime.fromisoformat(fixture["kickoff_time"].replace('Z', '+00:00'))
                 if kickoff_time > now and not fixture.get("finished", False):
                     fixture["team_h_name"] = teams.get(fixture["team_h"], {}).get("name", f"Team {fixture['team_h']}")
