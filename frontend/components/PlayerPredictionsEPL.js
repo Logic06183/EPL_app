@@ -12,6 +12,7 @@ export default function PlayerPredictionsEPL() {
   const [filter, setFilter] = useState('all')
   const [modelType, setModelType] = useState('basic')
   const [availableModels, setAvailableModels] = useState({})
+  const [userTier, setUserTier] = useState('free') // 'free', 'basic', 'premium'
 
   useEffect(() => {
     fetchAvailableModels()
@@ -42,10 +43,16 @@ export default function PlayerPredictionsEPL() {
     setError(null)
     
     try {
+      // Restrict AI models based on user tier
+      let actualModelType = modelType
+      if (userTier === 'free' && modelType !== 'basic') {
+        actualModelType = 'basic'
+      }
+      
       const params = new URLSearchParams({
         top_n: topN,
-        use_ai: useAI || modelType !== 'basic',
-        model_type: modelType
+        use_ai: useAI || actualModelType !== 'basic',
+        model_type: actualModelType
       })
       
       const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/players/predictions?${params}`
@@ -155,6 +162,40 @@ export default function PlayerPredictionsEPL() {
           <p className="text-white/80 text-lg">AI-powered insights for Fantasy Premier League success</p>
         </div>
 
+        {/* Subscription Tier Notice */}
+        <div className="bg-white/5 rounded-xl p-4 mb-6 border border-white/10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="text-2xl">
+                {userTier === 'free' && '📊'}
+                {userTier === 'basic' && '🤖'}
+                {userTier === 'premium' && '🚀'}
+              </div>
+              <div>
+                <h3 className="text-white font-semibold">
+                  {userTier === 'free' && 'Free Tier - Basic Predictions'}
+                  {userTier === 'basic' && 'Basic Tier - AI Enhanced'}
+                  {userTier === 'premium' && 'Premium Tier - Advanced AI'}
+                </h3>
+                <p className="text-white/70 text-sm">
+                  {userTier === 'free' && 'Form-based predictions available. Upgrade for AI models.'}
+                  {userTier === 'basic' && 'AI predictions and Random Forest model available.'}
+                  {userTier === 'premium' && 'All AI models including Deep Learning and Ensemble.'}
+                </p>
+              </div>
+            </div>
+            <select 
+              value={userTier} 
+              onChange={(e) => setUserTier(e.target.value)}
+              className="p-2 rounded-lg bg-white/20 text-white border border-white/30 focus:border-white/50 text-sm"
+            >
+              <option value="free" className="text-black">📊 Free</option>
+              <option value="basic" className="text-black">🤖 Basic</option>
+              <option value="premium" className="text-black">🚀 Premium</option>
+            </select>
+          </div>
+        </div>
+
         {/* Controls Grid */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           {/* Top N Players */}
@@ -196,29 +237,32 @@ export default function PlayerPredictionsEPL() {
               onChange={(e) => setModelType(e.target.value)}
               className="w-full p-3 rounded-lg bg-white/20 text-white border border-green-400/30 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 backdrop-blur-lg"
             >
-              <option value="basic" className="text-black">Basic (Form-based)</option>
-              {Object.keys(availableModels).length > 0 ? (
+              <option value="basic" className="text-black">📊 Basic (Form-based) - FREE</option>
+              
+              {userTier !== 'free' && (
+                <option value="random_forest" className="text-black">🌲 Random Forest ML - BASIC+</option>
+              )}
+              {userTier === 'free' && (
+                <option value="random_forest" className="text-black" disabled>🌲 Random Forest ML - UPGRADE REQUIRED</option>
+              )}
+              
+              {userTier === 'premium' && (
                 <>
-                  {availableModels.random_forest?.available && (
-                    <option value="random_forest" className="text-black">🌲 Random Forest ML</option>
-                  )}
-                  {availableModels.deep_learning?.available && (
-                    <option value="deep_learning" className="text-black">🧠 Deep Learning CNN</option>
-                  )}
-                  {availableModels.ensemble?.available && (
-                    <option value="ensemble" className="text-black">🚀 Multi-Model Ensemble</option>
-                  )}
+                  <option value="deep_learning" className="text-black">🧠 Deep Learning CNN - PREMIUM</option>
+                  <option value="ensemble" className="text-black">🚀 Multi-Model Ensemble - PREMIUM</option>
                 </>
-              ) : (
+              )}
+              {userTier !== 'premium' && (
                 <>
-                  <option value="random_forest" className="text-black">🌲 Random Forest ML</option>
-                  <option value="deep_learning" className="text-black">🧠 Deep Learning CNN</option>
-                  <option value="ensemble" className="text-black">🚀 Multi-Model Ensemble</option>
+                  <option value="deep_learning" className="text-black" disabled>🧠 Deep Learning CNN - PREMIUM ONLY</option>
+                  <option value="ensemble" className="text-black" disabled>🚀 Multi-Model Ensemble - PREMIUM ONLY</option>
                 </>
               )}
             </select>
             <div className="text-xs text-white/60">
-              {availableModels[modelType]?.accuracy || 'Standard accuracy'}
+              {userTier === 'free' && modelType !== 'basic' && '🔒 Upgrade required for this model'}
+              {userTier === 'basic' && ['deep_learning', 'ensemble'].includes(modelType) && '🔒 Premium required for this model'}
+              {(userTier !== 'free' || modelType === 'basic') && (availableModels[modelType]?.accuracy || 'Standard accuracy')}
             </div>
           </div>
 

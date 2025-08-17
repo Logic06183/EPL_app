@@ -1,35 +1,82 @@
 # Production Dockerfile optimized for deployment
-FROM python:3.11-slim
+FROM python:3.11-slim as builder
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements first for better caching
+# Copy requirements and install dependencies
 COPY requirements_production.txt .
+RUN pip install --no-cache-dir --user -r requirements_production.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements_production.txt
+# Production stage
+FROM python:3.11-slim as production
 
-# Copy application code
+# Install curl for health checks
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy installed packages from builder
+COPY --from=builder /root/.local /root/.local
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code and dependencies
 COPY api_production.py .
-COPY .env* ./
+COPY security_utils.py .
+COPY performance_utils.py .
+COPY sportmonks_integration.py .
+COPY paystack_integration.py .
+COPY hybrid_forecaster_enhanced.py .
+COPY gemini_integration.py .
+COPY .env.example .
+
+# Create necessary directories
+RUN mkdir -p logs data/cache
 
 # Create non-root user for security
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+RUN groupadd -r appgroup && useradd -r -g appgroup -u 1000 appuser \
+    && chown -R appuser:appgroup /app \
+    && chmod -R 755 /app
+
+# Switch to non-root user
 USER appuser
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+# Make sure ~/.local/bin is in PATH
+ENV PATH=/root/.local/bin:$PATH
+
+# Health check with better configuration
+HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV ENVIRONMENT=production
+ENV LOG_LEVEL=INFO
 
 # Expose port
 EXPOSE 8000
 
-# Run with gunicorn for production
-CMD ["gunicorn", "api_production:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--timeout", "120"]
+# Run with optimized gunicorn configuration
+CMD ["gunicorn", "api_production:app", \
+     "-w", "4", \
+     "-k", "uvicorn.workers.UvicornWorker", \
+     "--bind", "0.0.0.0:8000", \
+     "--timeout", "120", \
+     "--keep-alive", "5", \
+     "--max-requests", "1000", \
+     "--max-requests-jitter", "100", \
+     "--preload", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--log-level", "info"]

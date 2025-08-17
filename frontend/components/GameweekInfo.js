@@ -17,7 +17,14 @@ export default function GameweekInfo() {
     setError(null)
     
     try {
-      const response = await fetch('/api/gameweek/current')
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/gameweek/current`, {
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
+      
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }

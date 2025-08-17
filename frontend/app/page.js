@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Activity, Trophy, TrendingUp, Users, Zap, Target, Calendar, Crown, Star } from 'lucide-react'
+import { Activity, Trophy, TrendingUp, Users, Zap, Target, Calendar, Crown, Star, Brain } from 'lucide-react'
 import PlayerPredictionsEPL from '../components/PlayerPredictionsEPL'
 import SquadOptimizer from '../components/SquadOptimizer'
 import PlayerAnalysisEnhanced from '../components/PlayerAnalysisEnhanced'
@@ -9,6 +9,8 @@ import GameweekInfo from '../components/GameweekInfo'
 import PaymentModal from '../components/PaymentModal'
 import LiveScoresEPL from '../components/LiveScoresEPL'
 import MLMethodology from '../components/MLMethodology'
+import HybridForecaster from '../components/HybridForecaster'
+import PredictionTracker from '../components/PredictionTracker'
 
 export default function EPLDashboard() {
   const [activeTab, setActiveTab] = useState('predictions')
@@ -45,31 +47,78 @@ export default function EPLDashboard() {
       id: 'predictions', 
       name: 'Top Players', 
       icon: TrendingUp, 
-      description: 'AI-powered player predictions and rankings'
+      description: 'AI-powered player predictions and rankings',
+      benefits: [
+        'Identifies highest-scoring players for each gameweek',
+        'Uses form, fixtures, and sentiment analysis',
+        'Provides confidence scores for each prediction'
+      ]
     },
     { 
       id: 'live', 
       name: 'Live Scores', 
       icon: Zap, 
-      description: 'Real-time matches and league standings'
+      description: 'Real-time matches and league standings',
+      benefits: [
+        'Track live matches and goal scorers',
+        'Monitor your players\' performance in real-time',
+        'Plan transfers based on live data'
+      ]
     },
     { 
       id: 'optimizer', 
       name: 'Squad Builder', 
       icon: Trophy, 
-      description: 'Optimize your team within budget constraints'
+      description: 'Build the perfect squad within budget and formation',
+      benefits: [
+        'Maximizes total points within budget constraints',
+        'Supports all FPL formations (3-5-2, 4-4-2, etc.)',
+        'Identifies value picks and optimal combinations'
+      ]
     },
     { 
       id: 'analysis', 
       name: 'Player Intel', 
       icon: Target, 
-      description: 'Deep dive analysis with AI insights'
+      description: 'Deep dive analysis with comprehensive statistics',
+      benefits: [
+        'Detailed performance metrics and trends',
+        'Fixture difficulty and upcoming opponents',
+        'Price change predictions and ownership data'
+      ]
     },
     { 
       id: 'gameweek', 
       name: 'Live Info', 
       icon: Calendar, 
-      description: 'Current gameweek status and deadlines'
+      description: 'Current gameweek status and key information',
+      benefits: [
+        'Never miss transfer deadlines',
+        'Track bonus points and price changes',
+        'Get gameweek-specific insights'
+      ]
+    },
+    { 
+      id: 'hybrid', 
+      name: 'AI Forecaster', 
+      icon: Brain, 
+      description: 'Advanced match predictions with contextual AI',
+      benefits: [
+        'Predicts match outcomes with high accuracy',
+        'Considers team news, injuries, and form',
+        'Helps plan captaincy and differential picks'
+      ]
+    },
+    { 
+      id: 'tracker', 
+      name: 'Prediction Tracker', 
+      icon: TrendingUp, 
+      description: 'Track prediction accuracy and model improvements',
+      benefits: [
+        'See how predictions compare to actual results',
+        'Track model accuracy improvements over time',
+        'Understand how data feeds back into better predictions'
+      ]
     },
   ]
 
@@ -85,6 +134,10 @@ export default function EPLDashboard() {
         return <PlayerAnalysisEnhanced />
       case 'gameweek':
         return <GameweekInfo />
+      case 'hybrid':
+        return <HybridForecaster />
+      case 'tracker':
+        return <PredictionTracker />
       default:
         return <PlayerPredictionsEPL />
     }

@@ -1,0 +1,129 @@
+# Page snapshot
+
+```yaml
+- img
+- heading "⚽ FPL AI Pro" [level=1]
+- text: Premier League • Predictions • Performance
+- paragraph: Advanced Fantasy Premier League predictions powered by artificial intelligence. Get real player insights, optimal squad suggestions, and live gameweek data.
+- text: 🤖 AI Enhanced 500+ Players 87% Accuracy 2.5K+ Users 15K+ Predictions ⚽
+- button "Top Players AI-powered player predictions and rankings":
+  - img
+  - text: Top Players AI-powered player predictions and rankings
+- button "Live Scores Real-time matches and league standings":
+  - img
+  - text: Live Scores Real-time matches and league standings
+- button "Squad Builder Optimize your team within budget constraints":
+  - img
+  - text: Squad Builder Optimize your team within budget constraints
+- button "Player Intel Deep dive analysis with AI insights":
+  - img
+  - text: Player Intel Deep dive analysis with AI insights
+- button "Live Info Current gameweek status and deadlines":
+  - img
+  - text: Live Info Current gameweek status and deadlines
+- button "AI Forecaster Hybrid AI match predictions with contextual analysis":
+  - img
+  - text: AI Forecaster Hybrid AI match predictions with contextual analysis
+- img
+- heading "AI/ML Methodology" [level=3]
+- paragraph: How our predictions work
+- text: 85-90% Accuracy
+- img
+- img
+- heading "🏆 Top Player Predictions" [level=2]
+- paragraph: AI-powered insights for Fantasy Premier League success
+- text: ⚽ Show Top
+- combobox:
+  - option "Top 10"
+  - option "Top 20" [selected]
+  - option "Top 50"
+  - option "Top 100"
+- text: Position
+- combobox:
+  - option "All Positions" [selected]
+  - option "Goalkeepers"
+  - option "Defenders"
+  - option "Midfielders"
+  - option "Forwards"
+- text: AI Model
+- combobox:
+  - option "Basic (Form-based)" [selected]
+  - option "🌲 Random Forest ML"
+  - option "🧠 Deep Learning CNN"
+  - option "🚀 Multi-Model Ensemble"
+- text: 70-75% AI Mode
+- button "📊 Standard Click to Enable AI"
+- text: Actions
+- button "Refresh Data":
+  - img
+  - text: Refresh Data
+- text: "20 Players Analyzed 0 AI Enhanced £129.5m Total Value 206 Total Points 🥇 #1 DEF Sunderland"
+- heading "Daniel Ballard" [level=3]
+- paragraph: Ballard
+- text: "16 Predicted Points 75% confident £4.5m Price 10 Form 1.2% Owned 🥈 #2 MID Bournemouth"
+- heading "Antoine Semenyo" [level=3]
+- paragraph: Semenyo
+- text: "15.2 Predicted Points 75% confident £7m Price 10 Form 7.5% Owned 🥉 #3 DEF Man City"
+- heading "Rico Lewis" [level=3]
+- paragraph: Lewis
+- text: "12.9 Predicted Points 75% confident £5m Price 10 Form 1.1% Owned #4 FWD Man City"
+- heading "Erling Haaland" [level=3]
+- paragraph: Haaland
+- text: "12.8 Predicted Points 75% confident £14m Price 10 Form 25% Owned #5 FWD Liverpool"
+- heading "Hugo Ekitiké" [level=3]
+- paragraph: Ekitiké
+- text: "11.7 Predicted Points 75% confident £8.5m Price 10 Form 17.5% Owned #6 FWD Spurs"
+- heading "Richarlison de Andrade" [level=3]
+- paragraph: Richarlison
+- text: "11 Predicted Points 75% confident £6.5m Price 10 Form 2.9% Owned #7 MID Man City"
+- heading "Tijjani Reijnders" [level=3]
+- paragraph: Reijnders
+- text: "10.1 Predicted Points 75% confident £5.5m Price 10 Form 21.9% Owned #8 DEF Newcastle"
+- heading "Dan Burn" [level=3]
+- paragraph: Burn
+- text: "10 Predicted Points 75% confident £5m Price 9 Form 3.8% Owned #9 GK Sunderland"
+- heading "Robin Roefs" [level=3]
+- paragraph: Roefs
+- text: "9.8 Predicted Points 75% confident £4.5m Price 8 Form 0.3% Owned #10 MID Brighton"
+- heading "Matt O'Riley" [level=3]
+- paragraph: O'Riley
+- text: "9.7 Predicted Points 75% confident £5.5m Price 10 Form 0.3% Owned #11 DEF Newcastle"
+- heading "Tino Livramento" [level=3]
+- paragraph: Livramento
+- text: "9.7 Predicted Points 75% confident £5m Price 9 Form 3.8% Owned #12 DEF Aston Villa"
+- heading "Matty Cash" [level=3]
+- paragraph: Cash
+- text: "9.2 Predicted Points 75% confident £4.5m Price 8 Form 2.6% Owned #13 MID Spurs"
+- heading "Mohammed Kudus" [level=3]
+- paragraph: Kudus
+- text: "9.2 Predicted Points 75% confident £6.5m Price 10 Form 25.5% Owned #14 MID Liverpool"
+- heading "Mohamed Salah" [level=3]
+- paragraph: M.Salah
+- text: "8.7 Predicted Points 75% confident £14.5m Price 8 Form 54.4% Owned #15 DEF Man City"
+- heading "Rayan Aït-Nouri" [level=3]
+- paragraph: Aït-Nouri
+- text: "8.7 Predicted Points 75% confident £6m Price 9 Form 21.2% Owned #16 DEF Spurs"
+- heading "Micky van de Ven" [level=3]
+- paragraph: Van de Ven
+- text: "8.6 Predicted Points 75% confident £4.5m Price 6 Form 27.8% Owned #17 GK Newcastle"
+- heading "Nick Pope" [level=3]
+- paragraph: Pope
+- text: "8.4 Predicted Points 75% confident £5m Price 9 Form 3.7% Owned #18 GK Spurs"
+- heading "Guglielmo Vicario" [level=3]
+- paragraph: Vicario
+- text: "8.1 Predicted Points 75% confident £5m Price 9 Form 4.3% Owned #19 MID Liverpool"
+- heading "Cody Gakpo" [level=3]
+- paragraph: Gakpo
+- text: "8 Predicted Points 75% confident £7.5m Price 7 Form 7.6% Owned #20 GK Man City"
+- heading "James Trafford" [level=3]
+- paragraph: Trafford
+- text: 7.9 Predicted Points 75% confident £5m Price 7 Form 2.1% Owned
+- img
+- text: FPL AI Pro
+- paragraph: Powered by real-time FPL data, machine learning algorithms, and Google's Gemini AI. Built for managers who want to dominate their leagues.
+- text: 🏆 Premier League • 🤖 AI Powered • ⚡ Real-time Data
+- button "Upgrade to Pro - From $9.99/month":
+  - img
+  - text: Upgrade to Pro - From $9.99/month
+- alert
+```

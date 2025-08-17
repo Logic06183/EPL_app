@@ -31,10 +31,10 @@ export default function PlayerAnalysisEnhanced() {
         setTrendingPlayers(trendingData.predictions || [])
       }
 
-      // Set popular searches
+      // Set popular searches - Updated for 2024/25 season
       setPopularSearches([
-        'Haaland', 'Salah', 'De Bruyne', 'Son', 'Kane', 'Rashford', 
-        'Saka', 'Martinelli', 'Foden', 'Bruno Fernandes'
+        'Haaland', 'Salah', 'De Bruyne', 'Son', 'Watkins', 'Rashford', 
+        'Saka', 'Martinelli', 'Foden', 'Bruno Fernandes', 'Palmer', 'Isak'
       ])
     } catch (error) {
       console.error('Error loading initial data:', error)
@@ -290,7 +290,7 @@ export default function PlayerAnalysisEnhanced() {
               </div>
             </div>
             <p className="text-white/60 text-sm mt-4">
-              Try searching: Haaland, Salah, De Bruyne, Son, Kane, Rashford
+              Try searching: Haaland, Salah, De Bruyne, Son, Watkins, Palmer, Isak
             </p>
           </div>
         </div>
@@ -509,7 +509,7 @@ export default function PlayerAnalysisEnhanced() {
               </div>
             </div>
             <div className="mt-6 text-sm text-white/60">
-              Try searching: Haaland, Salah, De Bruyne, Son, Kane, Rashford
+              Try searching: Haaland, Salah, De Bruyne, Son, Watkins, Palmer, Isak
             </div>
           </div>
         </div>
