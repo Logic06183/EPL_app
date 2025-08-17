@@ -19,12 +19,7 @@ export default function PlayerPredictions() {
     setError(null)
     
     try {
-      const response = await fetch(`http://localhost:8000/predictions`, {
-        headers: {
-          'Authorization': 'Bearer mock_local_token',
-          'Content-Type': 'application/json'
-        }
-      })
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/players/predictions/enhanced`)
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }

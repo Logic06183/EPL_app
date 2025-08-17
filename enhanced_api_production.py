@@ -13,6 +13,9 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import httpx
+import requests
+import pickle
+import torch
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -95,6 +98,11 @@ class EnhancedAIPredictor:
         
         # CNN Deep Learning (simplified version for production)
         self.cnn_available = False
+        self.cnn_model = None
+        self.pytorch_scaler = None
+        
+        # Model paths
+        self.model_dir = "models"
         
         # Sentiment Analyzer
         self.sentiment_analyzer = NewsSentimentAnalyzer() if NEWS_API_KEY else None
@@ -109,11 +117,69 @@ class EnhancedAIPredictor:
         # Gemini AI configuration (for deployment)
         self.gemini_enabled = os.getenv("GOOGLE_API_KEY") is not None or os.getenv("GEMINI_API_KEY") is not None
         
+        # Load saved models
+        self.load_saved_models()
+        
         logger.info(f"Enhanced AI Predictor initialized")
-        logger.info(f"  - Random Forest: Ready")
-        logger.info(f"  - CNN Deep Learning: {'Available' if self.cnn_available else 'Simplified'}")
+        logger.info(f"  - Random Forest: {'Loaded' if self.rf_trained else 'Ready'}")
+        logger.info(f"  - CNN Deep Learning: {'Loaded' if self.cnn_available else 'Simplified'}")
         logger.info(f"  - Sentiment Analysis: {'Enabled' if self.sentiment_analyzer else 'Disabled'}")
         logger.info(f"  - Gemini AI: {'Enabled' if self.gemini_enabled else 'Disabled'}")
+    
+    def load_saved_models(self):
+        """Load saved models from disk"""
+        try:
+            # Load PyTorch model and scaler
+            pytorch_model_path = os.path.join(self.model_dir, "pytorch_model.pth")
+            scaler_path = os.path.join(self.model_dir, "scaler.pkl")
+            
+            if os.path.exists(pytorch_model_path) and os.path.exists(scaler_path):
+                # Load scaler
+                with open(scaler_path, 'rb') as f:
+                    self.pytorch_scaler = pickle.load(f)
+                
+                # Load PyTorch model (simplified for production)
+                if torch.cuda.is_available():
+                    device = torch.device('cuda')
+                elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                    device = torch.device('mps')
+                else:
+                    device = torch.device('cpu')
+                
+                # Simple CNN model definition for loading
+                class SimpleCNN(torch.nn.Module):
+                    def __init__(self, input_size=7, sequence_length=10):
+                        super().__init__()
+                        self.conv1 = torch.nn.Conv1d(input_size, 64, kernel_size=3, padding=1)
+                        self.conv2 = torch.nn.Conv1d(64, 128, kernel_size=3, padding=1)
+                        self.dropout = torch.nn.Dropout(0.3)
+                        self.fc = torch.nn.Linear(128 * sequence_length, 1)
+                        
+                    def forward(self, x):
+                        x = torch.relu(self.conv1(x))
+                        x = torch.relu(self.conv2(x))
+                        x = self.dropout(x)
+                        x = x.view(x.size(0), -1)
+                        return self.fc(x)
+                
+                self.cnn_model = SimpleCNN()
+                state_dict = torch.load(pytorch_model_path, map_location=device)
+                
+                # Try to load the state dict, handling potential size mismatches
+                try:
+                    self.cnn_model.load_state_dict(state_dict)
+                    self.cnn_available = True
+                    logger.info("PyTorch CNN model loaded successfully")
+                except Exception as e:
+                    logger.warning(f"Could not load full PyTorch model: {e}")
+                    self.cnn_available = False
+                    
+            else:
+                logger.info("No saved PyTorch models found, will use simplified predictions")
+                
+        except Exception as e:
+            logger.error(f"Error loading saved models: {e}")
+            self.cnn_available = False
     
     def train_random_forest(self, player_data):
         """Train Random Forest model with enhanced features"""
@@ -232,11 +298,39 @@ class EnhancedAIPredictor:
                 rf_prediction = float(player_data.get("form", 5.0))
                 predictions['random_forest'] = rf_prediction
         
-        # 2. CNN Enhanced Prediction (simplified for production)
+        # 2. CNN Enhanced Prediction
         cnn_prediction = 0
-        if self.cnn_available:
-            # Would use actual CNN model here
-            cnn_prediction = rf_prediction * 1.05  # Placeholder enhancement
+        if self.cnn_available and self.cnn_model is not None:
+            try:
+                # Prepare features for CNN (simplified version)
+                features = np.array([
+                    float(player_data.get("form", 0)),
+                    float(player_data.get("now_cost", 0)) / 10,
+                    float(player_data.get("minutes", 0)) / 90,
+                    float(player_data.get("ict_index", 0)) / 100,
+                    float(player_data.get("selected_by_percent", 0)) / 100,
+                    float(player_data.get("total_points", 0)) / 100,
+                    float(player_data.get("element_type", 1))
+                ]).reshape(1, 7, 1)  # Reshape for CNN input
+                
+                # Create sequence (repeat current data for sequence)
+                sequence = np.repeat(features, 10, axis=2).transpose(0, 1, 2)
+                
+                # Convert to tensor and predict
+                with torch.no_grad():
+                    tensor_input = torch.FloatTensor(sequence)
+                    cnn_prediction = float(self.cnn_model(tensor_input).squeeze())
+                    cnn_prediction = max(0, cnn_prediction)
+                    
+                logger.debug(f"CNN prediction: {cnn_prediction}")
+            except Exception as e:
+                logger.warning(f"CNN prediction failed, using fallback: {e}")
+                # Fallback to statistical model
+                form = float(player_data.get("form", 0))
+                minutes = float(player_data.get("minutes", 0))
+                ict = float(player_data.get("ict_index", 0))
+                cnn_prediction = (form * 1.2) + (minutes / 90 * 0.8) + (ict / 1000 * 2)
+                cnn_prediction = max(0, cnn_prediction)
         else:
             # Advanced statistical model as CNN substitute
             form = float(player_data.get("form", 0))
@@ -704,6 +798,77 @@ async def get_detailed_forecast(
     except Exception as e:
         logger.error(f"Error generating detailed forecast: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Missing endpoints that frontend expects
+@app.get("/api/gameweek/current")
+async def get_current_gameweek():
+    """Get current gameweek information from FPL API"""
+    try:
+        response = requests.get(f"{FPL_API_BASE}/bootstrap-static/")
+        response.raise_for_status()
+        data = response.json()
+        
+        current_event = next((event for event in data['events'] if event['is_current']), None)
+        
+        if not current_event:
+            # If no current event, get the next one
+            current_event = next((event for event in data['events'] if event['is_next']), None)
+        
+        return {
+            "id": current_event['id'] if current_event else 1,
+            "name": current_event['name'] if current_event else "Gameweek 1",
+            "deadline_time": current_event['deadline_time'] if current_event else None,
+            "finished": current_event['finished'] if current_event else False,
+            "is_current": current_event['is_current'] if current_event else True,
+            "is_next": current_event['is_next'] if current_event else False
+        }
+    except Exception as e:
+        logger.error(f"Error fetching current gameweek: {e}")
+        return {
+            "id": 1,
+            "name": "Gameweek 1", 
+            "deadline_time": None,
+            "finished": False,
+            "is_current": True,
+            "is_next": False
+        }
+
+@app.get("/api/fixtures")
+async def get_fixtures(filter: str = Query("upcoming", description="Filter: live, today, recent, upcoming")):
+    """Get fixtures from FPL API"""
+    try:
+        response = requests.get(f"{FPL_API_BASE}/fixtures/")
+        response.raise_for_status()
+        fixtures = response.json()
+        
+        # Simple filtering logic
+        filtered_fixtures = []
+        for fixture in fixtures[:20]:  # Limit to first 20
+            if filter == "upcoming" and not fixture['finished']:
+                filtered_fixtures.append(fixture)
+            elif filter == "recent" and fixture['finished']:
+                filtered_fixtures.append(fixture)
+            elif filter == "live" and fixture['started'] and not fixture['finished']:
+                filtered_fixtures.append(fixture)
+        
+        return {"fixtures": filtered_fixtures[:10]}  # Limit to 10 results
+    except Exception as e:
+        logger.error(f"Error fetching fixtures: {e}")
+        return {"fixtures": []}
+
+@app.get("/api/models/available")
+async def get_available_models():
+    """Get available models (alias for /api/models/info)"""
+    return await get_models_info()
+
+@app.get("/api/players/predictions")
+async def get_player_predictions_basic(
+    top_n: int = Query(15, description="Number of top predictions to return"),
+    use_ai: bool = Query(True, description="Enable AI-powered predictions"),
+    model_type: str = Query("ensemble", description="Model type to use")
+):
+    """Get player predictions (alias for enhanced endpoint)"""
+    return await get_enhanced_predictions(top_n=top_n, use_ai=use_ai, model_type=model_type)
 
 # Add existing integrations
 add_sportmonks_routes(app)

@@ -66,7 +66,7 @@ export default function PaymentModal({ isOpen, onClose, selectedPlan = 'pro' }) 
     
     try {
       // Call PayStack API to initialize payment
-      const response = await fetch('http://localhost:8001/api/payment/initialize', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/payment/initialize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

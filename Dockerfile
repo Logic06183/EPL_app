@@ -21,6 +21,9 @@ COPY sportmonks_integration.py .
 COPY paystack_integration.py .
 COPY news_sentiment_analyzer.py .
 
+# Copy trained models
+COPY models/ ./models/
+
 # No non-root user for now to avoid permission issues
 
 # Expose port

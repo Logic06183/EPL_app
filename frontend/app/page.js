@@ -13,7 +13,7 @@ import HybridForecaster from '../components/HybridForecaster'
 import PredictionTracker from '../components/PredictionTracker'
 
 export default function EPLDashboard() {
-  const [activeTab, setActiveTab] = useState('hybrid')
+  const [activeTab, setActiveTab] = useState('predictions')
   const [apiStatus, setApiStatus] = useState('checking')
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [stats, setStats] = useState({

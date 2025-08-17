@@ -25,7 +25,7 @@ export default function PlayerAnalysisEnhanced() {
   const loadInitialData = async () => {
     try {
       // Load trending players (top performers)
-      const trendingResponse = await fetch('http://localhost:8001/api/players/predictions?top_n=8')
+      const trendingResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/players/predictions?top_n=8`)
       if (trendingResponse.ok) {
         const trendingData = await trendingResponse.json()
         setTrendingPlayers(trendingData.predictions || [])
@@ -64,7 +64,7 @@ export default function PlayerAnalysisEnhanced() {
 
       setSearching(true)
       try {
-        const response = await fetch(`http://localhost:8001/api/players/search?q=${encodeURIComponent(searchQuery)}`)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/players/search?q=${encodeURIComponent(searchQuery)}`)
         if (response.ok) {
           const data = await response.json()
           setSearchResults(data.players || [])
@@ -90,7 +90,7 @@ export default function PlayerAnalysisEnhanced() {
     addToRecentlyViewed(player)
 
     try {
-      const response = await fetch(`http://localhost:8001/api/players/${player.id}/ai-analysis`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/players/${player.id}/ai-analysis`)
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }

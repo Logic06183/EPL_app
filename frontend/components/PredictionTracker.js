@@ -32,7 +32,7 @@ export default function PredictionTracker() {
 
   const fetchPredictionHistory = async () => {
     try {
-      const response = await fetch('http://localhost:8001/api/predictions/history')
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/predictions/history`)
       if (response.ok) {
         const data = await response.json()
         setPredictionHistory(data.history || [])
@@ -55,7 +55,7 @@ export default function PredictionTracker() {
 
   const fetchModelImprovements = async () => {
     try {
-      const response = await fetch('http://localhost:8001/api/models/improvements')
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/models/improvements`)
       if (response.ok) {
         const data = await response.json()
         setModelImprovements(data.improvements || [])
