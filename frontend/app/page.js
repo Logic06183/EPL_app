@@ -13,7 +13,7 @@ import HybridForecaster from '../components/HybridForecaster'
 import PredictionTracker from '../components/PredictionTracker'
 
 export default function EPLDashboard() {
-  const [activeTab, setActiveTab] = useState('predictions')
+  const [activeTab, setActiveTab] = useState('hybrid')
   const [apiStatus, setApiStatus] = useState('checking')
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [stats, setStats] = useState({
@@ -29,7 +29,7 @@ export default function EPLDashboard() {
 
   const checkApiStatus = async () => {
     try {
-      const response = await fetch('http://localhost:8001/health')
+      const response = await fetch('http://localhost:8002/health')
       if (response.ok) {
         const data = await response.json()
         setApiStatus(data.ai_enabled ? 'ai-enabled' : 'connected')

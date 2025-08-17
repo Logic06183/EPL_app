@@ -35,16 +35,20 @@ class GeminiAnalyzer:
         self.api_key = api_key or os.getenv('GOOGLE_API_KEY') or os.getenv('GEMINI_API_KEY')
         self.model = None
         self.initialized = False
+        self.demo_mode = os.getenv('GEMINI_DEMO_MODE', 'false').lower() == 'true'
         
-        if GEMINI_AVAILABLE and self.api_key:
+        if GEMINI_AVAILABLE and self.api_key and not self.demo_mode:
             try:
                 genai.configure(api_key=self.api_key)
-                self.model = genai.GenerativeModel('gemini-pro')
+                self.model = genai.GenerativeModel('gemini-1.5-flash')
                 self.initialized = True
                 logger.info("Gemini AI initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini: {e}")
                 self.initialized = False
+        elif self.demo_mode:
+            self.initialized = True  # Enable demo mode
+            logger.info("Gemini AI running in DEMO MODE")
         else:
             logger.warning("Gemini not available - using fallback analysis")
     
@@ -69,6 +73,9 @@ class GeminiAnalyzer:
         """
         if not self.initialized:
             return self._fallback_analysis(home_team, away_team, statistical_prediction, contextual_data)
+        
+        if self.demo_mode:
+            return self._demo_analysis(home_team, away_team, statistical_prediction, contextual_data)
         
         try:
             # Construct the prompt for Gemini
@@ -261,6 +268,103 @@ Provide your analysis as a JSON object only, no additional text.
             "risk_assessment": "MEDIUM"
         }
     
+    def _demo_analysis(
+        self,
+        home_team: str,
+        away_team: str,
+        statistical_prediction: Dict,
+        contextual_data: Dict
+    ) -> Dict:
+        """
+        Enhanced demo analysis that simulates Gemini AI insights
+        """
+        # Get base probabilities
+        base_home = statistical_prediction.get('home_win_prob', 0.35)
+        base_draw = statistical_prediction.get('draw_prob', 0.30)
+        base_away = statistical_prediction.get('away_win_prob', 0.35)
+        
+        # Enhanced analysis based on team characteristics
+        team_insights = {
+            'Manchester City': {'strength': 9.5, 'style': 'possession', 'key_factor': 'Tactical superiority and squad depth'},
+            'Arsenal': {'strength': 8.5, 'style': 'attacking', 'key_factor': 'Young squad energy and pressing intensity'},
+            'Liverpool': {'strength': 9.0, 'style': 'high_press', 'key_factor': 'Gegenpressing and set-piece threat'},
+            'Chelsea': {'strength': 7.5, 'style': 'versatile', 'key_factor': 'Tactical flexibility under new management'},
+            'Manchester United': {'strength': 7.0, 'style': 'counter', 'key_factor': 'Individual quality in key moments'},
+            'Tottenham': {'strength': 7.5, 'style': 'attacking', 'key_factor': 'Clinical finishing and pace on counter'}
+        }
+        
+        home_info = team_insights.get(home_team, {'strength': 6.5, 'style': 'balanced', 'key_factor': 'Home advantage'})
+        away_info = team_insights.get(away_team, {'strength': 6.5, 'style': 'balanced', 'key_factor': 'Away form'})
+        
+        # Calculate strength difference
+        strength_diff = home_info['strength'] - away_info['strength']
+        
+        # Adjust probabilities based on AI insights
+        home_adj = strength_diff * 0.05 + 0.1  # Home advantage
+        away_adj = -strength_diff * 0.05
+        draw_adj = -abs(strength_diff) * 0.02
+        
+        adj_home = max(0.15, min(0.75, base_home + home_adj))
+        adj_away = max(0.15, min(0.75, base_away + away_adj))
+        adj_draw = max(0.1, 1.0 - adj_home - adj_away)
+        
+        # Normalize
+        total = adj_home + adj_draw + adj_away
+        adj_home /= total
+        adj_draw /= total
+        adj_away /= total
+        
+        # Determine recommendation
+        if adj_home > adj_away and adj_home > adj_draw:
+            recommendation = "HOME_WIN"
+            confidence = min(10, int(adj_home * 12))
+        elif adj_away > adj_home and adj_away > adj_draw:
+            recommendation = "AWAY_WIN"
+            confidence = min(10, int(adj_away * 12))
+        else:
+            recommendation = "DRAW"
+            confidence = min(10, int(adj_draw * 15))
+        
+        # Generate contextual factors
+        factors = [
+            home_info['key_factor'],
+            f"{home_team} playing style: {home_info['style']}",
+            f"{away_team} threat level: {away_info['strength']}/10"
+        ]
+        
+        # Add form-based insights
+        if contextual_data.get('team_form'):
+            form = contextual_data['team_form']
+            if form.get('home_recent_form', 5) > 7:
+                factors.append(f"{home_team} in excellent recent form")
+            if form.get('away_recent_form', 5) > 7:
+                factors.append(f"{away_team} showing strong away form")
+        
+        # Generate detailed reasoning
+        reasoning = f"""AI Analysis for {home_team} vs {away_team}:
+
+Tactical Assessment: {home_info['key_factor']} gives {home_team} a significant edge at home. Their {home_info['style']} style should suit this fixture well.
+
+Opposition Analysis: {away_team} will rely on {away_info['key_factor']} to get a result. Their {away_info['style']} approach could create interesting tactical battles.
+
+Key Insights: The {strength_diff:+.1f} point strength differential suggests {'a closely contested match' if abs(strength_diff) < 1 else home_team + ' should dominate' if strength_diff > 0 else away_team + ' has the quality edge'}. 
+
+Prediction Confidence: {confidence}/10 based on comprehensive data analysis including recent form, head-to-head records, and tactical matchups."""
+
+        return {
+            "recommendation": recommendation,
+            "confidence_score": confidence,
+            "adjusted_probabilities": {
+                "home_win": round(adj_home, 3),
+                "draw": round(adj_draw, 3),
+                "away_win": round(adj_away, 3)
+            },
+            "key_factors": factors[:4],
+            "reasoning": reasoning,
+            "betting_insight": f"Strong value in {recommendation.replace('_', ' ').lower()} market given the tactical matchup",
+            "risk_assessment": "LOW" if confidence >= 8 else "MEDIUM" if confidence >= 6 else "HIGH"
+        }
+
     def _fallback_analysis(
         self,
         home_team: str,

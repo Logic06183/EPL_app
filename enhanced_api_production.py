@@ -27,6 +27,7 @@ warnings.filterwarnings('ignore')
 from sportmonks_integration import SportMonksAPI, add_sportmonks_routes
 from paystack_integration import add_paystack_routes
 from news_sentiment_analyzer import NewsSentimentAnalyzer
+from gemini_integration import get_gemini_analyzer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -106,7 +107,7 @@ class EnhancedAIPredictor:
         }
         
         # Gemini AI configuration (for deployment)
-        self.gemini_enabled = os.getenv("GEMINI_API_KEY") is not None
+        self.gemini_enabled = os.getenv("GOOGLE_API_KEY") is not None or os.getenv("GEMINI_API_KEY") is not None
         
         logger.info(f"Enhanced AI Predictor initialized")
         logger.info(f"  - Random Forest: Ready")
@@ -366,6 +367,15 @@ enhanced_predictor = EnhancedAIPredictor()
 
 # API Endpoints
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for frontend"""
+    return {
+        "status": "healthy",
+        "ai_enabled": enhanced_predictor.gemini_enabled,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
 @app.get("/")
 async def root():
     return {
@@ -516,10 +526,191 @@ async def get_models_info():
         "performance_tracking": enhanced_predictor.model_performance
     }
 
+# Match Predictions Endpoint for Hybrid Forecaster
+@app.get("/api/match-predictions")
+async def get_match_predictions(limit: int = Query(8, description="Number of matches to analyze")):
+    """Get hybrid AI-powered match predictions with Gemini integration"""
+    try:
+        # Mock upcoming fixtures data (would be from real API in production)
+        upcoming_matches = [
+            {
+                "fixture_id": 1,
+                "home_team": "Manchester City",
+                "away_team": "Arsenal", 
+                "kickoff_time": "2025-01-20T15:00:00Z",
+                "home_form": 8.5,
+                "away_form": 7.2
+            },
+            {
+                "fixture_id": 2,
+                "home_team": "Liverpool",
+                "away_team": "Chelsea",
+                "kickoff_time": "2025-01-20T17:30:00Z", 
+                "home_form": 9.1,
+                "away_form": 6.8
+            },
+            {
+                "fixture_id": 3,
+                "home_team": "Manchester United",
+                "away_team": "Tottenham",
+                "kickoff_time": "2025-01-21T14:00:00Z",
+                "home_form": 6.5,
+                "away_form": 7.8
+            },
+            {
+                "fixture_id": 4,
+                "home_team": "Newcastle",
+                "away_team": "Brighton",
+                "kickoff_time": "2025-01-21T16:30:00Z",
+                "home_form": 7.2,
+                "away_form": 6.9
+            }
+        ]
+        
+        predictions = []
+        gemini_analyzer = get_gemini_analyzer()
+        
+        for match in upcoming_matches[:limit]:
+            # Generate statistical baseline
+            home_form = match['home_form']
+            away_form = match['away_form']
+            
+            # Simple statistical model baseline
+            home_advantage = 0.1
+            form_diff = (home_form - away_form) / 10
+            
+            base_home_prob = 0.35 + home_advantage + form_diff * 0.2
+            base_away_prob = 0.35 - home_advantage - form_diff * 0.2
+            base_draw_prob = 1.0 - base_home_prob - base_away_prob
+            
+            # Normalize probabilities
+            total = base_home_prob + base_draw_prob + base_away_prob
+            base_home_prob /= total
+            base_draw_prob /= total
+            base_away_prob /= total
+            
+            statistical_prediction = {
+                'home_win_prob': base_home_prob,
+                'draw_prob': base_draw_prob, 
+                'away_win_prob': base_away_prob,
+                'confidence': 0.75
+            }
+            
+            # Contextual data
+            contextual_data = {
+                'team_form': {
+                    'home_recent_form': home_form,
+                    'away_recent_form': away_form,
+                    'home_last_5': 'W-W-D-W-L',
+                    'away_last_5': 'W-L-W-D-W'
+                },
+                'head_to_head': {
+                    'last_5_meetings': 'H-A-H-D-A',
+                    'home_wins': 2,
+                    'away_wins': 2, 
+                    'draws': 1
+                },
+                'injury_reports': [],
+                'news_articles': []
+            }
+            
+            # Get Gemini AI analysis
+            gemini_result = await gemini_analyzer.analyze_match_context(
+                match['home_team'],
+                match['away_team'],
+                statistical_prediction,
+                contextual_data
+            )
+            
+            # Extract final probabilities
+            final_probs = gemini_result['adjusted_probabilities']
+            
+            prediction = {
+                "fixture_id": match['fixture_id'],
+                "home_team": match['home_team'],
+                "away_team": match['away_team'],
+                "kickoff_time": match['kickoff_time'],
+                "recommendation": gemini_result['recommendation'],
+                "confidence": gemini_result['confidence_score'],
+                "probabilities": {
+                    "home_win": final_probs['home_win'],
+                    "draw": final_probs['draw'],
+                    "away_win": final_probs['away_win']
+                },
+                "key_factors": gemini_result.get('key_factors', []),
+                "reasoning_summary": gemini_result['reasoning'][:150] + "..." if len(gemini_result['reasoning']) > 150 else gemini_result['reasoning']
+            }
+            
+            predictions.append(prediction)
+        
+        return {
+            "predictions": predictions,
+            "total_matches": len(predictions),
+            "gemini_enabled": gemini_analyzer.initialized,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating match predictions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/hybrid-forecast/{home_team}/{away_team}")
+async def get_detailed_forecast(
+    home_team: str,
+    away_team: str,
+    match_date: Optional[str] = Query(None)
+):
+    """Get detailed hybrid forecast for a specific match"""
+    try:
+        # Mock detailed analysis
+        statistical_baseline = {
+            'home_win': 0.45,
+            'draw': 0.30,
+            'away_win': 0.25
+        }
+        
+        contextual_data = {
+            'team_form': {
+                'home_recent_form': 8.2,
+                'away_recent_form': 6.5
+            },
+            'injury_reports': [
+                {'team': home_team, 'player': 'Key Player', 'status': 'Minor knock'}
+            ],
+            'news_articles': []
+        }
+        
+        gemini_analyzer = get_gemini_analyzer()
+        gemini_result = await gemini_analyzer.analyze_match_context(
+            home_team, away_team, statistical_baseline, contextual_data
+        )
+        
+        return {
+            "match": {
+                "home_team": home_team,
+                "away_team": away_team,
+                "match_date": match_date
+            },
+            "forecast": {
+                "recommendation": gemini_result['recommendation'],
+                "confidence_score": gemini_result['confidence_score'],
+                "statistical_baseline": statistical_baseline,
+                "final_probabilities": gemini_result['adjusted_probabilities'],
+                "contextual_factors": gemini_result.get('key_factors', []),
+                "reasoning": gemini_result['reasoning']
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating detailed forecast: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Add existing integrations
 add_sportmonks_routes(app)
 add_paystack_routes(app)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("enhanced_api_production:app", host="0.0.0.0", port=8001, reload=False)
+    import os
+    port = int(os.getenv("PORT", 8002))
+    uvicorn.run("enhanced_api_production:app", host="0.0.0.0", port=port, reload=False)

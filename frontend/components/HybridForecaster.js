@@ -21,7 +21,7 @@ export default function HybridForecaster() {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout for AI analysis
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/match-predictions?limit=8`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'}/api/match-predictions?limit=8`, {
         signal: controller.signal
       })
       clearTimeout(timeoutId)
@@ -45,7 +45,7 @@ export default function HybridForecaster() {
     
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/hybrid-forecast/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}?match_date=${encodeURIComponent(matchDate)}`
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002'}/api/hybrid-forecast/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}?match_date=${encodeURIComponent(matchDate)}`
       )
       
       if (!response.ok) {
