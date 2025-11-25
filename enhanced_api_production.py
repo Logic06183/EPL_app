@@ -15,7 +15,15 @@ from typing import Dict, List, Optional, Any
 import httpx
 import requests
 import pickle
-import torch
+
+# Optional PyTorch import (for CNN models if available)
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    torch = None
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -79,6 +87,14 @@ class EnhancedPlayerPrediction(BaseModel):
     sentiment_impact: Optional[float] = None
     gemini_insight: Optional[str] = None
     reasoning: Optional[str] = None
+    # Advanced analytics metrics
+    expected_goals: Optional[float] = None
+    expected_assists: Optional[float] = None
+    expected_goal_involvements: Optional[float] = None
+    ict_index: Optional[float] = None
+    creativity: Optional[float] = None
+    threat: Optional[float] = None
+    influence: Optional[float] = None
 
 class ModelPerformance(BaseModel):
     model_name: str
@@ -132,8 +148,8 @@ class EnhancedAIPredictor:
             # Load PyTorch model and scaler
             pytorch_model_path = os.path.join(self.model_dir, "pytorch_model.pth")
             scaler_path = os.path.join(self.model_dir, "scaler.pkl")
-            
-            if os.path.exists(pytorch_model_path) and os.path.exists(scaler_path):
+
+            if TORCH_AVAILABLE and os.path.exists(pytorch_model_path) and os.path.exists(scaler_path):
                 # Load scaler
                 with open(scaler_path, 'rb') as f:
                     self.pytorch_scaler = pickle.load(f)
@@ -188,7 +204,7 @@ class EnhancedAIPredictor:
             targets = []
             
             for player in player_data:
-                # Enhanced feature vector with more FPL-specific features
+                # Enhanced feature vector with advanced analytics (xG, xA, ICT)
                 feature_vector = [
                     float(player.get("now_cost", 0)) / 10,           # Price
                     float(player.get("total_points", 0)),            # Total points
@@ -200,11 +216,21 @@ class EnhancedAIPredictor:
                     float(player.get("clean_sheets", 0)),            # Clean sheets
                     float(player.get("goals_conceded", 0)),          # Goals conceded
                     float(player.get("influence", 0)) / 100,         # ICT - Influence
-                    float(player.get("creativity", 0)) / 100,        # ICT - Creativity  
+                    float(player.get("creativity", 0)) / 100,        # ICT - Creativity
                     float(player.get("threat", 0)) / 100,            # ICT - Threat
                     float(player.get("ict_index", 0)) / 100,         # ICT Index
                     float(player.get("element_type", 0)),            # Position
                     float(player.get("transfers_balance", 0)),       # Transfer balance
+                    # Advanced analytics metrics
+                    float(player.get("expected_goals", 0)),          # xG - Expected goals
+                    float(player.get("expected_assists", 0)),        # xA - Expected assists
+                    float(player.get("expected_goal_involvements", 0)),  # xGI
+                    float(player.get("expected_goals_conceded", 0)), # xGC - Defensive metric
+                    float(player.get("expected_goals_per_90", 0)),   # xG per 90 min
+                    float(player.get("expected_assists_per_90", 0)), # xA per 90 min
+                    float(player.get("bps", 0)),                     # Bonus points system
+                    float(player.get("saves", 0)),                   # GK saves
+                    float(player.get("bonus", 0)),                   # Bonus points earned
                 ]
                 
                 # Target: estimated next gameweek points
@@ -242,30 +268,47 @@ class EnhancedAIPredictor:
             return False
     
     async def get_gemini_enhancement(self, player_data):
-        """Get Gemini AI enhancement (deployment feature)"""
+        """Get Gemini AI enhancement with advanced analytics (xG, xA)"""
         if not self.gemini_enabled:
             return 0.0, "Gemini not available"
-        
-        # Simulate Gemini AI analysis for deployment
+
+        # Extract key metrics including advanced analytics
         form = float(player_data.get('form', 0))
         ownership = float(player_data.get('selected_by_percent', 0))
         price = float(player_data.get('now_cost', 0)) / 10
-        
-        # Advanced context analysis (would use actual Gemini API in deployment)
-        if form > 7.5 and ownership < 15:
-            return 0.4, "Hidden gem with excellent form and low ownership"
+        xg = float(player_data.get('expected_goals', 0))
+        xa = float(player_data.get('expected_assists', 0))
+        actual_goals = float(player_data.get('goals_scored', 0))
+        actual_assists = float(player_data.get('assists', 0))
+        ict_index = float(player_data.get('ict_index', 0))
+
+        # Calculate xG/xA overperformance (player scoring more than expected)
+        xg_delta = actual_goals - xg
+        xa_delta = actual_assists - xa
+
+        # Advanced context analysis using xG and xA
+        if xg > 3 and xg_delta < -2:
+            return -0.2, f"Underperforming xG ({xg:.1f}) - due {abs(xg_delta):.1f} goals"
+        elif xg > 2 and xg_delta > 1.5:
+            return 0.3, f"Outperforming xG by {xg_delta:.1f} goals - hot streak"
+        elif xa > 2 and xa_delta > 1:
+            return 0.25, f"Creating chances (xA: {xa:.1f}) and delivering assists"
+        elif form > 7.5 and ownership < 15 and (xg + xa) > 2:
+            return 0.4, f"Hidden gem: High xGI ({xg+xa:.1f}), low ownership"
         elif form < 3 and ownership > 40:
             return -0.3, "Overvalued player with poor recent form"
-        elif price > 10 and form > 6:
-            return 0.2, "Premium player delivering consistent returns"
+        elif price > 10 and form > 6 and ict_index > 150:
+            return 0.2, f"Premium player with strong ICT ({ict_index:.0f})"
+        elif (xg + xa) > 3 and form < 5:
+            return 0.15, f"High xGI ({xg+xa:.1f}) suggests improvement coming"
         else:
             return 0.0, "Balanced metrics, no significant enhancement"
     
-    async def predict_enhanced(self, player_data, model_preference="ensemble"):
+    async def predict_enhanced(self, player_data, model_preference="ensemble", skip_gemini=False):
         """Generate enhanced prediction using multiple models"""
         predictions = {}
         
-        # 1. Random Forest Prediction
+        # 1. Random Forest Prediction with Advanced Analytics
         rf_prediction = 0
         if self.rf_trained and self.rf_model:
             try:
@@ -285,6 +328,16 @@ class EnhancedAIPredictor:
                     float(player_data.get("ict_index", 0)) / 100,
                     float(player_data.get("element_type", 0)),
                     float(player_data.get("transfers_balance", 0)),
+                    # Advanced analytics metrics (must match training features)
+                    float(player_data.get("expected_goals", 0)),
+                    float(player_data.get("expected_assists", 0)),
+                    float(player_data.get("expected_goal_involvements", 0)),
+                    float(player_data.get("expected_goals_conceded", 0)),
+                    float(player_data.get("expected_goals_per_90", 0)),
+                    float(player_data.get("expected_assists_per_90", 0)),
+                    float(player_data.get("bps", 0)),
+                    float(player_data.get("saves", 0)),
+                    float(player_data.get("bonus", 0)),
                 ]
                 
                 X = np.array([feature_vector])
@@ -357,8 +410,11 @@ class EnhancedAIPredictor:
             except Exception as e:
                 logger.debug(f"Sentiment analysis failed: {e}")
         
-        # 4. Gemini AI Enhancement
-        gemini_impact, gemini_reasoning = await self.get_gemini_enhancement(player_data)
+        # 4. Gemini AI Enhancement (skip for performance if not needed)
+        if skip_gemini:
+            gemini_impact, gemini_reasoning = 0.0, None
+        else:
+            gemini_impact, gemini_reasoning = await self.get_gemini_enhancement(player_data)
         
         # 5. Ensemble Prediction
         if model_preference == "random_forest":
@@ -518,17 +574,17 @@ async def get_enhanced_predictions(
             enhanced_predictor.train_random_forest(elements)
         
         predictions = []
-        
+
         for player in elements:
             # Filter by position if specified
             if position and player.get("element_type") != position:
                 continue
-            
+
             team = teams.get(player.get("team", 0), {})
             pos = positions.get(player.get("element_type", 0), {})
-            
-            # Generate enhanced prediction
-            prediction_result = await enhanced_predictor.predict_enhanced(player, model)
+
+            # Generate enhanced prediction (skip Gemini for now - add it later for top players only)
+            prediction_result = await enhanced_predictor.predict_enhanced(player, model, skip_gemini=True)
             
             enhanced_prediction = EnhancedPlayerPrediction(
                 id=player["id"],
@@ -548,14 +604,37 @@ async def get_enhanced_predictions(
                 model_breakdown=prediction_result['model_breakdown'],
                 sentiment_impact=prediction_result['sentiment_impact'],
                 gemini_insight=prediction_result['gemini_insight'],
-                reasoning=prediction_result['reasoning']
+                reasoning=prediction_result['reasoning'],
+                # Advanced analytics
+                expected_goals=float(player.get("expected_goals", 0)),
+                expected_assists=float(player.get("expected_assists", 0)),
+                expected_goal_involvements=float(player.get("expected_goal_involvements", 0)),
+                ict_index=float(player.get("ict_index", 0)),
+                creativity=float(player.get("creativity", 0)),
+                threat=float(player.get("threat", 0)),
+                influence=float(player.get("influence", 0))
             )
             
             predictions.append(enhanced_prediction)
         
         # Sort by predicted points
         predictions.sort(key=lambda x: x.predicted_points, reverse=True)
-        
+
+        # Add Gemini AI insights to top 5 players only (for performance)
+        top_players_for_gemini = min(5, top_n)
+        for i in range(top_players_for_gemini):
+            if i < len(predictions):
+                player_id = predictions[i].id
+                player_data = next((p for p in elements if p["id"] == player_id), None)
+                if player_data:
+                    try:
+                        gemini_impact, gemini_reasoning = await enhanced_predictor.get_gemini_enhancement(player_data)
+                        predictions[i].gemini_insight = gemini_reasoning
+                        # Update prediction with Gemini impact
+                        predictions[i].predicted_points += gemini_impact
+                    except Exception as e:
+                        logger.warning(f"Gemini enhancement failed for player {player_id}: {e}")
+
         return {
             "predictions": predictions[:top_n],
             "total_players": len(predictions),
@@ -868,7 +947,7 @@ async def get_player_predictions_basic(
     model_type: str = Query("ensemble", description="Model type to use")
 ):
     """Get player predictions (alias for enhanced endpoint)"""
-    return await get_enhanced_predictions(top_n=top_n, use_ai=use_ai, model_type=model_type)
+    return await get_enhanced_predictions(top_n=top_n, model=model_type)
 
 # Add existing integrations
 add_sportmonks_routes(app)

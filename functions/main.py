@@ -2,21 +2,28 @@
 import os
 import sys
 from pathlib import Path
+from firebase_functions import https_fn
+from firebase_admin import initialize_app
+import functions_framework
+from mangum import Mangum
 
 # Add current directory to Python path
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 
+# Initialize Firebase Admin
+initialize_app()
+
 # Import the FastAPI app
 from api_production import app
 
-# Firebase Functions entry point
-def main(request):
+# Create Mangum handler
+handler = Mangum(app)
+
+# Expose the FastAPI app as a Cloud Function
+@functions_framework.http
+def api(request):
     """
     Cloud Function entry point for Firebase
     """
-    import uvicorn
-    from fastapi.applications import FastAPI
-    
-    # Return the FastAPI app
-    return app
+    return handler(request)

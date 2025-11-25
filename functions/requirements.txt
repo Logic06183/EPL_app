@@ -1,3 +1,5 @@
+functions-framework>=3.0.0
+mangum>=0.17.0
 firebase-functions==0.1.0
 fastapi==0.104.1
 uvicorn==0.24.0

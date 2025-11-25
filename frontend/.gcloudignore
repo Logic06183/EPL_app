@@ -1,0 +1,55 @@
+# Ignore frontend directory when deploying backend
+frontend/
+web/
+mobile/
+
+# Ignore git
+.git/
+.github/
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Ignore IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Ignore logs
+*.log
+logs/
+
+# Ignore test files
+tests/
+test_*.py
+*_test.py
+pytest.ini
+.pytest_cache/
+
+# Ignore screenshots
+screenshots/
+
+# Ignore node modules
+node_modules/
+
+# Ignore Firebase
+.firebase/
+
+# Ignore environment
+.env
+.env.*
+!.env.example
+
+# Ignore Docker
+docker-compose*.yml

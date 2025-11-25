@@ -44,29 +44,42 @@ export default function PlayerPredictionsEPL() {
   const fetchPredictions = async () => {
     setLoading(true)
     setError(null)
-    
+
     try {
-      // Restrict AI models based on user tier
+      // Map frontend model types to backend model parameter
+      const modelMapping = {
+        'basic': 'random_forest',
+        'random_forest': 'random_forest',
+        'deep_learning': 'cnn',
+        'ensemble': 'ensemble'
+      }
+
       let actualModelType = modelType
       if (userTier === 'free' && modelType !== 'basic') {
         actualModelType = 'basic'
       }
-      
+
+      const backendModel = modelMapping[actualModelType] || 'ensemble'
+
       const params = new URLSearchParams({
         top_n: topN,
-        use_ai: useAI || actualModelType !== 'basic',
-        model_type: actualModelType
+        model: backendModel
       })
-      
-      const apiUrl = typeof window !== 'undefined' ? 
+
+      // Add position filter if active
+      if (filter !== 'all') {
+        params.append('position', filter)
+      }
+
+      const apiUrl = typeof window !== 'undefined' ?
         (process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app') :
         'https://epl-backend-77913915885.us-central1.run.app'
       const url = `${apiUrl}/api/players/predictions/enhanced?${params}`
       console.log('Fetching predictions from:', url)
       
       const controller = new AbortController()
-      // Longer timeout for ML model predictions (30 seconds)
-      const timeoutDuration = (modelType !== 'basic') ? 30000 : 10000
+      // Longer timeout for ML model predictions (45 seconds for Gemini AI)
+      const timeoutDuration = (modelType !== 'basic') ? 45000 : 10000
       const timeoutId = setTimeout(() => controller.abort(), timeoutDuration)
       
       const response = await fetch(url, {
@@ -82,7 +95,14 @@ export default function PlayerPredictionsEPL() {
       }
       const data = await response.json()
       console.log('Predictions data:', data)
-      setPredictions(data.predictions || [])
+
+      // Add ai_enhanced flag based on model used
+      const enhancedPredictions = (data.predictions || []).map(p => ({
+        ...p,
+        ai_enhanced: backendModel !== 'basic' || p.gemini_insight || p.sentiment_impact
+      }))
+
+      setPredictions(enhancedPredictions)
     } catch (error) {
       console.error('Error fetching predictions:', error)
       setError(error.message)
@@ -414,6 +434,36 @@ export default function PlayerPredictionsEPL() {
                   <div className="text-white/60 text-xs">Owned</div>
                 </div>
               </div>
+
+              {/* Advanced Analytics - xG/xA */}
+              {(player.expected_goals > 0 || player.expected_assists > 0 || player.ict_index > 0) && (
+                <div className="mb-4 p-3 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-lg border border-purple-400/20">
+                  <div className="text-xs text-purple-300 font-semibold mb-2 flex items-center gap-1">
+                    <Star className="w-3 h-3" />
+                    Advanced Analytics
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    {player.expected_goals > 0 && (
+                      <div className="text-center">
+                        <div className="text-yellow-400 font-bold">{player.expected_goals?.toFixed(1)}</div>
+                        <div className="text-white/60">xG</div>
+                      </div>
+                    )}
+                    {player.expected_assists > 0 && (
+                      <div className="text-center">
+                        <div className="text-blue-400 font-bold">{player.expected_assists?.toFixed(1)}</div>
+                        <div className="text-white/60">xA</div>
+                      </div>
+                    )}
+                    {player.ict_index > 0 && (
+                      <div className="text-center">
+                        <div className="text-green-400 font-bold">{player.ict_index?.toFixed(1)}</div>
+                        <div className="text-white/60">ICT</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Reasoning */}
               {player.reasoning && (

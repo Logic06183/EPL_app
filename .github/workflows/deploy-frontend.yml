@@ -1,0 +1,91 @@
+name: Deploy Frontend to Firebase
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18'
+  FIREBASE_PROJECT_ID: 'epl-prediction-app'
+
+jobs:
+  deploy:
+    name: Build and Deploy Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build Next.js app
+        working-directory: ./frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.API_URL || 'https://epl-backend-77913915885.us-central1.run.app' }}
+        run: npm run build
+
+      - name: Setup Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy to Firebase Hosting
+        working-directory: ./frontend
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          firebase deploy --only hosting --project ${{ env.FIREBASE_PROJECT_ID }} --token "$FIREBASE_TOKEN"
+
+      - name: Get Hosting URL
+        run: echo "Frontend deployed to https://${{ env.FIREBASE_PROJECT_ID }}.web.app"
+
+      - name: Comment on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Frontend deployed to https://${{ env.FIREBASE_PROJECT_ID }}.web.app'
+            })
+
+      - name: Post-deployment test
+        run: |
+          SITE_URL="https://${{ env.FIREBASE_PROJECT_ID }}.web.app"
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" $SITE_URL)
+          if [ $STATUS -eq 200 ]; then
+            echo "✅ Site is live and returning 200 OK"
+          else
+            echo "❌ Site returned status code: $STATUS"
+            exit 1
+          fi
+
+  notify:
+    name: Notify deployment status
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Deployment Success
+        if: needs.deploy.result == 'success'
+        run: echo "🎉 Frontend deployment successful!"
+
+      - name: Deployment Failed
+        if: needs.deploy.result == 'failure'
+        run: echo "❌ Frontend deployment failed!"

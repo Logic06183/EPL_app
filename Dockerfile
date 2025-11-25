@@ -21,8 +21,8 @@ COPY sportmonks_integration.py .
 COPY paystack_integration.py .
 COPY news_sentiment_analyzer.py .
 
-# Copy trained models
-COPY models/ ./models/
+# Copy trained models (optional - models excluded by .gcloudignore)
+# COPY models/ ./models/
 
 # No non-root user for now to avoid permission issues
 
@@ -37,5 +37,5 @@ ENV PORT=8080
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-# Run the application
-CMD ["python", "enhanced_api_production.py"]
+# Run the application with uvicorn
+CMD exec uvicorn enhanced_api_production:app --host 0.0.0.0 --port $PORT

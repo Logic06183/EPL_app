@@ -29,7 +29,7 @@ export default function EPLDashboard() {
 
   const checkApiStatus = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/health`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://us-central1-epl-backend-77913915885.cloudfunctions.net/api'}/health`)
       if (response.ok) {
         const data = await response.json()
         setApiStatus(data.ai_enabled ? 'ai-enabled' : 'connected')
@@ -43,10 +43,10 @@ export default function EPLDashboard() {
   }
 
   const tabs = [
-    { 
-      id: 'predictions', 
-      name: 'Top Players', 
-      icon: TrendingUp, 
+    {
+      id: 'predictions',
+      name: 'Top Players',
+      icon: TrendingUp,
       description: 'AI-powered player predictions and rankings',
       benefits: [
         'Identifies highest-scoring players for each gameweek',
@@ -54,10 +54,10 @@ export default function EPLDashboard() {
         'Provides confidence scores for each prediction'
       ]
     },
-    { 
-      id: 'live', 
-      name: 'Live Scores', 
-      icon: Zap, 
+    {
+      id: 'live',
+      name: 'Live Scores',
+      icon: Zap,
       description: 'Real-time matches and league standings',
       benefits: [
         'Track live matches and goal scorers',
@@ -65,10 +65,10 @@ export default function EPLDashboard() {
         'Plan transfers based on live data'
       ]
     },
-    { 
-      id: 'optimizer', 
-      name: 'Squad Builder', 
-      icon: Trophy, 
+    {
+      id: 'optimizer',
+      name: 'Squad Builder',
+      icon: Trophy,
       description: 'Build the perfect squad within budget and formation',
       benefits: [
         'Maximizes total points within budget constraints',
@@ -76,10 +76,10 @@ export default function EPLDashboard() {
         'Identifies value picks and optimal combinations'
       ]
     },
-    { 
-      id: 'analysis', 
-      name: 'Player Intel', 
-      icon: Target, 
+    {
+      id: 'analysis',
+      name: 'Player Intel',
+      icon: Target,
       description: 'Deep dive analysis with comprehensive statistics',
       benefits: [
         'Detailed performance metrics and trends',
@@ -87,10 +87,10 @@ export default function EPLDashboard() {
         'Price change predictions and ownership data'
       ]
     },
-    { 
-      id: 'gameweek', 
-      name: 'Live Info', 
-      icon: Calendar, 
+    {
+      id: 'gameweek',
+      name: 'Live Info',
+      icon: Calendar,
       description: 'Current gameweek status and key information',
       benefits: [
         'Never miss transfer deadlines',
@@ -98,10 +98,10 @@ export default function EPLDashboard() {
         'Get gameweek-specific insights'
       ]
     },
-    { 
-      id: 'hybrid', 
-      name: 'AI Forecaster', 
-      icon: Brain, 
+    {
+      id: 'hybrid',
+      name: 'AI Forecaster',
+      icon: Brain,
       description: 'Advanced match predictions with contextual AI',
       benefits: [
         'Predicts match outcomes with high accuracy',
@@ -109,10 +109,10 @@ export default function EPLDashboard() {
         'Helps plan captaincy and differential picks'
       ]
     },
-    { 
-      id: 'tracker', 
-      name: 'Prediction Tracker', 
-      icon: TrendingUp, 
+    {
+      id: 'tracker',
+      name: 'Prediction Tracker',
+      icon: TrendingUp,
       description: 'Track prediction accuracy and model improvements',
       benefits: [
         'See how predictions compare to actual results',
@@ -195,16 +195,16 @@ export default function EPLDashboard() {
                 </div>
               </div>
             </div>
-            
+
             <p className="text-xl text-white/90 text-balance max-w-3xl mx-auto mb-6">
-              Advanced Fantasy Premier League predictions powered by artificial intelligence. 
+              Advanced Fantasy Premier League predictions powered by artificial intelligence.
               Get real player insights, optimal squad suggestions, and live gameweek data.
             </p>
 
             {/* Status and Stats */}
             <div className="flex flex-col md:flex-row items-center justify-center gap-6">
               {getStatusIndicator()}
-              
+
               <div className="grid grid-cols-4 gap-6 text-center">
                 <div>
                   <div className="text-2xl font-bold text-green-400">{stats.playersAnalyzed}</div>
@@ -271,7 +271,7 @@ export default function EPLDashboard() {
               <span className="text-white font-semibold">FPL AI Pro</span>
             </div>
             <p className="text-white/70 text-sm mb-4">
-              Powered by real-time FPL data, machine learning algorithms, and Google's Gemini AI. 
+              Powered by real-time FPL data, machine learning algorithms, and Google's Gemini AI.
               Built for managers who want to dominate their leagues.
             </p>
             <div className="flex justify-center items-center gap-4 text-white/60 text-sm mb-4">
@@ -281,7 +281,7 @@ export default function EPLDashboard() {
               <span>•</span>
               <span>⚡ Real-time Data</span>
             </div>
-            
+
             {/* Upgrade CTA */}
             <button
               onClick={() => setShowPaymentModal(true)}
@@ -295,11 +295,11 @@ export default function EPLDashboard() {
           </div>
         </div>
       </div>
-      
+
       {/* Payment Modal */}
-      <PaymentModal 
-        isOpen={showPaymentModal} 
-        onClose={() => setShowPaymentModal(false)} 
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
       />
     </div>
   )
