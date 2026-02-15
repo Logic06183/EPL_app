@@ -1,6 +1,6 @@
 """Player-related schemas"""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Dict, Any
 
 
@@ -38,8 +38,7 @@ class PlayerAdvancedStats(BaseModel):
     creativity: Optional[float] = None
     threat: Optional[float] = None
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class PlayerPrediction(BaseModel):

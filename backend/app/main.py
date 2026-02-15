@@ -4,7 +4,7 @@ Consolidated API with multi-model predictions, xG/xA analytics, and Gemini AI
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from contextlib import asynccontextmanager
 
@@ -84,7 +84,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={
             "error": "Internal server error",
             "detail": str(exc) if settings.DEBUG else "An unexpected error occurred",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     )
 
@@ -122,7 +122,7 @@ async def health_check():
     return HealthResponse(
         status="healthy",
         version=settings.APP_VERSION,
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
         models_loaded=app_state.get("models_loaded", False),
         cache_available=app_state.get("cache") is not None,
     )
@@ -132,7 +132,7 @@ async def health_check():
 @app.get("/ping")
 async def ping():
     """Lightweight ping endpoint"""
-    return {"status": "pong", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "pong", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 # Include API routers
