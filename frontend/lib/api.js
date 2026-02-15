@@ -131,7 +131,7 @@ export const getPredictions = async (options = {}) => {
     maxPrice = null,
   } = options
 
-  return await get('/api/predictions', {
+  return await get('/api/players/predictions', {
     top_n: topN,
     model,
     position,
@@ -146,7 +146,7 @@ export const getEnhancedPredictions = async (options = {}) => {
     useGemini = true,
   } = options
 
-  return await get('/api/predictions/enhanced', {
+  return await get('/api/players/predictions/enhanced', {
     top_n: topN,
     model,
     use_gemini: useGemini,
@@ -158,7 +158,7 @@ export const getEnhancedPredictions = async (options = {}) => {
 export const getPlayerPrediction = async (playerId, options = {}) => {
   const { model = 'ensemble', useGemini = false } = options
 
-  return await get(`/api/predictions/${playerId}`, {
+  return await get(`/api/players/predictions/${playerId}`, {
     model,
     use_gemini: useGemini,
   })
