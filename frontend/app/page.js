@@ -29,7 +29,7 @@ export default function EPLDashboard() {
 
   const checkApiStatus = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://us-central1-epl-backend-77913915885.cloudfunctions.net/api'}/health`)
+      const response = await fetch('/api/health')
       if (response.ok) {
         const data = await response.json()
         setApiStatus(data.ai_enabled ? 'ai-enabled' : 'connected')

@@ -331,9 +331,21 @@ class AIPredictor:
             logger.error(f"Error making prediction: {e}")
             return float(player_data.get("form", 5.0)), 0.7
 
-# Initialize managers
-fpl_manager = FPLDataManager()
-ai_predictor = AIPredictor()
+# Initialize managers (Lazy loading)
+fpl_manager = None
+ai_predictor = None
+
+def get_fpl_manager():
+    global fpl_manager
+    if fpl_manager is None:
+        fpl_manager = FPLDataManager()
+    return fpl_manager
+
+def get_ai_predictor():
+    global ai_predictor
+    if ai_predictor is None:
+        ai_predictor = AIPredictor()
+    return ai_predictor
 
 # Authentication
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -356,10 +368,11 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check with AI status"""
+    predictor = get_ai_predictor()
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "ai_enabled": ai_predictor.is_trained,
+        "ai_enabled": predictor.is_trained,
         "cache_status": "redis" if redis_available else "memory",
         "version": "2.0.0"
     }
@@ -372,16 +385,23 @@ async def get_player_predictions(
 ):
     """Get player predictions with real FPL data"""
     try:
+        # Get managers
+        manager = get_fpl_manager()
+        predictor = get_ai_predictor()
+        
         # Get FPL data
-        data = await fpl_manager.get_bootstrap_data()
+        data = await manager.get_bootstrap_data()
         
         elements = data.get("elements", [])
         teams = {team["id"]: team for team in data.get("teams", [])}
         positions = {pos["id"]: pos for pos in data.get("element_types", [])}
         
         # Train AI model if not trained
-        if use_ai and not ai_predictor.is_trained:
-            ai_predictor.train_model(elements)
+        if use_ai and not predictor.is_trained:
+            # Run training in background or check if we can skip
+            # For now, train on the fly but log it
+            logger.info("Training AI model on demand...")
+            predictor.train_model(elements)
         
         predictions = []
         
@@ -395,7 +415,7 @@ async def get_player_predictions(
             
             # Generate prediction
             if use_ai:
-                predicted_points, confidence = ai_predictor.predict(player)
+                predicted_points, confidence = predictor.predict(player)
                 reasoning = f"AI analysis considering form ({player.get('form', 0)}), recent performance, and team dynamics"
             else:
                 # Form-based prediction
@@ -449,7 +469,8 @@ async def get_player_predictions(
 async def search_players(q: str):
     """Search players by name"""
     try:
-        data = await fpl_manager.get_bootstrap_data()
+        manager = get_fpl_manager()
+        data = await manager.get_bootstrap_data()
         elements = data.get("elements", [])
         teams = {team["id"]: team for team in data.get("teams", [])}
         positions = {pos["id"]: pos for pos in data.get("element_types", [])}
@@ -489,7 +510,10 @@ async def search_players(q: str):
 async def get_player_ai_analysis(player_id: int):
     """Get detailed AI analysis for a specific player"""
     try:
-        data = await fpl_manager.get_bootstrap_data()
+        manager = get_fpl_manager()
+        predictor = get_ai_predictor()
+        
+        data = await manager.get_bootstrap_data()
         elements = data.get("elements", [])
         teams = {team["id"]: team for team in data.get("teams", [])}
         positions = {pos["id"]: pos for pos in data.get("element_types", [])}
@@ -507,10 +531,10 @@ async def get_player_ai_analysis(player_id: int):
         pos = positions.get(player.get("element_type", 0), {})
         
         # Generate AI analysis
-        if not ai_predictor.is_trained:
-            ai_predictor.train_model(elements)
+        if not predictor.is_trained:
+            predictor.train_model(elements)
         
-        predicted_points, confidence = ai_predictor.predict(player)
+        predicted_points, confidence = predictor.predict(player)
         
         # Generate insights
         form = float(player.get("form", 0))
@@ -567,8 +591,10 @@ async def optimize_squad(request: Dict = {}):
     budget = request.get("budget", 100.0)
     
     try:
+        manager = get_fpl_manager()
+        
         # Get FPL data
-        data = await fpl_manager.get_bootstrap_data()
+        data = await manager.get_bootstrap_data()
         elements = data.get("elements", [])
         teams = {team["id"]: team for team in data.get("teams", [])}
         positions = {pos["id"]: pos for pos in data.get("element_types", [])}
@@ -653,7 +679,8 @@ async def optimize_squad(request: Dict = {}):
 async def get_current_gameweek():
     """Get current gameweek information"""
     try:
-        gameweek = await fpl_manager.get_gameweek_info()
+        manager = get_fpl_manager()
+        gameweek = await manager.get_gameweek_info()
         if gameweek:
             return gameweek.dict()
         else:
@@ -684,23 +711,11 @@ async def get_current_gameweek():
 #     """Handle Stripe webhooks - DEPRECATED: Use PayStack instead"""
 #     pass
 
-# Background tasks for cache warming
-@app.on_event("startup")
-async def startup_event():
-    """Startup tasks"""
-    logger.info("Starting FPL AI Pro API...")
-    
-    # Warm up cache with FPL data
-    try:
-        await fpl_manager.get_bootstrap_data()
-        logger.info("FPL data cache warmed up")
-    except Exception as e:
-        logger.warning(f"Could not warm up FPL cache: {e}")
-
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    if fpl_manager.session:
+    global fpl_manager
+    if fpl_manager and fpl_manager.session:
         await fpl_manager.session.aclose()
 
 # Add third-party integrations to the app
