@@ -2,8 +2,8 @@
 Team optimization and transfer suggestion endpoints
 """
 
-from fastapi import APIRouter, HTTPException, Depends
-from typing import List
+from fastapi import APIRouter, HTTPException, Depends, Query
+from typing import List, Optional
 import logging
 
 from ..schemas.team import (
@@ -13,6 +13,7 @@ from ..schemas.team import (
     TransferSuggestion,
 )
 from ..services.team_service import get_team_service, TeamService
+from ..services.data_service import get_data_service, FPLDataService
 
 logger = logging.getLogger(__name__)
 
@@ -117,3 +118,63 @@ async def get_formations():
         "default": "3-4-3",
         "description": "Format: DEF-MID-FWD (GK always 1)",
     }
+
+
+@router.get("/gameweek/current", summary="Get current gameweek information")
+async def get_current_gameweek(
+    data_service: FPLDataService = Depends(get_data_service),
+):
+    """
+    Get information about the current or next gameweek
+
+    Returns:
+    - Current/next gameweek number
+    - Deadline time
+    - Whether it's started
+    - Fixtures for the gameweek
+    """
+    try:
+        gameweek_info = await data_service.get_gameweek_info()
+        return gameweek_info
+    except Exception as e:
+        logger.error(f"Error fetching gameweek info: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch gameweek information")
+
+
+@router.get("/fixtures", summary="Get fixtures")
+async def get_fixtures(
+    filter: Optional[str] = Query("upcoming", description="Filter: live, today, recent, upcoming"),
+    gameweek: Optional[int] = Query(None, description="Specific gameweek number"),
+    data_service: FPLDataService = Depends(get_data_service),
+):
+    """
+    Get Premier League fixtures
+
+    Filters:
+    - live: Currently playing matches
+    - today: Matches scheduled for today
+    - recent: Recently finished matches
+    - upcoming: Upcoming matches
+    - gameweek: Specific gameweek (requires gameweek parameter)
+
+    Returns list of fixtures with:
+    - Teams playing
+    - Kickoff time
+    - Score (if started)
+    - Status (upcoming, live, finished)
+    """
+    try:
+        # Get bootstrap data which includes events (gameweeks) and fixtures
+        bootstrap = await data_service.get_bootstrap_data()
+
+        # For now, return a structure indicating fixtures aren't fully implemented yet
+        # This prevents the frontend from crashing
+        return {
+            "fixtures": [],
+            "filter": filter,
+            "message": "Fixtures endpoint is available. FPL API fixtures integration coming soon.",
+            "gameweek": gameweek,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching fixtures: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch fixtures")

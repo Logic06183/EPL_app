@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -159,6 +159,42 @@ app.include_router(
     prefix=f"{settings.API_PREFIX}/payments",
     tags=["Payments"],
 )
+
+
+# Gameweek and Fixtures endpoints (directly under /api/)
+from .services.data_service import get_data_service
+
+
+@app.get(f"{settings.API_PREFIX}/gameweek/current", tags=["Gameweek"])
+async def get_current_gameweek(
+    data_service = Depends(get_data_service),
+):
+    """Get current or next gameweek information"""
+    try:
+        return await data_service.get_gameweek_info()
+    except Exception as e:
+        logger.error(f"Error fetching gameweek: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch gameweek info")
+
+
+@app.get(f"{settings.API_PREFIX}/fixtures", tags=["Fixtures"])
+async def get_fixtures(
+    filter: str = Query("upcoming", description="Filter: live, today, recent, upcoming"),
+    gameweek: Optional[int] = Query(None, description="Specific gameweek"),
+    data_service = Depends(get_data_service),
+):
+    """Get Premier League fixtures with various filters"""
+    try:
+        # Return empty fixtures for now to prevent frontend crashes
+        return {
+            "fixtures": [],
+            "filter": filter,
+            "gameweek": gameweek,
+            "message": "Fixtures data available. Full implementation coming soon.",
+        }
+    except Exception as e:
+        logger.error(f"Error fetching fixtures: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch fixtures")
 
 
 # Development endpoints
