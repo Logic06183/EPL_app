@@ -12,6 +12,9 @@ import MLMethodology from '../components/MLMethodology'
 import HybridForecaster from '../components/HybridForecaster'
 import PredictionTracker from '../components/PredictionTracker'
 
+// Get API URL (same as in lib/api.js)
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
 export default function EPLDashboard() {
   const [activeTab, setActiveTab] = useState('predictions')
   const [apiStatus, setApiStatus] = useState('checking')
@@ -29,7 +32,7 @@ export default function EPLDashboard() {
 
   const checkApiStatus = async () => {
     try {
-      const response = await fetch('/api/health')
+      const response = await fetch(`${API_URL}/health`)
       if (response.ok) {
         const data = await response.json()
         setApiStatus(data.ai_enabled ? 'ai-enabled' : 'connected')
