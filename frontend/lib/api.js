@@ -4,14 +4,8 @@
  */
 
 // Get API URL from environment or fallback
-const getApiUrl = () => {
-  if (typeof window !== 'undefined') {
-    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-  }
-  return 'http://localhost:8000'
-}
-
-const API_URL = getApiUrl()
+// Next.js replaces process.env.NEXT_PUBLIC_* at build time
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 /**
  * Make a GET request to the API
