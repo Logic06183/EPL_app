@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY pyproject.toml ./
+# Copy all necessary files for pip install
+COPY pyproject.toml README.md ./
+COPY app/ ./app/
 
 # Install dependencies
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
@@ -44,12 +45,10 @@ COPY --chown=appuser:appuser app/ ./app/
 # Switch to non-root user
 USER appuser
 
-# Expose port
-EXPOSE 8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Expose port (Cloud Run uses 8080)
+EXPOSE 8080
 
 # Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use exec form with shell to expand PORT variable
+ENTRYPOINT ["sh", "-c"]
+CMD ["uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
