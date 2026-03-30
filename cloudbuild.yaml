@@ -1,21 +1,21 @@
 steps:
   # Build the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/epl-prediction-app/backend', '.']
-  
+    args: ['build', '-f', 'Dockerfile.production', '-t', 'gcr.io/epl-prediction-app/epl-api', '.']
+
   # Push the container image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/epl-prediction-app/backend']
-  
+    args: ['push', 'gcr.io/epl-prediction-app/epl-api']
+
   # Deploy container image to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
       - 'run'
       - 'deploy'
-      - 'epl-backend'
+      - 'epl-api'
       - '--image'
-      - 'gcr.io/epl-prediction-app/backend'
+      - 'gcr.io/epl-prediction-app/epl-api'
       - '--region'
       - 'us-central1'
       - '--platform'
@@ -24,11 +24,13 @@ steps:
       - '--memory'
       - '2Gi'
       - '--cpu'
-      - '1'
+      - '2'
       - '--timeout'
       - '300'
       - '--max-instances'
-      - '3'
+      - '10'
+      - '--set-env-vars'
+      - 'ENVIRONMENT=production,PAYFAST_MERCHANT_ID=15828539,PAYFAST_MERCHANT_KEY=cf6uuimyjjcss,PAYFAST_PASSPHRASE=FplAiPro2026,PAYFAST_NOTIFY_URL=https://epl-api-77913915885.us-central1.run.app/api/payments/webhook,PAYFAST_SANDBOX=false'
 
 images:
-  - 'gcr.io/epl-prediction-app/backend'
+  - 'gcr.io/epl-prediction-app/epl-api'

@@ -2,71 +2,90 @@
 
 import { useState, useEffect } from 'react'
 import { TrendingUp, Star, DollarSign, Users, Loader2, AlertCircle, Trophy, Zap, Crown, Target } from 'lucide-react'
-import { getPredictions, getEnhancedPredictions, getModelInfo, handleApiError } from '../lib/api'
 
 export default function PlayerPredictionsEPL() {
   const [predictions, setPredictions] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [topN, setTopN] = useState(20)
-  const [useGemini, setUseGemini] = useState(false)
+  const [useAI, setUseAI] = useState(false)
   const [filter, setFilter] = useState('all')
-  const [modelType, setModelType] = useState('random_forest')
-  const [modelInfo, setModelInfo] = useState(null)
+  const [modelType, setModelType] = useState('basic')
+  const [availableModels, setAvailableModels] = useState({})
   const [userTier, setUserTier] = useState('free') // 'free', 'basic', 'premium'
 
   useEffect(() => {
-    fetchModelInfo()
+    fetchAvailableModels()
   }, [])
 
   useEffect(() => {
     fetchPredictions()
-  }, [topN, useGemini, modelType, filter])
+  }, [topN, useAI, modelType])
 
-  const fetchModelInfo = async () => {
+  const fetchAvailableModels = async () => {
     try {
-      const data = await getModelInfo()
-      setModelInfo(data)
+      const apiUrl = typeof window !== 'undefined' ? 
+        (process.env.NEXT_PUBLIC_API_URL || 'https://epl-api-5d4hhzfrfq-uc.a.run.app') :
+        'https://epl-api-5d4hhzfrfq-uc.a.run.app'
+      const response = await fetch(`${apiUrl}/api/models/info`)
+      console.log('Models API response status:', response.status)
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Available models data:', data)
+        setAvailableModels(data.available_models || {})
+      } else {
+        console.error('Models API failed:', response.status, response.statusText)
+      }
     } catch (error) {
-      console.error('Error fetching model info:', error)
+      console.error('Error fetching available models:', error)
     }
   }
 
   const fetchPredictions = async () => {
     setLoading(true)
     setError(null)
-
+    
     try {
-      // Enforce tier restrictions
-      let actualModel = modelType
-      if (userTier === 'free') {
-        actualModel = 'random_forest'
+      // Restrict AI models based on user tier
+      let actualModelType = modelType
+      if (userTier === 'free' && modelType !== 'basic') {
+        actualModelType = 'basic'
       }
-
-      const position = filter === 'all' ? null : parseInt(filter)
-
-      let data
-      if (useGemini && userTier === 'premium') {
-        // Enhanced predictions with Gemini AI (premium only)
-        data = await getEnhancedPredictions({
-          topN,
-          model: actualModel,
-          useGemini: true,
-        })
-      } else {
-        // Standard predictions
-        data = await getPredictions({
-          topN,
-          model: actualModel,
-          position,
-        })
+      
+      const params = new URLSearchParams({
+        top_n: topN,
+        use_ai: useAI || actualModelType !== 'basic',
+        model_type: actualModelType
+      })
+      
+      const apiUrl = typeof window !== 'undefined' ? 
+        (process.env.NEXT_PUBLIC_API_URL || 'https://epl-api-5d4hhzfrfq-uc.a.run.app') :
+        'https://epl-api-5d4hhzfrfq-uc.a.run.app'
+      const url = `${apiUrl}/api/players/predictions/enhanced?${params}`
+      console.log('Fetching predictions from:', url)
+      
+      const controller = new AbortController()
+      // Longer timeout for ML model predictions (30 seconds)
+      const timeoutDuration = (modelType !== 'basic') ? 30000 : 10000
+      const timeoutId = setTimeout(() => controller.abort(), timeoutDuration)
+      
+      const response = await fetch(url, {
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
+      console.log('Response status:', response.status, response.statusText)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Error response body:', errorText)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
-
-      // The new backend returns an array directly
-      setPredictions(Array.isArray(data) ? data : [])
+      const data = await response.json()
+      console.log('Predictions data:', data)
+      setPredictions(data.predictions || [])
     } catch (error) {
       console.error('Error fetching predictions:', error)
-      setError(handleApiError(error))
+      setError(error.message)
     } finally {
       setLoading(false)
     }
@@ -85,7 +104,7 @@ export default function PlayerPredictionsEPL() {
   const getPositionName = (position) => {
     const names = {
       1: 'GK',
-      2: 'DEF',
+      2: 'DEF', 
       3: 'MID',
       4: 'FWD'
     }
@@ -99,6 +118,11 @@ export default function PlayerPredictionsEPL() {
     return 'form-poor'
   }
 
+  const filteredPredictions = predictions.filter(player => {
+    if (filter === 'all') return true
+    return player.position === parseInt(filter)
+  })
+
   if (loading) {
     return (
       <div className="glass-epl rounded-3xl p-8">
@@ -106,7 +130,7 @@ export default function PlayerPredictionsEPL() {
           <div className="loading-epl mb-6"></div>
           <h3 className="text-xl font-semibold text-white mb-2">⚽ Analyzing Premier League Players</h3>
           <p className="text-white/70 text-center max-w-md">
-            {useGemini ? 'AI is processing player data with advanced algorithms...' : 'Fetching the latest player statistics and predictions...'}
+            {useAI ? 'AI is processing player data with advanced algorithms...' : 'Fetching the latest player statistics and predictions...'}
           </p>
         </div>
       </div>
@@ -160,14 +184,14 @@ export default function PlayerPredictionsEPL() {
                   {userTier === 'premium' && 'Premium Tier - Advanced AI'}
                 </h3>
                 <p className="text-white/70 text-sm">
-                  {userTier === 'free' && 'Random Forest model available. Upgrade for advanced features.'}
-                  {userTier === 'basic' && 'AI predictions with xG/xA analytics available.'}
-                  {userTier === 'premium' && 'All models including Gemini AI insights.'}
+                  {userTier === 'free' && 'Form-based predictions available. Upgrade for AI models.'}
+                  {userTier === 'basic' && 'AI predictions and Random Forest model available.'}
+                  {userTier === 'premium' && 'All AI models including Deep Learning and Ensemble.'}
                 </p>
               </div>
             </div>
-            <select
-              value={userTier}
+            <select 
+              value={userTier} 
               onChange={(e) => setUserTier(e.target.value)}
               className="p-2 rounded-lg bg-white/20 text-white border border-white/30 focus:border-white/50 text-sm"
             >
@@ -179,12 +203,12 @@ export default function PlayerPredictionsEPL() {
         </div>
 
         {/* Controls Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           {/* Top N Players */}
           <div className="space-y-2">
             <label className="text-white font-medium text-sm uppercase tracking-wide">Show Top</label>
-            <select
-              value={topN}
+            <select 
+              value={topN} 
               onChange={(e) => setTopN(parseInt(e.target.value))}
               className="w-full p-3 rounded-lg bg-white/20 text-white border border-green-400/30 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 backdrop-blur-lg"
             >
@@ -198,8 +222,8 @@ export default function PlayerPredictionsEPL() {
           {/* Position Filter */}
           <div className="space-y-2">
             <label className="text-white font-medium text-sm uppercase tracking-wide">Position</label>
-            <select
-              value={filter}
+            <select 
+              value={filter} 
               onChange={(e) => setFilter(e.target.value)}
               className="w-full p-3 rounded-lg bg-white/20 text-white border border-green-400/30 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 backdrop-blur-lg"
             >
@@ -214,175 +238,202 @@ export default function PlayerPredictionsEPL() {
           {/* AI Model Selection */}
           <div className="space-y-2">
             <label className="text-white font-medium text-sm uppercase tracking-wide">AI Model</label>
-            <select
-              value={modelType}
+            <select 
+              value={modelType} 
               onChange={(e) => setModelType(e.target.value)}
               className="w-full p-3 rounded-lg bg-white/20 text-white border border-green-400/30 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 backdrop-blur-lg"
             >
-              <option value="random_forest" className="text-black">🌲 Random Forest (200 trees)</option>
-
+              <option value="basic" className="text-black">📊 Basic (Form-based) - FREE</option>
+              
+              {userTier !== 'free' && (
+                <option value="random_forest" className="text-black">🌲 Random Forest ML - BASIC+</option>
+              )}
+              {userTier === 'free' && (
+                <option value="random_forest" className="text-black" disabled>🌲 Random Forest ML - UPGRADE REQUIRED</option>
+              )}
+              
               {userTier === 'premium' && (
                 <>
-                  <option value="cnn" className="text-black">🧠 CNN Deep Learning</option>
-                  <option value="ensemble" className="text-black">🚀 Multi-Model Ensemble</option>
+                  <option value="deep_learning" className="text-black">🧠 Deep Learning CNN - PREMIUM</option>
+                  <option value="ensemble" className="text-black">🚀 Multi-Model Ensemble - PREMIUM</option>
                 </>
               )}
               {userTier !== 'premium' && (
                 <>
-                  <option value="cnn" className="text-black" disabled>🧠 CNN - PREMIUM ONLY</option>
-                  <option value="ensemble" className="text-black" disabled>🚀 Ensemble - PREMIUM ONLY</option>
+                  <option value="deep_learning" className="text-black" disabled>🧠 Deep Learning CNN - PREMIUM ONLY</option>
+                  <option value="ensemble" className="text-black" disabled>🚀 Multi-Model Ensemble - PREMIUM ONLY</option>
                 </>
               )}
             </select>
+            <div className="text-xs text-white/60">
+              {userTier === 'free' && modelType !== 'basic' && '🔒 Upgrade required for this model'}
+              {userTier === 'basic' && ['deep_learning', 'ensemble'].includes(modelType) && '🔒 Premium required for this model'}
+              {(userTier !== 'free' || modelType === 'basic') && (availableModels[modelType]?.accuracy || 'Standard accuracy')}
+            </div>
           </div>
 
-          {/* Gemini AI Toggle */}
+          {/* AI Enhancement Toggle */}
           <div className="space-y-2">
-            <label className="text-white font-medium text-sm uppercase tracking-wide">Gemini AI</label>
+            <label className="text-white font-medium text-sm uppercase tracking-wide">AI Mode</label>
             <button
-              onClick={() => setUseGemini(!useGemini)}
-              disabled={userTier !== 'premium'}
+              onClick={() => setUseAI(!useAI)}
               className={`w-full p-3 rounded-lg font-medium transition-all duration-300 border-2 ${
-                useGemini
-                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 border-purple-400 text-white shadow-lg shadow-purple-500/30'
-                  : 'bg-white/10 border-white/20 text-white/70 hover:bg-white/20'
-              } ${userTier !== 'premium' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                useAI || modelType !== 'basic'
+                  ? 'bg-gradient-to-r from-purple-500 to-indigo-500 border-purple-400 text-white shadow-lg' 
+                  : 'bg-white/10 border-white/30 text-white/70 hover:bg-white/20'
+              }`}
             >
-              {useGemini ? '✨ AI Insights ON' : '💡 AI Insights OFF'}
+              <div className="flex items-center justify-center gap-2">
+                {useAI || modelType !== 'basic' ? (
+                  <>
+                    <span className="text-lg">🤖</span>
+                    <span>AI Active</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-lg">📊</span>
+                    <span>Standard</span>
+                  </>
+                )}
+              </div>
+              <div className="text-xs mt-1 opacity-80">
+                {modelType !== 'basic' ? availableModels[modelType]?.name : 'Click to Enable AI'}
+              </div>
             </button>
-            {userTier !== 'premium' && (
-              <p className="text-xs text-white/50 text-center">Premium required</p>
-            )}
+          </div>
+
+          {/* Refresh Button */}
+          <div className="space-y-2">
+            <label className="text-white font-medium text-sm uppercase tracking-wide">Actions</label>
+            <button onClick={fetchPredictions} className="btn-epl-primary w-full">
+              <div className="flex items-center gap-2 justify-center">
+                <Target className="w-4 h-4" />
+                Refresh Data
+              </div>
+            </button>
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchPredictions}
-            className="btn-epl-primary"
-          >
-            🔄 Refresh Predictions
-          </button>
-          <div className="text-sm text-white/60">
-            Showing {predictions.length} player{predictions.length !== 1 ? 's' : ''}
+        {/* Stats Summary */}
+        {predictions.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="stat-card-epl">
+              <div className="text-2xl font-bold text-white mb-1">{predictions.length}</div>
+              <div className="text-white/70 text-sm">Players Analyzed</div>
+            </div>
+            <div className="stat-card-epl">
+              <div className="text-2xl font-bold text-green-400 mb-1">
+                {predictions.filter(p => p.ai_enhanced).length}
+              </div>
+              <div className="text-white/70 text-sm">AI Enhanced</div>
+            </div>
+            <div className="stat-card-epl">
+              <div className="text-2xl font-bold text-yellow-400 mb-1">
+                £{predictions.reduce((sum, p) => sum + p.price, 0).toFixed(1)}m
+              </div>
+              <div className="text-white/70 text-sm">Total Value</div>
+            </div>
+            <div className="stat-card-epl">
+              <div className="text-2xl font-bold text-purple-400 mb-1">
+                {Math.round(predictions.reduce((sum, p) => sum + p.predicted_points, 0))}
+              </div>
+              <div className="text-white/70 text-sm">Total Points</div>
+            </div>
           </div>
+        )}
+      </div>
+
+      {/* Players Grid */}
+      {filteredPredictions.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredPredictions.map((player, index) => (
+            <div key={player.id} className="player-card-epl group">
+              {/* Rank Badge */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  {index < 3 && (
+                    <div className="text-2xl">
+                      {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                    </div>
+                  )}
+                  <span className="text-white/60 font-bold text-lg">#{index + 1}</span>
+                </div>
+                {player.ai_enhanced && (
+                  <div className="flex items-center gap-1 px-2 py-1 bg-purple-500/30 rounded-full">
+                    <Zap className="w-3 h-3 text-purple-300" />
+                    <span className="text-purple-300 text-xs font-medium">AI</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Player Info */}
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`px-2 py-1 rounded-full text-xs font-bold ${getPositionColor(player.position)}`}>
+                    {getPositionName(player.position)}
+                  </span>
+                  <span className="text-white/60 text-sm">{player.team_name || `Team ${player.team}`}</span>
+                </div>
+                
+                <h3 className="text-white font-bold text-lg mb-1 group-hover:text-green-300 transition-colors">
+                  {player.full_name || player.name}
+                </h3>
+                
+                {player.name !== player.full_name && (
+                  <p className="text-white/60 text-sm">{player.name}</p>
+                )}
+              </div>
+
+              {/* Prediction Score */}
+              <div className="text-center mb-4 p-3 bg-white/10 rounded-lg backdrop-blur-sm">
+                <div className="text-3xl font-bold text-green-400 mb-1">
+                  {player.predicted_points}
+                </div>
+                <div className="text-white/70 text-sm">Predicted Points</div>
+                {player.confidence && (
+                  <div className="text-xs text-white/50 mt-1">
+                    {Math.round(player.confidence * 100)}% confident
+                  </div>
+                )}
+              </div>
+
+              {/* Stats Grid */}
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="text-center">
+                  <div className="text-white font-bold">£{player.price}m</div>
+                  <div className="text-white/60 text-xs">Price</div>
+                </div>
+                <div className="text-center">
+                  <div className={`font-bold ${getFormColor(parseFloat(player.form))}`}>
+                    {player.form}
+                  </div>
+                  <div className="text-white/60 text-xs">Form</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-white font-bold">{player.ownership}%</div>
+                  <div className="text-white/60 text-xs">Owned</div>
+                </div>
+              </div>
+
+              {/* Reasoning */}
+              {player.reasoning && (
+                <div className="text-xs text-white/60 italic border-t border-white/20 pt-3">
+                  "{player.reasoning}"
+                </div>
+              )}
+            </div>
+          ))}
         </div>
-      </div>
-
-      {/* Player Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {predictions.map((player, index) => (
-          <div
-            key={player.id || index}
-            className="glass-epl rounded-2xl p-6 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl border border-white/10 hover:border-green-400/50"
-          >
-            {/* Player Header */}
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <div className={`inline-block px-3 py-1 rounded-full text-sm font-bold mb-2 ${getPositionColor(player.position)}`}>
-                  {getPositionName(player.position)}
-                </div>
-                <h3 className="text-lg font-bold text-white mb-1">{player.name}</h3>
-                <p className="text-sm text-white/60">{player.team_name || 'Unknown Team'}</p>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-green-400">
-                  £{player.price?.toFixed(1) || '0.0'}m
-                </div>
-              </div>
-            </div>
-
-            {/* Prediction Score */}
-            <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 rounded-xl p-4 mb-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm text-white/70 uppercase tracking-wide">Predicted Points</div>
-                  <div className="text-3xl font-bold text-white">
-                    {player.predicted_points?.toFixed(1) || '0.0'}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm text-white/70 uppercase tracking-wide">Confidence</div>
-                  <div className="text-2xl font-bold text-green-400">
-                    {player.confidence?.toFixed(0) || '0'}%
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="bg-white/5 rounded-lg p-3">
-                <div className="text-xs text-white/60 uppercase">Form</div>
-                <div className={`text-lg font-bold ${getFormColor(player.form)}`}>
-                  {player.form?.toFixed(1) || '0.0'}
-                </div>
-              </div>
-              <div className="bg-white/5 rounded-lg p-3">
-                <div className="text-xs text-white/60 uppercase">Ownership</div>
-                <div className="text-lg font-bold text-white">
-                  {player.ownership?.toFixed(1) || '0.0'}%
-                </div>
-              </div>
-            </div>
-
-            {/* Advanced Analytics (if available) */}
-            {player.advanced_stats && (
-              <div className="bg-white/5 rounded-lg p-3 mb-4">
-                <div className="text-xs text-white/60 uppercase mb-2">Advanced Stats</div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  {player.advanced_stats.expected_goals !== null && (
-                    <div>
-                      <div className="text-xs text-yellow-400">xG</div>
-                      <div className="text-sm font-bold text-white">
-                        {player.advanced_stats.expected_goals?.toFixed(2) || '0.00'}
-                      </div>
-                    </div>
-                  )}
-                  {player.advanced_stats.expected_assists !== null && (
-                    <div>
-                      <div className="text-xs text-blue-400">xA</div>
-                      <div className="text-sm font-bold text-white">
-                        {player.advanced_stats.expected_assists?.toFixed(2) || '0.00'}
-                      </div>
-                    </div>
-                  )}
-                  {player.advanced_stats.ict_index !== null && (
-                    <div>
-                      <div className="text-xs text-green-400">ICT</div>
-                      <div className="text-sm font-bold text-white">
-                        {player.advanced_stats.ict_index?.toFixed(1) || '0.0'}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* AI Insights */}
-            {(player.reasoning || player.gemini_insight) && (
-              <div className="bg-purple-500/10 border border-purple-400/30 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <Star className="w-4 h-4 text-purple-400 flex-shrink-0 mt-1" />
-                  <p className="text-xs text-white/80 leading-relaxed">
-                    {player.gemini_insight || player.reasoning}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* No Results */}
-      {predictions.length === 0 && !loading && (
+      ) : (
         <div className="glass-epl rounded-3xl p-12 text-center">
-          <Trophy className="w-16 h-16 text-white/40 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">No Predictions Available</h3>
-          <p className="text-white/60">
-            Try adjusting your filters or refresh the data
+          <Trophy className="w-16 h-16 text-white/50 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-white mb-2">No Players Found</h3>
+          <p className="text-white/70 mb-6">
+            Try adjusting your filters or refreshing the data
           </p>
+          <button onClick={fetchPredictions} className="btn-epl-primary">
+            Refresh Data
+          </button>
         </div>
       )}
     </div>

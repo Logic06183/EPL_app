@@ -6,10 +6,23 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Browser-like headers required by the FPL API
+# Without these, requests from cloud providers (GCP, AWS, etc.) get blocked
+FPL_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-GB,en;q=0.9",
+    "Referer": "https://fantasy.premierleague.com/",
+    "Origin": "https://fantasy.premierleague.com",
+}
+
+
 class FPLDataFetcher:
     def __init__(self, base_url: str = "https://fantasy.premierleague.com/api"):
         self.base_url = base_url
         self.session = requests.Session()
+        self.session.headers.update(FPL_HEADERS)
         
     def get_bootstrap_data(self) -> Dict:
         url = f"{self.base_url}/bootstrap-static/"

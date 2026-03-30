@@ -30,7 +30,7 @@ export default function HybridForecaster() {
     setError(null)
     
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://epl-api-5d4hhzfrfq-uc.a.run.app'
       const fullUrl = `${apiUrl}/api/match-predictions?limit=8`
       console.log('🔍 Fetching predictions from:', fullUrl)
       console.log('📊 Environment API URL:', process.env.NEXT_PUBLIC_API_URL)
@@ -72,7 +72,7 @@ export default function HybridForecaster() {
     
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/hybrid-forecast/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}?match_date=${encodeURIComponent(matchDate)}`
+        `${process.env.NEXT_PUBLIC_API_URL || 'https://epl-api-5d4hhzfrfq-uc.a.run.app'}/api/hybrid-forecast/${encodeURIComponent(homeTeam)}/${encodeURIComponent(awayTeam)}?match_date=${encodeURIComponent(matchDate)}`
       )
       
       if (!response.ok) {

@@ -20,7 +20,7 @@ export default function LiveScores() {
     try {
       if (activeTab === 'live') {
         // When SportMonks is configured, this will fetch real live scores
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/sportmonks/live`)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-api-5d4hhzfrfq-uc.a.run.app'}/api/sportmonks/live`)
         if (response.ok) {
           const data = await response.json()
           setLiveMatches(data.matches || [])
@@ -29,7 +29,7 @@ export default function LiveScores() {
           setLiveMatches(getMockLiveMatches())
         }
       } else if (activeTab === 'standings') {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-backend-77913915885.us-central1.run.app'}/api/sportmonks/standings`)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://epl-api-5d4hhzfrfq-uc.a.run.app'}/api/sportmonks/standings`)
         if (response.ok) {
           const data = await response.json()
           setStandings(data.standings || getMockStandings())
