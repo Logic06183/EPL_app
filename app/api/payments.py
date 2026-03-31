@@ -57,15 +57,20 @@ PLANS = {
 # ── Signature helpers ──────────────────────────────────────────────────────────
 
 def _payfast_signature(params: Dict[str, str], passphrase: str = "") -> str:
-    """MD5 signature for payment page and ITN verification."""
-    parts = [
-        f"{k}={quote_plus(str(v))}"
-        for k, v in params.items()
-        if v != "" and v is not None
-    ]
+    """
+    MD5 signature matching PayFast PHP SDK exactly:
+      foreach($data as $key => $val) {
+          if($val !== '') { $out .= $key.'='.urlencode(trim($val)).'&'; }
+      }
+    """
+    parts = []
+    for k, v in params.items():
+        v_str = str(v).strip()
+        if v_str != "":
+            parts.append(f"{k}={quote_plus(v_str)}")
     param_string = "&".join(parts)
     if passphrase:
-        param_string += f"&passphrase={quote_plus(passphrase)}"
+        param_string += f"&passphrase={quote_plus(passphrase.strip())}"
     return hashlib.md5(param_string.encode("utf-8")).hexdigest()
 
 
@@ -133,6 +138,9 @@ async def initialize_payment(request: PaymentInitRequest):
     if not PAYFAST_MERCHANT_ID or not PAYFAST_MERCHANT_KEY:
         raise HTTPException(status_code=503, detail="Payment service not configured")
 
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Parameter order must match PayFast's expected order exactly
     params: Dict[str, str] = {
         "merchant_id":       PAYFAST_MERCHANT_ID,
         "merchant_key":      PAYFAST_MERCHANT_KEY,
@@ -147,15 +155,18 @@ async def initialize_payment(request: PaymentInitRequest):
         "item_name":         plan["name"],
         # Recurring subscription — monthly, indefinite
         "subscription_type": "1",
+        "billing_date":      today,       # must be explicit or PayFast adds its own
         "recurring_amount":  plan["amount"],
-        "frequency":         "3",   # 3 = monthly
-        "cycles":            "0",   # 0 = unlimited
+        "frequency":         "3",         # 3 = monthly
+        "cycles":            "0",         # 0 = unlimited
         # Pass plan and email to webhook so it can upgrade the user
         "custom_str1":       request.plan_id,
         "custom_str2":       request.email,
     }
 
-    params["signature"] = _payfast_signature(params, PAYFAST_PASSPHRASE)
+    sig = _payfast_signature(params, PAYFAST_PASSPHRASE)
+    logger.info(f"PayFast sig params: {list(params.keys())} → {sig}")
+    params["signature"] = sig
     payment_url = f"{PAYFAST_HOST}/eng/process?{urlencode(params)}"
 
     return {

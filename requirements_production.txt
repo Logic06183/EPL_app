@@ -1,0 +1,17 @@
+# FPL AI Pro — Production Requirements
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+gunicorn==21.2.0
+pydantic==2.6.1
+httpx==0.26.0
+
+# ML models
+scikit-learn==1.4.0
+numpy==1.26.4
+
+# Firebase / Firestore
+firebase-admin==6.4.0
+
+# Utilities
+cachetools==5.3.2
+python-dotenv==1.0.1
