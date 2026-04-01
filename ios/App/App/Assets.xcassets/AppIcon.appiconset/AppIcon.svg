@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f1f11"/>
+      <stop offset="100%" stop-color="#1a3d1e"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f0d060"/>
+      <stop offset="100%" stop-color="#b8962e"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#d4af37" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#d4af37" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <!-- Subtle pitch lines -->
+  <rect x="0" y="510" width="1024" height="4" fill="rgba(255,255,255,0.05)" rx="2"/>
+  <circle cx="512" cy="512" r="150" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="3"/>
+  <!-- Glow circle behind ball -->
+  <circle cx="512" cy="460" r="220" fill="url(#glow)"/>
+  <!-- Football -->
+  <circle cx="512" cy="460" r="180" fill="none" stroke="url(#gold)" stroke-width="14"/>
+  <!-- Pentagon patches on football -->
+  <polygon points="512,310 557,344 540,396 484,396 467,344" fill="none" stroke="url(#gold)" stroke-width="10"/>
+  <polygon points="512,310 466,282 432,316 450,366 467,344 512,310" fill="url(#gold)" opacity="0.7"/>
+  <polygon points="512,310 558,282 592,316 574,366 557,344 512,310" fill="url(#gold)" opacity="0.5"/>
+  <polygon points="540,396 592,408 610,360 592,316 574,366 540,396" fill="url(#gold)" opacity="0.6"/>
+  <polygon points="484,396 432,408 414,360 432,316 450,366 484,396" fill="url(#gold)" opacity="0.4"/>
+  <polygon points="512,610 466,578 432,544 450,494 484,396 540,396 574,494 592,544 558,578 512,610" fill="none" stroke="url(#gold)" stroke-width="6" opacity="0.4"/>
+  <!-- FPL text -->
+  <text x="512" y="730" font-family="'Arial Black',sans-serif" font-size="130" font-weight="900" fill="url(#gold)" text-anchor="middle" letter-spacing="8">FPL</text>
+  <!-- AI text -->
+  <text x="512" y="830" font-family="'Arial',sans-serif" font-size="58" font-weight="700" fill="rgba(212,175,55,0.6)" text-anchor="middle" letter-spacing="20">AI PRO</text>
+  <!-- Corner accent dots -->
+  <circle cx="180" cy="180" r="12" fill="url(#gold)" opacity="0.4"/>
+  <circle cx="844" cy="180" r="12" fill="url(#gold)" opacity="0.4"/>
+  <circle cx="180" cy="844" r="12" fill="url(#gold)" opacity="0.4"/>
+  <circle cx="844" cy="844" r="12" fill="url(#gold)" opacity="0.4"/>
+</svg>
