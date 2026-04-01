@@ -831,7 +831,11 @@ input[type=range]{width:110px;height:3px;accent-color:var(--gold);cursor:pointer
 
 <script>
 'use strict';
-const API = window.location.hostname==='localhost'?'http://localhost:8001/api':'/api';
+// Capacitor native app: window.Capacitor is defined — point at production API
+const _isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const API = _isNative
+  ? 'https://epl-prediction-app.web.app/api'
+  : (window.location.hostname === 'localhost' ? 'http://localhost:8001/api' : '/api');
 
 // ── Firebase Config — replace with your project values ────────────────────
 // Get these from: Firebase Console → Project Settings → Your apps → Web app
