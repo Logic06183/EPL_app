@@ -165,13 +165,21 @@ async def initialize_payment(request: PaymentInitRequest):
     }
 
     sig = _payfast_signature(params, PAYFAST_PASSPHRASE)
-    logger.info(f"PayFast sig params: {list(params.keys())} → {sig}")
-    params["signature"] = sig
+    logger.info(f"PayFast payment sig: {sig}")
+
+    # Only include the signature in the redirect URL if PayFast's
+    # "Enable require signature" is turned ON in merchant settings.
+    # When it is OFF, sending a mismatched signature causes a 400 error.
+    # ITN (webhook) verification uses the passphrase separately.
+    require_sig = os.getenv("PAYFAST_REQUIRE_SIGNATURE", "false").lower() == "true"
+    if require_sig:
+        params["signature"] = sig
+
     payment_url = f"{PAYFAST_HOST}/eng/process?{urlencode(params)}"
 
     return {
         "authorization_url": payment_url,
-        "reference":         params["signature"],
+        "reference":         sig,
     }
 
 

@@ -44,8 +44,18 @@ async def lifespan(app: FastAPI):
     app_state["cache"] = cache_manager
     logger.info("Cache manager initialized")
 
-    # Initialize ML models (lazy loading)
-    app_state["models_loaded"] = False
+    # Pre-warm FPL bootstrap cache so first user request is fast
+    try:
+        from .services.data_service import get_data_service
+        data_service = get_data_service()
+        bootstrap = await data_service.get_bootstrap_data()
+        player_count = len(bootstrap.get("elements", []))
+        logger.info(f"Bootstrap cache pre-warmed: {player_count} players loaded")
+        app_state["models_loaded"] = False
+    except Exception as e:
+        logger.warning(f"Bootstrap pre-warm failed (non-fatal): {e}")
+        app_state["models_loaded"] = False
+
     logger.info("Application startup complete")
 
     yield

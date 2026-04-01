@@ -76,7 +76,7 @@ class FPLDataService:
                 logger.info(f"FPL API returned {len(elements)} players")
 
             self._bootstrap_data = data
-            self.cache.set(cache_key, data, ttl=300)  # 5 minutes
+            self.cache.set(cache_key, data, ttl=600)  # 10 minutes
 
             logger.info("Bootstrap data fetched and cached")
             return data
