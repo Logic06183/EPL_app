@@ -444,8 +444,8 @@ firebase.initializeApp({
       </div>
     </div>
     <div style="background:var(--surf3);border:1px solid var(--brd-a);border-radius:var(--r);padding:16px;text-align:center;margin-top:4px">
-      <div style="font-size:13px;color:var(--txt-m);margin-bottom:8px">Subscribe at our website to unlock Pro features. Sign in with the same account and your Pro access will activate automatically.</div>
-      <div style="font-family:var(--fm);font-size:13px;color:var(--gold);font-weight:600">epl-prediction-app.web.app</div>
+      <div style="font-size:13px;color:var(--txt-m);margin-bottom:8px">Subscribe below to unlock Pro. Sign in with the same account and your Pro access activates automatically.</div>
+      <button class="btn" style="width:100%;margin-top:4px" onclick="openSubscribePage()">Subscribe — R99/month</button>
     </div>
   </div>
 </div>
@@ -850,10 +850,28 @@ async function signInWithApple() {
   }
 }
 
-// ── UPGRADE (website only — no in-app payment) ─────────────────────────────────
+// ── UPGRADE ───────────────────────────────────────────────────────────────────
 function openUpgradeModal() {
   $('account-modal').style.display = 'none';
   $('upgrade-modal').style.display = 'flex';
+}
+
+function openSubscribePage() {
+  var uid = currentUser ? currentUser.uid : '';
+  var email = currentUser ? (currentUser.email || '') : '';
+  // Build payment URL — passes firebase_uid so webhook can upgrade plan automatically
+  var base = AB.replace('/api', '');
+  var url = base + '/subscribe?uid=' + encodeURIComponent(uid) + '&email=' + encodeURIComponent(email) + '&plan=pro';
+  if (_platform === 'android' || _platform === 'ios') {
+    // Open in system browser so payment works outside WebView
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+      window.Capacitor.Plugins.Browser.open({url: url});
+    } else {
+      window.open(url, '_system');
+    }
+  } else {
+    window.open(url, '_blank');
+  }
 }
 
 // ── FEATURE GATE ──────────────────────────────────────────────────────────────
@@ -867,7 +885,7 @@ function requirePro(featureName, containerEl) {
       overlay.className = 'lock-overlay';
       overlay.innerHTML = '<div class="lock-icon">&#128274;</div>'
         + '<div class="lock-msg"><b>' + featureName + '</b> is a Pro feature</div>'
-        + '<button class="upgrade-btn" onclick="openUpgradeModal()">Unlock — Subscribe at<br>epl-prediction-app.web.app</button>';
+        + '<button class="upgrade-btn" onclick="openUpgradeModal()">Unlock Pro</button>';
       containerEl.appendChild(overlay);
     }
   }
