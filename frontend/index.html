@@ -467,15 +467,13 @@ var _n=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.
 var _platform=window.Capacitor&&window.Capacitor.getPlatform?window.Capacitor.getPlatform():(navigator.userAgent.indexOf('Android')>=0?'android':'web');
 var AB=_n?'https://epl-prediction-app.web.app/api':(window.location.hostname==='localhost'?'http://localhost:8001/api':'/api');
 
-// Show correct sign-in button for platform
+// Show correct sign-in button for platform (use getElementById — $ not yet defined)
 (function(){
   var isAndroid=_platform==='android';
-  var appleBtn=$('apple-signin-btn');
-  var googleBtn=$('google-signin-btn');
-  var divider=$('social-divider');
+  var appleBtn=document.getElementById('apple-signin-btn');
+  var googleBtn=document.getElementById('google-signin-btn');
   if(appleBtn)appleBtn.style.display=isAndroid?'none':'flex';
   if(googleBtn)googleBtn.style.display=isAndroid?'flex':'none';
-  if(divider)divider.style.display='block';
 })();
 var $=function(id){return document.getElementById(id)};
 var fmt=function(n){return n!=null?(Math.round(n*10)/10).toFixed(1):'--'};
