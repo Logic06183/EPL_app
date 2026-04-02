@@ -1,6 +1,6 @@
 {
-  "appId": "com.fplaipro.app",
-  "appName": "FPL AI Pro",
+  "appId": "com.pitchiq.app",
+  "appName": "Pitch IQ",
   "webDir": "frontend",
   "server": {
     "androidScheme": "https",

@@ -1,7 +1,7 @@
 {
-  "name": "fpl-ai-pro",
+  "name": "pitch-iq",
   "version": "1.0.0",
-  "description": "FPL AI Pro mobile app",
+  "description": "Pitch IQ mobile app",
   "scripts": {
     "sync": "cap sync",
     "open:ios": "cap open ios"
