@@ -1,5 +1,7 @@
 node_modules/
 build/
+
+# iOS
 ios/Pods/
 ios/App/build/
 ios/App/DerivedData/
@@ -7,6 +9,17 @@ ios/App/App.xcworkspace/xcuserdata/
 ios/App/App.xcodeproj/xcuserdata/
 ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcuserstate
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+
 .DS_Store
 .env
 .env.*

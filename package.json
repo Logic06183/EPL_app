@@ -4,10 +4,12 @@
   "description": "FPL AI Pro mobile app",
   "scripts": {
     "sync": "cap sync",
-    "open:ios": "cap open ios"
+    "open:ios": "cap open ios",
+    "open:android": "cap open android"
   },
   "dependencies": {
     "@capacitor-community/apple-sign-in": "^7.1.0",
+    "@capacitor/android": "^6.2.1",
     "@capacitor/app": "^6.0.0",
     "@capacitor/core": "^6.0.0",
     "@capacitor/haptics": "^6.0.0",
