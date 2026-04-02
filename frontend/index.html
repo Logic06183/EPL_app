@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FPL AI Pro</title>
+<title>Pitch IQ</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script>
@@ -404,7 +404,7 @@ firebase.initializeApp({
   <div class="modal">
     <button class="modal-close" onclick="closeAuthModal()">&times;</button>
     <h3 id="auth-modal-title">Sign In</h3>
-    <p class="modal-sub" id="auth-modal-sub">Access your FPL AI Pro account</p>
+    <p class="modal-sub" id="auth-modal-sub">Access your Pitch IQ account</p>
     <div id="auth-err" class="modal-err" style="display:none"></div>
     <div class="field"><label>Email</label><input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email"></div>
     <div class="field" id="auth-name-field" style="display:none"><label>Name</label><input type="text" id="auth-name" placeholder="Your name"></div>
@@ -667,7 +667,7 @@ var authMode = 'login'; // 'login' | 'signup'
 function openAuthModal() {
   authMode = 'login';
   $('auth-modal-title').textContent = 'Sign In';
-  $('auth-modal-sub').textContent = 'Access your FPL AI Pro account';
+  $('auth-modal-sub').textContent = 'Access your Pitch IQ account';
   $('auth-submit-btn').textContent = 'Sign In';
   $('auth-toggle-btn').textContent = "Don't have an account? Sign up";
   $('auth-name-field').style.display = 'none';
@@ -684,7 +684,7 @@ function toggleAuthMode() {
   authMode = authMode === 'login' ? 'signup' : 'login';
   var isLogin = authMode === 'login';
   $('auth-modal-title').textContent = isLogin ? 'Sign In' : 'Create Account';
-  $('auth-modal-sub').textContent = isLogin ? 'Access your FPL AI Pro account' : 'Join FPL AI Pro for free';
+  $('auth-modal-sub').textContent = isLogin ? 'Access your Pitch IQ account' : 'Join Pitch IQ for free';
   $('auth-submit-btn').textContent = isLogin ? 'Sign In' : 'Create Account';
   $('auth-toggle-btn').textContent = isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in';
   $('auth-name-field').style.display = isLogin ? 'none' : 'block';
@@ -818,7 +818,7 @@ async function signInWithApple() {
     if (!plugin) throw new Error('Apple Sign In not available on this platform');
 
     var result = await plugin.authorize({
-      clientId: 'com.fplaipro.app',
+      clientId: 'com.pitchiq.app',
       redirectURI: 'https://epl-prediction-app.web.app',
       scopes: 'email name',
       nonce: hashedNonce

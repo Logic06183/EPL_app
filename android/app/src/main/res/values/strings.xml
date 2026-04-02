@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">FPL AI Pro</string>
-    <string name="title_activity_main">FPL AI Pro</string>
-    <string name="package_name">com.fplaipro.app</string>
-    <string name="custom_url_scheme">com.fplaipro.app</string>
+    <string name="app_name">Pitch IQ</string>
+    <string name="title_activity_main">Pitch IQ</string>
+    <string name="package_name">com.pitchiq.app</string>
+    <string name="custom_url_scheme">com.pitchiq.app</string>
 </resources>
