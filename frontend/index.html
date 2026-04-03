@@ -445,7 +445,7 @@ firebase.initializeApp({
     </div>
     <div style="background:var(--surf3);border:1px solid var(--brd-a);border-radius:var(--r);padding:16px;text-align:center;margin-top:4px">
       <div style="font-size:13px;color:var(--txt-m);margin-bottom:8px">Subscribe below to unlock Pro. Sign in with the same account and your Pro access activates automatically.</div>
-      <button class="btn" style="width:100%;margin-top:4px" onclick="openSubscribePage()">Subscribe — R99/month</button>
+      <button class="btn" style="width:100%;margin-top:4px" onclick="openSubscribePage()">Subscribe — <span class="subscribe-price">$4.99/mo</span></button>
     </div>
   </div>
 </div>
@@ -856,16 +856,80 @@ function openUpgradeModal() {
   $('upgrade-modal').style.display = 'flex';
 }
 
-function openSubscribePage() {
-  var uid = currentUser ? currentUser.uid : '';
+// Detect timezone → payment provider + display currency
+function detectPaymentRegion() {
+  try {
+    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    var isSA = tz.startsWith('Africa/');
+    var currencies = {
+      'Africa':  { symbol: 'R',  amount: '99',   label: 'R99/mo',    provider: 'paystack' },
+      'Europe':  { symbol: '€',  amount: '4.49', label: '€4.49/mo',  provider: 'stripe'   },
+      'America': { symbol: '$',  amount: '4.99', label: '$4.99/mo',  provider: 'stripe'   },
+      'Asia':    { symbol: '$',  amount: '4.99', label: '$4.99/mo',  provider: 'stripe'   },
+      'Pacific': { symbol: 'A$', amount: '7.99', label: 'A$7.99/mo', provider: 'stripe'   },
+    };
+    for (var region in currencies) {
+      if (tz.startsWith(region)) return currencies[region];
+    }
+    // UK special case
+    if (tz === 'Europe/London') return { symbol: '£', amount: '3.99', label: '£3.99/mo', provider: 'stripe' };
+  } catch(e) {}
+  return { symbol: '$', amount: '4.99', label: '$4.99/mo', provider: 'stripe' };
+}
+
+// Update the subscribe button label with local price
+(function() {
+  var region = detectPaymentRegion();
+  var btns = document.querySelectorAll('.subscribe-price');
+  btns.forEach(function(b) { b.textContent = region.label; });
+})();
+
+async function openSubscribePage() {
+  var uid   = currentUser ? currentUser.uid   : '';
   var email = currentUser ? (currentUser.email || '') : '';
-  // Build payment URL — passes firebase_uid so webhook can upgrade plan automatically
-  var base = AB.replace('/api', '');
-  var url = base + '/subscribe?uid=' + encodeURIComponent(uid) + '&email=' + encodeURIComponent(email) + '&plan=pro';
+  var region = detectPaymentRegion();
+  var url;
+
+  if (region.provider === 'stripe') {
+    // Call backend to create a Stripe Checkout Session
+    try {
+      var r = await fetch(AB + '/payment/stripe/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firebase_uid: uid, email: email, currency: region.symbol })
+      });
+      var d = await r.json();
+      if (d.checkout_url) { url = d.checkout_url; }
+      else throw new Error('No checkout URL');
+    } catch(e) {
+      console.warn('Stripe checkout failed, fallback to PayStack', e);
+      region.provider = 'paystack';
+    }
+  }
+
+  if (region.provider === 'paystack' || !url) {
+    // PayStack for SA / fallback
+    try {
+      var r2 = await fetch(AB + '/payment/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, plan_code: 'pro', firebase_uid: uid })
+      });
+      var d2 = await r2.json();
+      url = d2.payment_url || '';
+    } catch(e) {
+      console.error('PayStack checkout failed', e);
+      alert('Payment unavailable right now — please try again shortly.');
+      return;
+    }
+  }
+
+  if (!url) { alert('Could not start checkout — please try again.'); return; }
+
+  // Open in system browser on mobile (payment must not run inside WebView)
   if (_platform === 'android' || _platform === 'ios') {
-    // Open in system browser so payment works outside WebView
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
-      window.Capacitor.Plugins.Browser.open({url: url});
+      window.Capacitor.Plugins.Browser.open({ url: url });
     } else {
       window.open(url, '_system');
     }
