@@ -2,12 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import Dict, Optional
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
+
+from jose import JWTError, jwt
 
 from ...auth.auth_manager import (
     AuthManager, UserCreate, Token, SubscriptionUpdate,
-    UserInDB, ACCESS_TOKEN_EXPIRE_MINUTES
+    UserInDB, ACCESS_TOKEN_EXPIRE_MINUTES,
+    SECRET_KEY, ALGORITHM, UserTier, UserFeatures
 )
 from ...database.models import User
 from ..dependencies import get_db, get_current_user
