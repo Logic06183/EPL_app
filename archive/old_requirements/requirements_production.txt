@@ -1,4 +1,5 @@
 # Production requirements for FPL AI Pro
+firebase-admin==6.2.0
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 httpx==0.25.0

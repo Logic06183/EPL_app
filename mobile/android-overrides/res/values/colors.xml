@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FPL AI Pro dark theme colours — copy into android/app/src/main/res/values/ -->
+<resources>
+    <color name="colorPrimary">#050a0c</color>
+    <color name="colorPrimaryDark">#050a0c</color>
+    <color name="colorAccent">#c9a84c</color>
+</resources>

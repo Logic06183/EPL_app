@@ -329,18 +329,29 @@ async def set_cached_data(key: str, data: Any, ttl: int = 300):
             pass
     memory_cache[key] = data
 
+# Browser-like headers required by the FPL API
+# Without these, requests from cloud providers (GCP, AWS, etc.) get blocked
+FPL_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-GB,en;q=0.9",
+    "Referer": "https://fantasy.premierleague.com/",
+    "Origin": "https://fantasy.premierleague.com",
+}
+
 # FPL API client
 class FPLDataManager:
     def __init__(self):
         self.session = None
         self._bootstrap_data = None
         self._last_fetch = None
-        
+
     async def get_session(self):
         if not self.session:
             self.session = httpx.AsyncClient(
                 timeout=httpx.Timeout(15.0, connect=5.0),
-                headers={"User-Agent": "FPL-AI-Pro/2.0"},
+                headers=FPL_HEADERS,
                 limits=httpx.Limits(max_keepalive_connections=10, max_connections=20)
             )
         return self.session

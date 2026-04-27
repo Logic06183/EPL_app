@@ -25,38 +25,20 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 # Copy installed packages from builder
-COPY --from=builder /root/.local /root/.local
+COPY --from=builder /root/.local /usr/local
 
 # Set working directory
 WORKDIR /app
 
-# Copy application code and dependencies
-COPY api_production.py .
-COPY security_utils.py .
-COPY performance_utils.py .
-COPY sportmonks_integration.py .
-COPY paystack_integration.py .
-COPY hybrid_forecaster_enhanced.py .
-COPY gemini_integration.py .
+# Copy application package and legacy files
+COPY app/ ./app/
 COPY .env.example .
 
 # Create necessary directories
 RUN mkdir -p logs data/cache
 
-# Create non-root user for security
-RUN groupadd -r appgroup && useradd -r -g appgroup -u 1000 appuser \
-    && chown -R appuser:appgroup /app \
-    && chmod -R 755 /app
-
-# Switch to non-root user
-USER appuser
-
-# Make sure ~/.local/bin is in PATH
-ENV PATH=/root/.local/bin:$PATH
-
-# Health check with better configuration
-HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Set permissions (but don't switch user - Cloud Run doesn't require it)
+RUN chmod -R 755 /app
 
 # Set environment variables
 ENV PYTHONPATH=/app
@@ -67,16 +49,20 @@ ENV LOG_LEVEL=INFO
 # Expose port
 EXPOSE 8000
 
+# Set default PORT if not provided (Cloud Run will override this)
+ENV PORT=8000
+
 # Run with optimized gunicorn configuration
-CMD ["gunicorn", "api_production:app", \
-     "-w", "4", \
-     "-k", "uvicorn.workers.UvicornWorker", \
-     "--bind", "0.0.0.0:8000", \
-     "--timeout", "120", \
-     "--keep-alive", "5", \
-     "--max-requests", "1000", \
-     "--max-requests-jitter", "100", \
-     "--preload", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-", \
-     "--log-level", "info"]
+# Use $PORT environment variable set by Cloud Run
+CMD gunicorn app.main:app \
+     -w 4 \
+     -k uvicorn.workers.UvicornWorker \
+     --bind 0.0.0.0:$PORT \
+     --timeout 120 \
+     --keep-alive 5 \
+     --max-requests 1000 \
+     --max-requests-jitter 100 \
+     --preload \
+     --access-logfile - \
+     --error-logfile - \
+     --log-level info
