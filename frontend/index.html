@@ -504,10 +504,11 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   font-weight:700;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
 .auth-btn:hover{border-color:var(--gold);color:var(--gold);}
 .plan-badge{font-family:'DM Mono',monospace;font-size:10px;padding:2px 8px;border-radius:10px;
-  background:rgba(201,168,76,.12);color:var(--gold);border:1px solid rgba(201,168,76,.25);white-space:nowrap;}
+  background:rgba(201,168,76,.12);color:var(--gold);border:1px solid rgba(201,168,76,.25);white-space:nowrap;
+  cursor:pointer;display:inline-flex;align-items:center;line-height:1.5;}
 .plan-badge.free{background:rgba(95,152,128,.1);color:var(--text2);border-color:var(--b2);}
-.plan-badge.pro{cursor:pointer;}
-.plan-badge.pro:hover{background:rgba(201,168,76,.22);}
+.plan-badge.pro:hover,.plan-badge.free:hover{background:rgba(201,168,76,.22);color:var(--gold);}
+.plan-badge:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 /* Upgrade modal */
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:900;display:flex;
   align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(8px);}
@@ -563,7 +564,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <span id="gwbadge"></span>
-    <span id="plan-badge" class="plan-badge free" onclick="handleBadgeClick()">Free</span>
+    <button id="plan-badge" type="button" class="plan-badge free" onclick="handleBadgeClick()">Free</button>
     <button class="auth-btn" id="auth-btn" onclick="handleAuthClick()">🔑 Sign in</button>
     <button class="auth-btn" onclick="showUpgrade()" style="border-color:var(--goldd);color:var(--gold)">⚡ Go Pro</button>
   </div>
