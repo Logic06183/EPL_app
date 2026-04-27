@@ -1,0 +1,38 @@
+{
+  "name": "FPL AI Pro",
+  "short_name": "FPL AI",
+  "description": "Fantasy Premier League AI predictions, squad optimization and analytics",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#060e08",
+  "theme_color": "#060e08",
+  "scope": "/",
+  "lang": "en-GB",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["sports", "games"],
+  "shortcuts": [
+    {
+      "name": "Predictions",
+      "short_name": "Predict",
+      "description": "View AI player predictions",
+      "url": "/?tab=predictions",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Squad Builder",
+      "short_name": "Squad",
+      "description": "Optimize your squad",
+      "url": "/?tab=squad",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    }
+  ]
+}
