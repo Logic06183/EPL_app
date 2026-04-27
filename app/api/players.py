@@ -20,11 +20,16 @@ router = APIRouter()
 POS_MAP = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 
 
-def _enrich(player, teams, positions, prediction_service=None, model_type="random_forest"):
-    """Build a standardised player dict from raw FPL element"""
+def _enrich(player, teams, positions, prediction_service=None, model_type="random_forest", pred=None):
+    """Build a standardised player dict from raw FPL element.
+
+    `pred` may be passed pre-computed (from predict_batch) to avoid per-player
+    sklearn calls. If omitted, falls back to per-player predict().
+    """
     team = teams.get(player.get("team", 0), {})
     pos  = positions.get(player.get("element_type", 0), {})
-    pred = prediction_service.predict(player, model_type) if prediction_service else None
+    if pred is None and prediction_service is not None:
+        pred = prediction_service.predict(player, model_type)
     return {
         "id":               player["id"],
         "name":             player.get("web_name", ""),
@@ -47,6 +52,52 @@ def _enrich(player, teams, positions, prediction_service=None, model_type="rando
 
 # ── Predictions ───────────────────────────────────────────────────────────────
 
+async def _get_predictions_payload(
+    top_n: int,
+    position: Optional[int],
+    model_type: str,
+    data_service: FPLDataService,
+    prediction_service: PredictionService,
+    user: dict,
+    ai_enhanced: bool = False,
+):
+    bootstrap = await data_service.get_bootstrap_data()
+    elements  = bootstrap.get("elements", [])
+    teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
+    positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
+
+    if model_type != "basic" and not prediction_service._trained:
+        prediction_service.train(elements)
+
+    candidates = [
+        p for p in elements
+        if not position or p.get("element_type") == position
+    ]
+    # One vectorised inference call instead of ~600 per-player .predict() calls
+    preds = prediction_service.predict_batch(candidates, model_type)
+
+    predictions = []
+    for player, pred in zip(candidates, preds):
+        d = _enrich(player, teams, positions, prediction_service, model_type, pred=pred)
+        d["ai_enhanced"] = ai_enhanced or model_type != "basic"
+        d["model_used"] = model_type
+        predictions.append(d)
+
+    predictions.sort(key=lambda x: x["predicted_points"] or 0, reverse=True)
+
+    limits     = plan_limits(user["plan"])
+    hard_limit = min(top_n, limits["predictions_limit"])
+    locked_out = len(predictions) - hard_limit if len(predictions) > hard_limit else 0
+
+    return {
+        "predictions":    predictions[:hard_limit],
+        "total_players":  len(predictions),
+        "model_type":     model_type,
+        "plan":           user["plan"],
+        "locked_count":   locked_out,
+    }
+
+
 @router.get("/predictions")
 async def get_player_predictions(
     top_n:       int            = Query(20, ge=1, le=100),
@@ -58,38 +109,68 @@ async def get_player_predictions(
 ):
     """Top predicted players for the next gameweek"""
     try:
-        bootstrap = await data_service.get_bootstrap_data()
-        elements  = bootstrap.get("elements", [])
-        teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
-        positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
-
-        if model_type != "basic" and not prediction_service._trained:
-            prediction_service.train(elements)
-
-        predictions = []
-        for player in elements:
-            if position and player.get("element_type") != position:
-                continue
-            d = _enrich(player, teams, positions, prediction_service, model_type)
-            d["ai_enhanced"] = model_type != "basic"
-            predictions.append(d)
-
-        predictions.sort(key=lambda x: x["predicted_points"] or 0, reverse=True)
-
-        limits     = plan_limits(user["plan"])
-        hard_limit = min(top_n, limits["predictions_limit"])
-        locked_out = len(predictions) - hard_limit if len(predictions) > hard_limit else 0
-
-        return {
-            "predictions":    predictions[:hard_limit],
-            "total_players":  len(predictions),
-            "model_type":     model_type,
-            "plan":           user["plan"],
-            "locked_count":   locked_out,
-        }
+        return await _get_predictions_payload(
+            top_n, position, model_type, data_service, prediction_service, user
+        )
     except Exception as e:
         logger.error(f"Error getting predictions: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch predictions")
+
+
+@router.get("/predictions/enhanced")
+async def get_enhanced_player_predictions(
+    top_n:       int            = Query(20, ge=1, le=100),
+    position:    Optional[int]  = Query(None),
+    model_type:  str            = Query("basic"),
+    model:       Optional[str]  = Query(None),
+    use_ai:      bool           = Query(False),
+    use_gemini:  bool           = Query(False),
+    data_service: FPLDataService   = Depends(get_data_service),
+    prediction_service: PredictionService = Depends(get_prediction_service),
+    user:        dict           = Depends(get_current_user),
+):
+    """Compatibility endpoint used by the current frontend and deploy checks."""
+    try:
+        selected_model = model or model_type
+        if selected_model == "cnn":
+            selected_model = "deep_learning"
+
+        return await _get_predictions_payload(
+            top_n,
+            position,
+            selected_model,
+            data_service,
+            prediction_service,
+            user,
+            ai_enhanced=use_ai or use_gemini,
+        )
+    except Exception as e:
+        logger.error(f"Error getting enhanced predictions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch enhanced predictions")
+
+
+@router.get("/predictions/{player_id}")
+async def get_player_prediction(
+    player_id:   int,
+    model_type:  str = Query("basic"),
+    model:       Optional[str] = Query(None),
+    data_service: FPLDataService = Depends(get_data_service),
+    prediction_service: PredictionService = Depends(get_prediction_service),
+):
+    """Compatibility endpoint for prediction details for a single player."""
+    player = await data_service.get_player_by_id(player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    bootstrap = await data_service.get_bootstrap_data()
+    elements  = bootstrap.get("elements", [])
+    teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
+    positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
+    selected_model = model or model_type
+    if selected_model != "basic" and not prediction_service._trained:
+        prediction_service.train(elements)
+
+    return _enrich(player, teams, positions, prediction_service, selected_model)
 
 
 # ── Captain picks ─────────────────────────────────────────────────────────────
@@ -519,6 +600,23 @@ async def search_players(
     except Exception as e:
         logger.error(f"Search error: {e}")
         raise HTTPException(status_code=500, detail="Search failed")
+
+
+@router.get("/search/{query}")
+async def search_players_by_path(
+    query:       str,
+    limit:       int = Query(20, ge=1, le=50),
+    data_service: FPLDataService = Depends(get_data_service),
+):
+    """Path-parameter variant kept for the shared frontend API client."""
+    result = await search_players(q=query, data_service=data_service)
+    result["players"] = result["players"][:limit]
+    return {
+        **result,
+        "results": result["players"],
+        "total_results": len(result["players"]),
+        "query": query,
+    }
 
 
 # ── Individual player ─────────────────────────────────────────────────────────

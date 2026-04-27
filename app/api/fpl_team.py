@@ -130,8 +130,9 @@ async def suggest_transfers(
         if not prediction_service._trained:
             prediction_service.train(elements)
 
-        # Build prediction map for all players
-        pred_map = {p["id"]: max(0.0, prediction_service.predict(p)) for p in elements}
+        # Build prediction map for all players (single vectorised pass)
+        _preds = prediction_service.predict_batch(elements, "random_forest")
+        pred_map = {p["id"]: max(0.0, v) for p, v in zip(elements, _preds)}
 
         squad_ids = {p["id"] for p in picks}
         bank = team_data.get("bank", 0.0)

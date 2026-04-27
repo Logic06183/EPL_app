@@ -7,6 +7,7 @@ import logging
 from typing import List, Dict, Optional, Any
 import httpx
 from functools import lru_cache
+from datetime import datetime, timezone
 
 from ..config import settings
 from ..utils.cache import get_cache_manager
@@ -163,7 +164,11 @@ class FPLDataService:
         bootstrap = await self.get_bootstrap_data()
         return bootstrap.get("teams", [])
 
-    async def get_fixtures(self, filter_type: str = "upcoming") -> List[Dict[str, Any]]:
+    async def get_fixtures(
+        self,
+        filter_type: str = "upcoming",
+        gameweek: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
         """Get fixtures from FPL API with filtering"""
         try:
             client = await self._get_client()
@@ -172,17 +177,44 @@ class FPLDataService:
             fixtures = response.json()
 
             filtered = []
+            today = datetime.now(timezone.utc).date()
             for fixture in fixtures:
+                if gameweek is not None and fixture.get("event") != gameweek:
+                    continue
+
+                kickoff = fixture.get("kickoff_time")
+                kickoff_date = None
+                if kickoff:
+                    try:
+                        kickoff_date = datetime.fromisoformat(
+                            kickoff.replace("Z", "+00:00")
+                        ).date()
+                    except ValueError:
+                        kickoff_date = None
+
                 if filter_type == "upcoming" and not fixture.get("finished"):
                     filtered.append(fixture)
                 elif filter_type == "recent" and fixture.get("finished"):
                     filtered.append(fixture)
                 elif filter_type == "live" and fixture.get("started") and not fixture.get("finished"):
                     filtered.append(fixture)
+                elif filter_type == "today" and kickoff_date == today:
+                    filtered.append(fixture)
+                elif filter_type == "all":
+                    filtered.append(fixture)
 
-            # For recent, return latest first; for upcoming, soonest first
+            def kickoff_sort_value(fixture: Dict[str, Any]) -> str:
+                return fixture.get("kickoff_time") or "9999-12-31T23:59:59Z"
+
+            # For recent, return latest first; for upcoming, soonest scheduled first.
             if filter_type == "recent":
-                filtered = filtered[-10:]
+                filtered = sorted(
+                    filtered,
+                    key=lambda fixture: fixture.get("kickoff_time") or "",
+                    reverse=True,
+                )[:10]
+            elif filter_type == "upcoming":
+                filtered = sorted(filtered, key=kickoff_sort_value)[:10]
             else:
                 filtered = filtered[:10]
 

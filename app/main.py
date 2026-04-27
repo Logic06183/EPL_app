@@ -44,17 +44,27 @@ async def lifespan(app: FastAPI):
     app_state["cache"] = cache_manager
     logger.info("Cache manager initialized")
 
-    # Pre-warm FPL bootstrap cache so first user request is fast
+    # Pre-warm FPL bootstrap cache and train ML models so first user request is fast.
+    # Without this, the first dashboard hit pays a ~25s RF training cost.
+    app_state["models_loaded"] = False
     try:
+        import asyncio
         from .services.data_service import get_data_service
+        from .services.prediction_service import get_prediction_service
+
         data_service = get_data_service()
         bootstrap = await data_service.get_bootstrap_data()
-        player_count = len(bootstrap.get("elements", []))
-        logger.info(f"Bootstrap cache pre-warmed: {player_count} players loaded")
-        app_state["models_loaded"] = False
+        elements = bootstrap.get("elements", [])
+        logger.info(f"Bootstrap cache pre-warmed: {len(elements)} players loaded")
+
+        prediction_service = get_prediction_service()
+        # train() is CPU-bound (sklearn .fit) — run in a worker thread so the
+        # event loop stays responsive to health probes during startup.
+        await asyncio.to_thread(prediction_service.train, elements)
+        app_state["models_loaded"] = prediction_service._trained
+        logger.info(f"Models pre-trained: {app_state['models_loaded']}")
     except Exception as e:
-        logger.warning(f"Bootstrap pre-warm failed (non-fatal): {e}")
-        app_state["models_loaded"] = False
+        logger.warning(f"Startup pre-warm failed (non-fatal, will train lazily): {e}")
 
     logger.info("Application startup complete")
 
@@ -202,7 +212,17 @@ async def get_current_gameweek(
 ):
     """Get current or next gameweek information"""
     try:
-        return await data_service.get_gameweek_info()
+        gameweek_info = await data_service.get_gameweek_info()
+        selected = gameweek_info.get("current") or gameweek_info.get("next") or {}
+        return {
+            **selected,
+            "gameweek": selected.get("id"),
+            "deadline": selected.get("deadline_time"),
+            "is_finished": selected.get("finished", False),
+            "current": gameweek_info.get("current"),
+            "next": gameweek_info.get("next"),
+            "all_events": gameweek_info.get("all_events", []),
+        }
     except Exception as e:
         logger.error(f"Error fetching gameweek: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch gameweek info")
@@ -216,7 +236,7 @@ async def get_fixtures(
 ):
     """Get Premier League fixtures with various filters"""
     try:
-        fixtures = await data_service.get_fixtures(filter_type=filter)
+        fixtures = await data_service.get_fixtures(filter_type=filter, gameweek=gameweek)
         # Enrich with team names from bootstrap
         bootstrap = await data_service.get_bootstrap_data()
         teams = {t["id"]: t for t in bootstrap.get("teams", [])}

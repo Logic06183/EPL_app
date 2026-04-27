@@ -126,15 +126,14 @@ async def optimize_squad(
         elements  = bootstrap.get("elements", [])
         teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
 
-        if not prediction_service._trained:
-            prediction_service.train(elements)
+        model_type = "ensemble" if prediction_service._trained else "basic"
 
         viable = [
             p for p in elements
             if p.get("now_cost", 0) > 0 and p.get("element_type") in [1, 2, 3, 4]
         ]
-        for player in viable:
-            pred = prediction_service.predict(player)
+        preds = prediction_service.predict_batch(viable, model_type)
+        for player, pred in zip(viable, preds):
             player["_predicted"] = max(pred, 0)
             price = player.get("now_cost", 50) / 10
             player["_value"] = player["_predicted"] / max(price, 0.1)
