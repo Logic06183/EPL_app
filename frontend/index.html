@@ -119,6 +119,7 @@ a.ext-link{color:var(--gold);text-decoration:underline;text-underline-offset:2px
 a.ext-link:hover{text-decoration-color:var(--gold);}
 a.ext-link:visited{color:var(--goldd);}
 a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:2px;}
+.tbd{font-family:'DM Mono',monospace;font-size:.85em;color:var(--text3);letter-spacing:.5px;font-style:italic;}
 .btn{height:34px;background:linear-gradient(135deg,var(--goldb) 0%,#8a6018 100%);color:#000;
   border:none;padding:0 16px;border-radius:7px;font-family:'Syne',sans-serif;font-size:12px;
   font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;}
@@ -1040,7 +1041,7 @@ async function apiFetch(path, opts={}){
 const posCol=p=>({GK:'var(--gk)',DEF:'var(--def)',MID:'var(--mid)',FWD:'var(--fwd)'}[p]||'var(--text2)');
 const formCol=f=>f>=7?'var(--green)':f>=4?'var(--gold)':'var(--red)';
 function fmtDate(iso){
-  if(!iso)return'—';
+  if(!iso)return'<span class="tbd">TBD</span>';
   const d=new Date(iso);
   return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})
     +' · '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
