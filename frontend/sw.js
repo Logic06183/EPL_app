@@ -1,4 +1,4 @@
-const CACHE = 'fpl-ai-v2';
+const CACHE = 'fpl-ai-v3';
 const ASSETS = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', e => {
@@ -18,10 +18,11 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Network-first for API calls
+  // Network-only for API calls — bypass HTTP cache so backend changes propagate immediately
   if (url.pathname.startsWith('/api') || url.pathname === '/health') {
+    const bypassed = new Request(e.request, { cache: 'no-store' });
     e.respondWith(
-      fetch(e.request).catch(() => new Response(
+      fetch(bypassed).catch(() => new Response(
         JSON.stringify({ error: 'Offline — no cached data available' }),
         { headers: { 'Content-Type': 'application/json' } }
       ))
