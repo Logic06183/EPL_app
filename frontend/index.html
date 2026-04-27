@@ -626,7 +626,7 @@ input[type=range]{width:110px;height:3px;accent-color:var(--gold);cursor:pointer
 <section class="tab active" id="tab-predict">
   <!-- Captain Hub -->
   <div class="captain-strip" id="cap-strip">
-    <div class="cap-title">🏅 CAPTAIN PICKS <span style="font-size:11px;color:var(--text3);font-weight:400;letter-spacing:0">this gameweek</span></div>
+    <h2 class="cap-title">🏅 CAPTAIN PICKS <span style="font-size:11px;color:var(--text3);font-weight:400;letter-spacing:0">this gameweek</span></h2>
     <div class="cap-row" id="cap-row"><div class="loading" style="padding:12px"><div class="spin"></div></div></div>
   </div>
 
@@ -667,7 +667,7 @@ input[type=range]{width:110px;height:3px;accent-color:var(--gold);cursor:pointer
     </div>
   </div>
   <div class="sh">
-    <span class="st">PLAYER PREDICTIONS</span>
+    <h2 class="st">PLAYER PREDICTIONS</h2>
     <span class="ss" id="pred-count"></span>
   </div>
   <div id="pred-grid"></div>
@@ -706,7 +706,7 @@ input[type=range]{width:110px;height:3px;accent-color:var(--gold);cursor:pointer
       </div>
       <button class="btn" onclick="loadThreeGW()">↻ Refresh</button>
     </div>
-    <div class="sh"><span class="st">3-GAMEWEEK PLANNER</span><span class="ss">Best picks across next 3 GWs</span></div>
+    <div class="sh"><h2 class="st">3-GAMEWEEK PLANNER</h2><span class="ss">Best picks across next 3 GWs</span></div>
     <div id="tgw-content"><div class="empty"><div class="eico">📆</div><div class="etxt">Click Refresh to load</div></div></div>
   </div>
 
@@ -745,7 +745,7 @@ input[type=range]{width:110px;height:3px;accent-color:var(--gold);cursor:pointer
       <button class="btn" onclick="loadFix()">↻ Refresh</button>
       <span class="rl" id="fix-rl"></span>
     </div>
-    <div class="sh"><span class="st">FIXTURES</span><span class="ss" id="fix-count"></span></div>
+    <div class="sh"><h2 class="st">FIXTURES</h2><span class="ss" id="fix-count"></span></div>
     <div id="fix-grid" class="fgrid"><div class="loading"><div class="spin"></div><span>Loading…</span></div></div>
   </div>
 
@@ -759,7 +759,7 @@ input[type=range]{width:110px;height:3px;accent-color:var(--gold);cursor:pointer
       </div>
       <button class="btn" onclick="loadFDR()">↻ Refresh</button>
     </div>
-    <div class="sh"><span class="st">FIXTURE DIFFICULTY</span><span class="ss">1=easy · 5=hard</span></div>
+    <div class="sh"><h2 class="st">FIXTURE DIFFICULTY</h2><span class="ss">1=easy · 5=hard</span></div>
     <div id="fdr-content"><div class="loading"><div class="spin"></div><span>Loading FDR…</span></div></div>
   </div>
 </section>
@@ -775,13 +775,13 @@ input[type=range]{width:110px;height:3px;accent-color:var(--gold);cursor:pointer
 
   <!-- Trending (FREE) -->
   <div id="intel-trend">
-    <div class="sh"><span class="st">TRENDING THIS WEEK</span><span class="ss">most transferred in &amp; out</span></div>
+    <div class="sh"><h2 class="st">TRENDING THIS WEEK</h2><span class="ss">most transferred in &amp; out</span></div>
     <div id="trend-content"><div class="loading"><div class="spin"></div><span>Loading trends…</span></div></div>
   </div>
 
   <!-- Injuries -->
   <div id="intel-inj" style="display:none">
-    <div class="sh"><span class="st">INJURY &amp; AVAILABILITY</span><span class="ss" id="inj-count"></span></div>
+    <div class="sh"><h2 class="st">INJURY &amp; AVAILABILITY</h2><span class="ss" id="inj-count"></span></div>
     <div id="inj-grid"><div class="loading"><div class="spin"></div><span>Loading injuries…</span></div></div>
   </div>
 
@@ -792,7 +792,7 @@ input[type=range]{width:110px;height:3px;accent-color:var(--gold);cursor:pointer
 
   <!-- Value -->
   <div id="intel-value" style="display:none">
-    <div class="sh"><span class="st">BEST VALUE</span><span class="ss">Predicted pts per £m</span></div>
+    <div class="sh"><h2 class="st">BEST VALUE</h2><span class="ss">Predicted pts per £m</span></div>
     <div id="value-grid"></div>
   </div>
 </section>
@@ -1289,9 +1289,9 @@ function renderTeam(d,id){
       <div class="tc-stat"><div class="tc-sl">TEAM VALUE</div><div class="tc-sv" style="font-size:16px">£${(d.team_value||0).toFixed(1)}m</div></div>
     </div>
   </div>
-  <div class="sh" style="margin-top:14px"><span class="st">STARTING XI</span><span class="ss">GW ${d.gameweek}</span></div>
+  <div class="sh" style="margin-top:14px"><h2 class="st">STARTING XI</h2><span class="ss">GW ${d.gameweek}</span></div>
   <div class="sbr"><div class="slist">${starting.map(pickRow).join('')}</div></div>
-  <div class="sh" style="margin-top:12px"><span class="st">BENCH</span></div>
+  <div class="sh" style="margin-top:12px"><h2 class="st">BENCH</h2></div>
   <div class="sbr"><div class="slist">${bench.map(pickRow).join('')}</div></div>
   <div id="transfers-content"></div>`;
 }
@@ -1310,7 +1310,7 @@ function renderTransfers(d){
   const sug=d.suggestions||[];
   if(!sug.length){document.getElementById('transfers-content').innerHTML='<div class="empty"><div class="eico">✓</div><div class="etxt">No obvious improvements found</div></div>';return;}
   document.getElementById('transfers-content').innerHTML=`
-  <div class="sh" style="margin-top:16px"><span class="st">TRANSFER SUGGESTIONS</span><span class="ss">ranked by predicted pts improvement</span></div>
+  <div class="sh" style="margin-top:16px"><h2 class="st">TRANSFER SUGGESTIONS</h2><span class="ss">ranked by predicted pts improvement</span></div>
   <div class="tsugg">${sug.map(s=>`
     <div class="tcard">
       <div class="tcard-impr">+${s.improvement}</div>
@@ -1372,7 +1372,7 @@ function renderSquad(d){
   document.getElementById('squad-content').innerHTML=`
   <div class="slayout">
     <div class="pwrap">
-      <div class="sh" style="margin-bottom:10px"><span class="st">STARTING XI</span><span class="ss">${d.formation||''}</span></div>
+      <div class="sh" style="margin-bottom:10px"><h2 class="st">STARTING XI</h2><span class="ss">${d.formation||''}</span></div>
       <div class="pitch">
         <div class="pm pcl"></div><div class="pm pcc"></div><div class="pm pcd"></div>
         <div class="pm pb1"></div><div class="pm pb2"></div>
@@ -1531,10 +1531,10 @@ async function loadPriceMovers(){
     </div>`;
     document.getElementById('price-content').innerHTML=`
       ${rising.length?`
-      <div class="sh"><span class="st" style="color:var(--green)">↑ RISING</span><span class="ss">${rising.length} players</span></div>
+      <div class="sh"><h2 class="st" style="color:var(--green)">↑ RISING</h2><span class="ss">${rising.length} players</span></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;margin-bottom:16px">${rising.map((p,i)=>moverCard(p,i,1)).join('')}</div>`:''}
       ${falling.length?`
-      <div class="sh"><span class="st" style="color:var(--red)">↓ FALLING</span><span class="ss">${falling.length} players</span></div>
+      <div class="sh"><h2 class="st" style="color:var(--red)">↓ FALLING</h2><span class="ss">${falling.length} players</span></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">${falling.map((p,i)=>moverCard(p,i,-1)).join('')}</div>`:''}`;
   }catch(e){
     document.getElementById('price-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
@@ -1648,7 +1648,7 @@ async function loadGW(){
       </div>`;
     })():'';
     document.getElementById('gw-content').innerHTML=`
-      <div class="sh" style="margin-bottom:14px"><span class="st">GAMEWEEK INFO</span></div>
+      <div class="sh" style="margin-bottom:14px"><h2 class="st">GAMEWEEK INFO</h2></div>
       <div class="gw-grid">${curH}${nxtH}</div>`;
   }catch(e){
     document.getElementById('gw-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
@@ -1739,11 +1739,11 @@ async function loadTrending(){
     document.getElementById('trend-content').innerHTML=`
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
         <div>
-          <div class="sh" style="margin-bottom:10px"><span class="st" style="color:var(--green)">↑ TRANSFERS IN</span></div>
+          <div class="sh" style="margin-bottom:10px"><h2 class="st" style="color:var(--green)">↑ TRANSFERS IN</h2></div>
           <div class="trend-grid">${inList.map((p,i)=>card(p,i,1)).join('')}</div>
         </div>
         <div>
-          <div class="sh" style="margin-bottom:10px"><span class="st" style="color:var(--red)">↓ TRANSFERS OUT</span></div>
+          <div class="sh" style="margin-bottom:10px"><h2 class="st" style="color:var(--red)">↓ TRANSFERS OUT</h2></div>
           <div class="trend-grid">${outList.map((p,i)=>card(p,i,-1)).join('')}</div>
         </div>
       </div>`;
