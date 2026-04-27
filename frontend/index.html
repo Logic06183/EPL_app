@@ -115,6 +115,10 @@ select:focus{border-color:var(--gold);}
   transform:translateY(-50%);color:var(--text2);pointer-events:none;font-size:10px;}
 input[type=range]{width:110px;height:3px;accent-color:var(--gold);cursor:pointer;}
 .rv{font-family:'DM Mono',monospace;font-size:12px;color:var(--gold);}
+a.ext-link{color:var(--gold);text-decoration:underline;text-underline-offset:2px;text-decoration-color:rgba(201,168,76,.4);transition:.2s;}
+a.ext-link:hover{text-decoration-color:var(--gold);}
+a.ext-link:visited{color:var(--goldd);}
+a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:2px;}
 .btn{height:34px;background:linear-gradient(135deg,var(--goldb) 0%,#8a6018 100%);color:#000;
   border:none;padding:0 16px;border-radius:7px;font-family:'Syne',sans-serif;font-size:12px;
   font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;}
@@ -686,7 +690,7 @@ input[type=range]{width:110px;height:3px;accent-color:var(--gold);cursor:pointer
     <div class="import-box">
       <div class="import-title">Import Your FPL Team</div>
       <div class="import-sub">Enter your FPL team ID to get transfer suggestions and squad analysis.<br>
-        Find it at: fantasy.premierleague.com/entry/<strong>YOUR-ID</strong>/history</div>
+        Find it at: <a href="https://fantasy.premierleague.com/" target="_blank" rel="noopener noreferrer" class="ext-link">fantasy.premierleague.com</a>/entry/<strong>YOUR-ID</strong>/history</div>
       <div class="irow">
         <input type="number" class="tid-input" id="tid-input" placeholder="e.g. 1234567" min="1">
         <button class="btn" onclick="loadTeam()">Load Team</button>
