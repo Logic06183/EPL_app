@@ -364,7 +364,19 @@ async def get_team_briefing(
     cur     = gw_info.get("current") or gw_info.get("next") or {}
     deadline = cur.get("deadline_time")
 
-    # Gemini reasons (cheap call, never fatal)
+    # Gemini reasons (cheap call, never fatal). Pass enough comparative data
+    # (form, current captain, ownership) for the model to write *insight*
+    # rather than paraphrase what's in the input.
+    def _player_meta(player_id: int) -> dict:
+        e = elements_by_id.get(player_id, {})
+        return {
+            "form":             float(e.get("form", 0) or 0),
+            "ownership":        float(e.get("selected_by_percent", 0) or 0),
+            "minutes":          int(e.get("minutes", 0) or 0),
+            "goals":            int(e.get("goals_scored", 0) or 0),
+            "assists":          int(e.get("assists", 0) or 0),
+        }
+
     llm_input_alerts = [
         {
             "player_id":     a["player_id"],
@@ -373,6 +385,7 @@ async def get_team_briefing(
             "flag":          a["flag"],
             "chance":        a["chance"],
             "news":          a["news"],
+            **_player_meta(a["player_id"]),
         }
         for a in alerts
     ]
@@ -382,12 +395,26 @@ async def get_team_briefing(
             "team":             captain["team_name"],
             "predicted_points": captain["predicted_points"],
             "currently_captained": captain["currently_captained"],
+            **_player_meta(captain["player_id"]),
+            "current_captain": (
+                None if not captain.get("current_captain") else {
+                    "name":             captain["current_captain"]["name"],
+                    "predicted_points": captain["current_captain"]["predicted_points"],
+                    **_player_meta(captain["current_captain"]["player_id"]),
+                }
+            ),
         }
     )
     llm_input_transfer = (
         None if top_transfer is None else {
-            "sell":        top_transfer["sell"],
-            "buy":         top_transfer["buy"],
+            "sell": {
+                **top_transfer["sell"],
+                **_player_meta(top_transfer["sell"]["id"]),
+            },
+            "buy": {
+                **top_transfer["buy"],
+                **_player_meta(top_transfer["buy"]["id"]),
+            },
             "improvement": top_transfer["improvement"],
         }
     )

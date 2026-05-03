@@ -129,6 +129,14 @@ def _build_prompt(
     """
     Compact JSON-in/JSON-out prompt. Keeps tokens low (~600 input / ~150 output)
     so the per-call cost is ~$0.0001 even on 2.5 Flash.
+
+    Prompt design notes:
+    - The model's failure mode is to *paraphrase* the input — we explicitly
+      forbid this and show good/bad examples so it adds insight instead.
+    - For each reason type we name the comparative angle (vs current captain,
+      vs the player being sold) so the model has a concrete frame.
+    - Empty string is a valid output when there's nothing useful to add —
+      better than filler.
     """
     payload = {
         "team_name": team_name,
@@ -136,22 +144,41 @@ def _build_prompt(
         "captain":   captain,
         "transfer":  transfer,
     }
-    return f"""You are an FPL (Fantasy Premier League) assistant writing for a manager.
-Be concise, specific, and never invent facts beyond the data provided.
-British football tone. No emojis. No exclamation marks.
+    return f"""You are a sharp Fantasy Premier League advisor writing for a manager.
+British football tone. No emojis, no exclamation marks, no filler.
 
-Data:
+DATA:
 {json.dumps(payload, ensure_ascii=False)}
 
-Return ONE valid JSON object with EXACTLY these keys:
-- "summary":         one sentence (<=25 words) for the top of their briefing,
-                     mentioning the most important issue if any.
-- "captain_reason":  one short sentence justifying the captain pick using
-                     form, fixture, or predicted_points. Empty string if no captain provided.
-- "transfer_reason": one short sentence (<=20 words) explaining the suggested
-                     transfer using a concrete reason from the data. Empty string if no transfer.
-- "alert_reasons":   object mapping each alert's "player_id" to a one-sentence
-                     plain-English reason ("Knock — 75% chance of playing vs ARS"),
-                     using the alert's news/chance fields. Empty object if no alerts.
+WRITE THESE REASONS — every reason must add INSIGHT, not paraphrase the input.
 
-Output JSON only — no preamble, no markdown."""
+GOLDEN RULE: never just restate fields. If you can only restate, use "" (empty).
+
+EXAMPLES:
+  alert news: "Knock - 75% chance of playing"
+    BAD  reason: "He has a knock and a 75% chance of playing."   (just paraphrasing)
+    GOOD reason: "75% fit — playable but consider a safer bench option."
+
+  captain pick: Bowen 5.2 pts, current captain Salah 4.8 pts
+    BAD  reason: "Bowen is predicted to score 5.2 points."        (just restating)
+    GOOD reason: "Bowen edges Salah by 0.4 — close call, stick if you trust the eye test."
+
+  transfer: Maddison (4.0 form) → Bruno G. (7.2 form), +4.4 improvement
+    BAD  reason: "This transfer improves predicted points by 4.4."  (just restating)
+    GOOD reason: "Bruno G. on hot form (7.2 vs 4.0) and Maddison's minutes are slipping."
+
+OUTPUT: ONE valid JSON object with these exact keys (omit any reason as ""):
+- "summary":         one sentence (<=22 words) capturing the manager's most
+                     important decision today. Lead with action ("Watch Bruno's
+                     fitness, captain Bowen, consider the Maddison swap.").
+                     If everything is settled, say so plainly.
+- "captain_reason":  one sentence (<=22 words). Reference form differential,
+                     fixture, or comparison with the current captain.
+- "transfer_reason": one sentence (<=22 words). Reference form trend or
+                     ownership/value, NOT the predicted-points delta directly.
+- "alert_reasons":   object mapping each alert's player_id (as string) to a
+                     one-sentence reason about *what to do* (bench? captain?
+                     hold?), not a paraphrase of the news. Skip a key entirely
+                     if you can't add value.
+
+JSON only — no preamble, no markdown."""
