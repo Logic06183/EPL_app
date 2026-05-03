@@ -18,9 +18,14 @@ logger = logging.getLogger(__name__)
 
 # Model + sampling config — tuned for short, factual sentences.
 # 2.5 Flash is the cheapest capable Gemini model and supports strict JSON output.
+# It's a "thinking" model — internal reasoning eats max_output_tokens before the
+# visible answer is generated. For structured JSON tasks like this we disable
+# thinking (thinking_budget=0) and give a comfortable token cap so the JSON
+# never gets truncated mid-string.
 _MODEL = "gemini-2.5-flash"
 _TEMPERATURE = 0.3
-_MAX_OUTPUT_TOKENS = 400
+_MAX_OUTPUT_TOKENS = 1500
+_THINKING_BUDGET = 0
 _TIMEOUT_S = 8.0
 
 
@@ -91,6 +96,7 @@ def generate_briefing_reasons(
                 response_mime_type="application/json",
                 temperature=_TEMPERATURE,
                 max_output_tokens=_MAX_OUTPUT_TOKENS,
+                thinking_config=types.ThinkingConfig(thinking_budget=_THINKING_BUDGET),
             ),
         )
         text = (response.text or "").strip()
