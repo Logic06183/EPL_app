@@ -112,9 +112,61 @@ def test_frontend_compatibility_endpoints_are_registered():
     assert client.get("/api/players/captain?top_n=2").status_code == 403
     assert client.get("/api/players/price-movers").status_code == 403
     assert client.get("/api/players/value?top_n=5").status_code == 403
-    assert client.get("/api/fpl-team/1234567").status_code == 403
+    # /api/fpl-team/{id} is open during launch — no Pro gate. We don't assert
+    # 200 here because that endpoint hits the live FPL API; covered separately
+    # by the briefing unit test that exercises the alert-extraction logic.
 
     app.dependency_overrides.clear()
+
+
+def test_briefing_squad_alerts_classify_correctly():
+    """Pure-logic test of _squad_alerts — no FPL or Gemini dependency."""
+    from app.api.fpl_team import _squad_alerts, _FLAG_INJURED, _FLAG_DOUBT
+
+    picks = [
+        # Healthy starter — no alert
+        {"id": 1, "name": "Salah", "is_starting": True, "chance_of_playing": 100, "news": "",
+         "team_name": "LIV", "position_name": "MID"},
+        # Injured starter — chance 0
+        {"id": 2, "name": "Saka", "is_starting": True, "chance_of_playing": 0, "news": "Hamstring",
+         "team_name": "ARS", "position_name": "MID"},
+        # Doubtful starter — chance 50
+        {"id": 3, "name": "Watkins", "is_starting": True, "chance_of_playing": 50, "news": "Knock",
+         "team_name": "AVL", "position_name": "FWD"},
+        # Bench player with injury — should NOT generate an alert (we only flag XI)
+        {"id": 4, "name": "Sub", "is_starting": False, "chance_of_playing": 0, "news": "Out",
+         "team_name": "X", "position_name": "MID"},
+        # News-only doubt (chance None, has news)
+        {"id": 5, "name": "Bruno", "is_starting": True, "chance_of_playing": None, "news": "Knock",
+         "team_name": "MUN", "position_name": "MID"},
+    ]
+    alerts = _squad_alerts(picks)
+    by_id = {a["player_id"]: a for a in alerts}
+
+    assert 1 not in by_id, "healthy player should not be alerted"
+    assert by_id[2]["flag"] == _FLAG_INJURED
+    assert by_id[3]["flag"] == _FLAG_DOUBT
+    assert 4 not in by_id, "bench player should not be alerted"
+    assert by_id[5]["flag"] == _FLAG_DOUBT
+
+
+def test_briefing_captain_picks_highest_predicted():
+    from app.api.fpl_team import _captain_pick
+
+    picks = [
+        {"id": 1, "name": "Salah",   "is_starting": True,  "is_captain": True,  "team_name": "LIV"},
+        {"id": 2, "name": "Haaland", "is_starting": True,  "is_captain": False, "team_name": "MCI"},
+        {"id": 3, "name": "Bench",   "is_starting": False, "is_captain": False, "team_name": "X"},
+    ]
+    # Haaland predicted higher — captain pick should switch
+    pred_map = {1: 6.0, 2: 8.5, 3: 9.9}
+
+    pick = _captain_pick(picks, pred_map)
+    assert pick is not None
+    assert pick["name"] == "Haaland"
+    assert pick["currently_captained"] is False
+    assert pick["current_captain"]["name"] == "Salah"
+    assert pick["predicted_points"] == 8.5
 
 
 def test_gameweek_and_fixture_shapes_match_frontend():

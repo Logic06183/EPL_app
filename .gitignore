@@ -198,3 +198,4 @@ models/
 *.tmp
 *.temp
 .gstack/
+frontend/.firebase/
