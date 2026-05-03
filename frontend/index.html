@@ -531,7 +531,8 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   background:rgba(201,168,76,.12);color:var(--gold);border:1px solid rgba(201,168,76,.25);white-space:nowrap;
   cursor:pointer;display:inline-flex;align-items:center;line-height:1.5;}
 .plan-badge.free{background:rgba(95,152,128,.1);color:var(--text2);border-color:var(--b2);}
-.plan-badge.pro:hover,.plan-badge.free:hover{background:rgba(201,168,76,.22);color:var(--gold);}
+.plan-badge.founder{background:linear-gradient(90deg,rgba(201,168,76,.25),rgba(201,168,76,.12));color:var(--gold);border-color:rgba(201,168,76,.6);font-weight:700;letter-spacing:.5px;}
+.plan-badge.pro:hover,.plan-badge.free:hover,.plan-badge.founder:hover{background:rgba(201,168,76,.32);color:var(--gold);}
 .plan-badge:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 /* Upgrade modal */
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:900;display:flex;
@@ -929,8 +930,16 @@ function updateAuthUI(user, plan){
   const badge = document.getElementById('plan-badge');
   if(user){
     btn.textContent   = 'Sign out';
-    badge.textContent = plan==='pro' ? '⚡ Pro' : 'Free';
-    badge.className   = 'plan-badge' + (plan==='pro' ? '' : ' free');
+    if(plan==='founder'){
+      badge.textContent = '★ Founder';
+      badge.className   = 'plan-badge founder';
+    } else if(plan==='pro'){
+      badge.textContent = '⚡ Pro';
+      badge.className   = 'plan-badge';
+    } else {
+      badge.textContent = 'Free';
+      badge.className   = 'plan-badge free';
+    }
   } else {
     btn.textContent   = '🔑 Sign in';
     badge.textContent = 'Free';
@@ -1319,6 +1328,33 @@ function fmtFresh(iso){
 
 function renderBriefing(b){
   if(!b) return '';
+
+  // Paywall path — meter limit reached or anonymous post-grace
+  if(b.paywall){
+    const isAnon = b.reason === 'anon';
+    const cta = isAnon ? '🔑 Sign in with Google' : '⚡ Upgrade to Pro';
+    const ctaAction = isAnon
+      ? 'document.getElementById(\'signin-modal\').classList.remove(\'hidden\')'
+      : 'showUpgrade()';
+    return `
+    <div class="brief" style="border-color:var(--gold);background:linear-gradient(135deg,rgba(201,168,76,.06),rgba(201,168,76,.02))">
+      <div class="brief-head">
+        <div class="brief-title" style="color:var(--gold)">Today — GW ${b.gameweek}</div>
+        <span class="brief-deadline" style="color:var(--gold);border:1px solid rgba(201,168,76,.3)">⚡ Pro</span>
+      </div>
+      <div class="brief-summary">${b.message}</div>
+      <div class="brief-section">
+        <div class="brief-h">What you'd get</div>
+        <div class="brief-row" style="border:none;padding:4px 0">→ Daily briefing refresh when team news drops</div>
+        <div class="brief-row" style="border:none;padding:4px 0">→ Captain pick + transfer reasons in plain English</div>
+        <div class="brief-row" style="border:none;padding:4px 0">→ Squad alerts for injuries, doubts and price drops</div>
+      </div>
+      <div style="margin-top:12px">
+        <button class="auth-btn" style="border-color:var(--goldd);color:var(--gold);font-weight:700" onclick="${ctaAction}">${cta}</button>
+      </div>
+    </div>`;
+  }
+
   const alerts=(b.alerts||[]);
   const cap=b.captain;
   const xfer=b.top_transfer;

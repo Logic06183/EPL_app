@@ -5,6 +5,7 @@ build a personalised briefing card for the user's squad.
 """
 
 import logging
+import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -12,7 +13,9 @@ from ..services.data_service import FPLDataService, get_data_service
 from ..services.prediction_service import PredictionService, get_prediction_service
 from ..services import gemini_service
 from ..utils.cache import get_cache_manager
-from ..auth.firebase_auth import get_current_user, require_pro
+from ..auth.firebase_auth import (
+    get_current_user, require_pro, get_effective_plan, _in_grace_period, get_db,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -223,6 +226,10 @@ _FLAG_INJURED = "INJURED"        # ruled out / chance of playing < 25
 _FLAG_DOUBT   = "DOUBT"          # 25 ≤ chance < 75 or has news
 _FLAG_PRICE_DROP = "PRICE_DROP"  # cost dropped this gameweek
 
+# Free-tier briefing meter: how many cache-miss briefing fetches per gameweek.
+# Pro/founder bypass entirely. Cache hits don't count.
+_FREE_BRIEFINGS_PER_GW = int(os.getenv("FREE_BRIEFINGS_PER_GW", "1"))
+
 
 def _squad_alerts(picks: list[dict]) -> list[dict]:
     """Extract injury/doubt/price-drop alerts for the user's XI only."""
@@ -252,6 +259,51 @@ def _squad_alerts(picks: list[dict]) -> list[dict]:
 
     # Price-drop risk uses the raw element field, fetched separately by caller.
     return alerts
+
+
+def _has_unlimited_briefings(user: dict) -> bool:
+    """Pro/founder users — and *anyone* during the launch grace period — get
+    unlimited briefings. Free signed-in users post-grace are metered."""
+    return get_effective_plan(user) in ("pro", "founder")
+
+
+def _briefing_meter_check_and_increment(user: dict, gw_id: int) -> tuple[bool, int]:
+    """
+    Returns (allowed, used_count) for this user/gameweek.
+
+    Anonymous users post-grace: not allowed (must sign in to use the meter).
+    Signed-in free users post-grace: allowed up to _FREE_BRIEFINGS_PER_GW per GW.
+    Increments the counter on success — cache hits in the parent endpoint should
+    bypass this entirely so they don't burn the meter.
+    """
+    if _has_unlimited_briefings(user):
+        return (True, 0)
+
+    uid = user.get("uid")
+    if not uid:
+        return (False, 0)  # anonymous post-grace → must sign in
+
+    db = get_db()
+    if db is None:
+        # Firestore unavailable — fail open during this transient issue rather
+        # than locking everyone out. Log so we notice.
+        logger.warning("Briefing meter: Firestore unavailable, failing open")
+        return (True, 0)
+
+    try:
+        doc_ref = db.collection("users").document(uid)
+        snapshot = doc_ref.get()
+        data = snapshot.to_dict() if snapshot.exists else {}
+        usage = (data.get("briefing_usage") or {})
+        used = int(usage.get(str(gw_id), 0))
+        if used >= _FREE_BRIEFINGS_PER_GW:
+            return (False, used)
+        usage[str(gw_id)] = used + 1
+        doc_ref.set({"briefing_usage": usage}, merge=True)
+        return (True, used + 1)
+    except Exception as e:
+        logger.warning(f"Briefing meter Firestore op failed: {e} — failing open")
+        return (True, 0)
 
 
 def _captain_pick(picks: list[dict], pred_map: dict[int, float]) -> dict | None:
@@ -307,7 +359,31 @@ async def get_team_briefing(
     cache_key = f"briefing:{team_id}:{gw_id}"
     cached = cache.get(cache_key)
     if cached is not None:
+        # Cache hits are free — they don't consume the user's briefing meter.
         return cached
+
+    # Meter check (post-grace only) — gate fresh fetches behind the free limit
+    allowed, used = _briefing_meter_check_and_increment(user, gw_id)
+    if not allowed:
+        # Return a 200 with a paywall payload so the frontend renders an
+        # upgrade card cleanly, not a generic error.
+        is_anon = not user.get("uid")
+        return {
+            "team_id":     team_id,
+            "gameweek":    gw_id,
+            "paywall":     True,
+            "reason":      "anon" if is_anon else "limit_reached",
+            "free_used":   used,
+            "free_limit":  _FREE_BRIEFINGS_PER_GW,
+            "message": (
+                "Sign in with Google to unlock your free briefing each gameweek."
+                if is_anon else
+                f"You've used your free briefing for GW{gw_id}. "
+                f"Upgrade to Pro for unlimited refreshes when team news drops."
+            ),
+            "upgrade_url": "/api/payments/initialize",
+            "upgrade_plan_id": "pro",
+        }
 
     picks = team_data["picks"]
 

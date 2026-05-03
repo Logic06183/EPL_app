@@ -90,7 +90,14 @@ class FakeDataService:
         return next((player for player in data["elements"] if player["id"] == player_id), None)
 
 
-def test_frontend_compatibility_endpoints_are_registered():
+def test_frontend_compatibility_endpoints_are_registered(monkeypatch):
+    # Force post-grace behavior so the Pro gates assert correctly. The grace
+    # period default (year 2099) would unlock captain/price-movers/value.
+    import importlib
+    from app.auth import firebase_auth
+    monkeypatch.setenv("LAUNCH_FREE_UNTIL", "2000-01-01")
+    importlib.reload(firebase_auth)
+
     app.dependency_overrides[get_data_service] = lambda: FakeDataService()
     client = TestClient(app)
 
@@ -117,6 +124,44 @@ def test_frontend_compatibility_endpoints_are_registered():
     # by the briefing unit test that exercises the alert-extraction logic.
 
     app.dependency_overrides.clear()
+
+
+def test_grace_period_grants_pro_to_anonymous():
+    """During grace, anonymous users behave as Pro for gating decisions."""
+    import os
+    import importlib
+    from app.auth import firebase_auth
+
+    # Force a future cutoff
+    os.environ["LAUNCH_FREE_UNTIL"] = "2099-12-31"
+    importlib.reload(firebase_auth)
+
+    anon = {"uid": None, "email": None, "plan": "free"}
+    assert firebase_auth.get_effective_plan(anon) == "pro"
+    # require_pro should not raise during grace
+    firebase_auth.require_pro(anon)
+
+
+def test_post_grace_blocks_free_plan():
+    import os
+    import importlib
+    from app.auth import firebase_auth
+
+    os.environ["LAUNCH_FREE_UNTIL"] = "2000-01-01"  # already past
+    importlib.reload(firebase_auth)
+
+    free_user = {"uid": "abc", "email": "x@y.com", "plan": "free"}
+    assert firebase_auth.get_effective_plan(free_user) == "free"
+
+    import pytest
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc_info:
+        firebase_auth.require_pro(free_user)
+    assert exc_info.value.status_code == 403
+
+    # Restore for subsequent tests
+    os.environ["LAUNCH_FREE_UNTIL"] = "2099-12-31"
+    importlib.reload(firebase_auth)
 
 
 def test_briefing_squad_alerts_classify_correctly():

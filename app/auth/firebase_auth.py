@@ -81,7 +81,51 @@ PLANS = {
         "value":             True,
         "injuries_limit":    999,
     },
+    # Founder = same perks as Pro, granted free to anyone who signs in
+    # before LAUNCH_FREE_UNTIL. Lifetime — never expires. The reward for
+    # showing up early.
+    "founder": {
+        "label":             "Founder",
+        "predictions_limit": 100,
+        "captain":           True,
+        "fdr":               True,
+        "team_import":       True,
+        "price_movers":      True,
+        "differentials":     True,
+        "value":             True,
+        "injuries_limit":    999,
+    },
 }
+
+
+# ── Launch grace period ───────────────────────────────────────────────────────
+
+# Until this date (UTC), every signed-in user is granted "founder" automatically.
+# Anonymous (not-signed-in) users are *also* treated as Pro during grace via
+# get_effective_plan(). Default of "2099-01-01" = grace forever until Craig
+# explicitly sets the env var to flip the paywall on. Safe by default.
+_LAUNCH_FREE_UNTIL_RAW = os.getenv("LAUNCH_FREE_UNTIL", "2099-01-01")
+
+
+def _in_grace_period(now: Optional[datetime] = None) -> bool:
+    try:
+        cutoff = datetime.fromisoformat(_LAUNCH_FREE_UNTIL_RAW).replace(tzinfo=timezone.utc)
+    except ValueError:
+        logger.warning(f"Invalid LAUNCH_FREE_UNTIL='{_LAUNCH_FREE_UNTIL_RAW}', defaulting to in-grace")
+        return True
+    return (now or datetime.now(timezone.utc)) < cutoff
+
+
+def get_effective_plan(user: dict) -> str:
+    """
+    Plan to use for gating decisions. During grace period anonymous and free
+    users are treated as 'pro' so they experience the full app. After grace,
+    the stored plan stands.
+    """
+    plan = user.get("plan", "free")
+    if plan in ("pro", "founder"):
+        return plan
+    return "pro" if _in_grace_period() else plan
 
 
 def plan_limits(plan: str) -> dict:
@@ -122,23 +166,33 @@ async def get_current_user(
         doc_ref  = db.collection("users").document(uid)
         doc      = doc_ref.get()
 
+        in_grace = _in_grace_period()
+
         if doc.exists:
             data = doc.to_dict()
             plan = data.get("plan", "free")
-            # Check expiry
+            # Check expiry (founders never expire)
             expires = data.get("plan_expires_at")
-            if expires:
+            if expires and plan != "founder":
                 exp_dt = expires if isinstance(expires, datetime) else datetime.fromisoformat(str(expires))
                 if exp_dt.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
                     plan = "free"
                     doc_ref.update({"plan": "free"})
+            # Founder upgrade: existing free user signs in during grace → reward
+            if in_grace and plan == "free":
+                plan = "founder"
+                doc_ref.update({"plan": "founder", "founder_granted_at": datetime.now(timezone.utc).isoformat()})
         else:
-            plan = "free"
-            doc_ref.set({
+            # Brand-new user. Founder during grace, free after.
+            plan = "founder" if in_grace else "free"
+            new_doc = {
                 "email":      email,
-                "plan":       "free",
+                "plan":       plan,
                 "created_at": datetime.now(timezone.utc).isoformat(),
-            })
+            }
+            if plan == "founder":
+                new_doc["founder_granted_at"] = new_doc["created_at"]
+            doc_ref.set(new_doc)
 
         return {"uid": uid, "email": email, "plan": plan}
 
@@ -148,14 +202,20 @@ async def get_current_user(
 
 
 def require_pro(user: dict):
-    """Raise 403 if user is not on a paid plan."""
+    """
+    Raise 403 if the user can't access Pro features.
+    During the launch grace period this is a no-op — anonymous and free users
+    are treated as Pro. Founders/Pro always pass.
+    """
     from fastapi import HTTPException
-    if plan_limits(user["plan"])["predictions_limit"] <= 10:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "error":   "upgrade_required",
-                "message": "This feature requires FPL AI Pro. Upgrade at /pricing.",
-                "plan":    user["plan"],
-            }
-        )
+    effective = get_effective_plan(user)
+    if effective in ("pro", "founder"):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "error":   "upgrade_required",
+            "message": "This feature requires FPL AI Pro. Upgrade at /pricing.",
+            "plan":    user["plan"],
+        }
+    )
