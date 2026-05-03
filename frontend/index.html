@@ -296,6 +296,29 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 .tpp{font-family:'DM Mono',monospace;font-size:11px;}.tpv{font-size:10px;color:var(--text3);}
 .tarr-icon{font-size:20px;color:var(--gold);}
 
+/* ── BRIEFING (My Team — Today) ── */
+.brief{background:var(--card);border:1px solid var(--b1);border-radius:var(--r);padding:16px;margin-bottom:14px;}
+.brief-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
+.brief-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;color:var(--gold);}
+.brief-fresh{font-size:10px;color:var(--text3);letter-spacing:.5px;}
+.brief-summary{font-size:13px;line-height:1.5;color:var(--text);margin:6px 0 12px;}
+.brief-section{margin-top:12px;}
+.brief-h{font-size:10px;color:var(--text3);letter-spacing:.6px;margin-bottom:6px;text-transform:uppercase;}
+.brief-row{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(21,37,53,.5);font-size:12px;}
+.brief-row:last-child{border-bottom:none;}
+.brief-tag{font-family:'DM Mono',monospace;font-size:10px;padding:2px 6px;border-radius:3px;font-weight:700;letter-spacing:.5px;}
+.brief-tag.injured{background:rgba(220,38,38,.15);color:var(--red);}
+.brief-tag.doubt{background:rgba(245,158,11,.15);color:var(--orange);}
+.brief-tag.pricedrop{background:rgba(99,102,241,.15);color:#818cf8;}
+.brief-name{font-weight:700;font-size:12px;}
+.brief-meta{font-size:11px;color:var(--text2);}
+.brief-reason{font-size:11px;color:var(--text2);font-style:italic;margin-top:2px;}
+.brief-cap{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,0,0,.2);border-radius:6px;}
+.brief-cap-name{font-weight:700;}
+.brief-cap-pred{font-family:'DM Mono',monospace;color:var(--gold);font-size:11px;}
+.brief-deadline{display:inline-block;background:rgba(0,0,0,.2);padding:4px 8px;border-radius:4px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text);}
+.brief-empty{font-size:12px;color:var(--text3);font-style:italic;}
+
 /* ── FDR HEATMAP ── */
 .fdr-wrap{overflow-x:auto;}
 .fdrtbl{border-collapse:collapse;min-width:500px;width:100%;}
@@ -1262,15 +1285,122 @@ async function loadTeam(){
   if(!id){toast('Enter your team ID','error');return;}
   document.getElementById('team-content').innerHTML='<div class="loading"><div class="spin"></div><span>Loading your team…</span></div>';
   try{
-    const d=await apiFetch(`/fpl-team/${id}`);
-    renderTeam(d,id);
+    // Fire team + briefing in parallel — briefing is cached server-side per (id,gw)
+    // so this costs no extra cold-path; both share the bootstrap fetch on the backend.
+    const [team,briefing]=await Promise.all([
+      apiFetch(`/fpl-team/${id}`),
+      apiFetch(`/fpl-team/${id}/briefing`).catch(()=>null),
+    ]);
+    renderTeam(team,id,briefing);
   }catch(e){
     document.getElementById('team-content').innerHTML=`<div class="err">⚠ ${e.message}. Check team ID is correct.</div>`;
     toast('Team not found','error');
   }
 }
 
-function renderTeam(d,id){
+// ── Briefing card ────────────────────────────────────
+function fmtDeadline(iso){
+  if(!iso) return '';
+  const d=new Date(iso), now=new Date();
+  const diffMs=d-now, diffHr=Math.round(diffMs/3600000);
+  if(diffMs<0) return 'deadline passed';
+  if(diffHr<24) return `in ${diffHr}h`;
+  return `in ${Math.round(diffHr/24)}d ${diffHr%24}h`;
+}
+function fmtFresh(iso){
+  if(!iso) return '';
+  const d=new Date(iso), now=new Date();
+  const mins=Math.max(1,Math.round((now-d)/60000));
+  if(mins<60) return `updated ${mins}m ago`;
+  const hrs=Math.round(mins/60);
+  if(hrs<24) return `updated ${hrs}h ago`;
+  return `updated ${Math.round(hrs/24)}d ago`;
+}
+
+function renderBriefing(b){
+  if(!b) return '';
+  const alerts=(b.alerts||[]);
+  const cap=b.captain;
+  const xfer=b.top_transfer;
+  const flagClass=f=>f==='INJURED'?'injured':f==='DOUBT'?'doubt':'pricedrop';
+  const flagLabel=f=>f==='INJURED'?'OUT':f==='DOUBT'?'DOUBT':'PRICE↓';
+
+  const alertRows = alerts.length ? alerts.map(a=>`
+    <div class="brief-row">
+      <span class="brief-tag ${flagClass(a.flag)}">${flagLabel(a.flag)}</span>
+      <div style="flex:1;min-width:0">
+        <div class="brief-name">${a.name} <span style="color:var(--text3);font-weight:400">· ${a.team_name}</span></div>
+        ${a.news?`<div class="brief-meta">${a.news}</div>`:''}
+        ${a.reason?`<div class="brief-reason">${a.reason}</div>`:''}
+      </div>
+    </div>`).join('') : '<div class="brief-empty">No injury or price-drop concerns in your XI.</div>';
+
+  let capBlock='';
+  if(cap){
+    const switchHint = !cap.currently_captained && cap.current_captain
+      ? ` <span style="color:var(--orange);font-size:11px">· consider switching from ${cap.current_captain.name} (${cap.current_captain.predicted_points})</span>`
+      : '';
+    capBlock=`
+    <div class="brief-section">
+      <div class="brief-h">Captain pick</div>
+      <div class="brief-cap">
+        <span style="font-size:18px">©</span>
+        <div style="flex:1">
+          <span class="brief-cap-name">${cap.name}</span>
+          <span class="brief-meta"> · ${cap.team_name}</span>${switchHint}
+          ${cap.reason?`<div class="brief-reason">${cap.reason}</div>`:''}
+        </div>
+        <span class="brief-cap-pred">${cap.predicted_points} pts</span>
+      </div>
+    </div>`;
+  }
+
+  let xferBlock='';
+  if(xfer){
+    xferBlock=`
+    <div class="brief-section">
+      <div class="brief-h">Top transfer</div>
+      <div class="brief-row" style="border-bottom:none">
+        <div style="flex:1;min-width:0">
+          <div class="brief-name" style="color:var(--red)">↓ ${xfer.sell.name}</div>
+          <div class="brief-meta">£${xfer.sell.price.toFixed(1)}m · ${xfer.sell.predicted_points} pred</div>
+        </div>
+        <div class="brief-cap-pred" style="color:var(--green);font-size:13px">+${xfer.improvement}</div>
+        <div style="flex:1;min-width:0;text-align:right">
+          <div class="brief-name" style="color:var(--green)">↑ ${xfer.buy.name}</div>
+          <div class="brief-meta">£${xfer.buy.price.toFixed(1)}m · ${xfer.buy.predicted_points} pred</div>
+        </div>
+      </div>
+      ${xfer.reason?`<div class="brief-reason" style="margin-top:4px">${xfer.reason}</div>`:''}
+    </div>`;
+  }
+
+  const summary = b.summary
+    ? `<div class="brief-summary">${b.summary}</div>`
+    : (alerts.length===0 && cap && !xfer
+        ? `<div class="brief-summary">Your XI looks settled. Captain ${cap.name} for the highest predicted return.</div>`
+        : '');
+
+  return `
+  <div class="brief">
+    <div class="brief-head">
+      <div class="brief-title">Today — GW ${b.gameweek}</div>
+      <div>
+        ${b.deadline?`<span class="brief-deadline">⏱ ${fmtDeadline(b.deadline)}</span>`:''}
+        ${b.data_fetched_at?`<span class="brief-fresh" style="margin-left:6px">${fmtFresh(b.data_fetched_at)}</span>`:''}
+      </div>
+    </div>
+    ${summary}
+    <div class="brief-section">
+      <div class="brief-h">Squad alerts (${alerts.length})</div>
+      ${alertRows}
+    </div>
+    ${capBlock}
+    ${xferBlock}
+  </div>`;
+}
+
+function renderTeam(d,id,briefing){
   const picks=d.picks||[];
   const starting=picks.filter(p=>p.is_starting);
   const bench=picks.filter(p=>!p.is_starting);
@@ -1290,6 +1420,7 @@ function renderTeam(d,id){
   const rankFmt=r=>r?r.toLocaleString():'—';
 
   document.getElementById('team-content').innerHTML=`
+  ${renderBriefing(briefing)}
   <div class="team-card">
     <div class="tc-top">
       <div class="tc-name">${d.team_name}</div>
