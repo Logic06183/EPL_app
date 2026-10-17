@@ -30,8 +30,9 @@ personal weekly briefing for *your* team.
 - [x] Estimate free transfers from the manager's history (user can override)
 - [ ] Briefing: use the new model; chip advice (bench boost / triple captain timing)
 - [x] Analytics: anonymous daily event counts for the funnel; `/api/admin/funnel` (needs `ADMIN_EMAILS`)
-- [ ] Retention: email capture + deadline reminder carrying the briefing
-- [ ] Pricing review (R199/month is high vs competitors; consider a cheaper season pass)
+- [ ] Retention: email capture + deadline reminder carrying the briefing — needs an email provider account (Resend/Postmark) from Craig
+- [x] Pricing review → `docs/pricing.md` (recommendation only; Craig decides)
+- [ ] International checkout (GBP/USD) via a merchant-of-record provider — needs Craig's account
 
 ## Needs Craig
 
