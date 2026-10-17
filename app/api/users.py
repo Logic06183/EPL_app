@@ -12,6 +12,7 @@ from ..auth.firebase_auth import (
     _in_grace_period,
     get_current_user,
     get_db,
+    get_effective_plan,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,9 +29,10 @@ async def get_me(user: dict = Depends(get_current_user)):
 
     if not user["uid"]:
         return {
-            "authenticated": False,
-            "plan":          "free",
-            "limits":        PLANS["free"],
+            "authenticated":  False,
+            "plan":           "free",
+            "effective_plan": get_effective_plan(user),
+            "limits":         PLANS[get_effective_plan(user)],
             "grace":         grace_info,
         }
 
@@ -53,7 +55,8 @@ async def get_me(user: dict = Depends(get_current_user)):
         "uid":           user["uid"],
         "email":         user["email"],
         "plan":          user["plan"],
-        "limits":        PLANS.get(user["plan"], PLANS["free"]),
+        "effective_plan": get_effective_plan(user),
+        "limits":        PLANS.get(get_effective_plan(user), PLANS["free"]),
         "subscription":  subscription,
         "grace":         grace_info,
     }

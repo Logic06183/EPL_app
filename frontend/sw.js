@@ -1,4 +1,4 @@
-const CACHE = 'fpl-ai-v4';
+const CACHE = 'fpl-ai-v5';
 const ASSETS = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', e => {
@@ -23,8 +23,8 @@ self.addEventListener('fetch', e => {
     const bypassed = new Request(e.request, { cache: 'no-store' });
     e.respondWith(
       fetch(bypassed).catch(() => new Response(
-        JSON.stringify({ error: 'Offline — no cached data available' }),
-        { headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Offline — no cached data available', offline: true }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } }
       ))
     );
     return;

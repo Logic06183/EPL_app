@@ -125,3 +125,16 @@ def test_gemini_disabled_without_key(monkeypatch):
     monkeypatch.setattr(gemini_service, "_client", lambda: None)
     out = asyncio.run(gemini_service.generate_briefing_reasons_async(team_name="x", alerts=[], captain=None, transfer=None))
     assert out == {"summary": "", "captain_reason": "", "transfer_reason": "", "alert_reasons": {}}
+
+
+def test_users_me_reports_effective_plan_for_anonymous(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    monkeypatch.setattr(firebase_auth, "_LAUNCH_FREE_UNTIL_RAW", "2099-01-01")
+    d = client.get("/api/users/me").json()
+    assert d["plan"] == "free" and d["effective_plan"] == "pro"
+    monkeypatch.setattr(firebase_auth, "_LAUNCH_FREE_UNTIL_RAW", "2000-01-01")
+    assert client.get("/api/users/me").json()["effective_plan"] == "free"

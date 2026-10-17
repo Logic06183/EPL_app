@@ -3,6 +3,33 @@
 Running record of the push to make EPL_app a cleanly deployable product.
 Newest first. Each entry: what changed, why, how it was checked.
 
+## 2026-10-17 — Iteration 6: launch-grace UI, error states, rate limiting
+
+**Found**
+- **The launch offer didn't work in the UI.** The SPA unlocked Pro features
+  only for `plan === 'pro'`; founders (`founder`) and grace-period
+  anonymous/free users — whom the API serves as Pro — saw lock screens.
+- Pro-gated 403s never opened the upgrade modal (`detail` is an object,
+  the SPA compared it to a string) — users saw "Access denied".
+- Errors surfaced as "HTTP 500" / "Failed to fetch"; the SW returned its
+  offline placeholder with status 200, so offline looked like empty data;
+  the status pill stayed "Online" offline.
+- No per-client rate limiting.
+
+**Changed**
+- `/api/users/me` returns `effective_plan` (also for anonymous users); the
+  SPA gates on `hasPro()` from it and asks the API even when signed out.
+- `apiFetch`: upgrade modal on `upgrade_required`, readable messages for
+  429 / 5xx / network / offline; offline banner; SW offline response is 503.
+- `app/utils/rate_limit.py`: sliding-window per-IP limits per instance —
+  20/min briefing & optimiser, 30/min team import, 20/min payments, 240/min
+  default; probes and PayFast webhook exempt; 429 with `Retry-After`.
+- `scripts/e2e.mjs` (renamed from e2e-xss): XSS + error states + upgrade
+  modal + grace-period UI. Old frontend fails 5 of its 6 checks.
+
+**Checked**: ruff clean; pytest 54 passed; frontend static checks and all 6
+browser checks pass.
+
 ## 2026-10-17 — Iteration 5: fixtures bug, honest model metrics, next-GW model
 
 **Found**
@@ -174,7 +201,7 @@ unconfigured. Docker build not run locally (no daemon) — CI covers it.
 - [ ] Briefing meter is read-then-write; make it a Firestore transaction.
 - [x] Next-GW model with walk-forward backtest + auto gate (iteration 5).
 - [ ] Record real-data backtest numbers; consider adding previous seasons for early-season rounds.
-- [~] Gemini cost cap done; general per-client rate limiting still open.
+- [x] Gemini cost cap + per-client rate limiting (iterations 2, 6). Per-instance only — use Cloud Armor if abuse appears.
 - [x] Security headers, SW updates, Firestore rules, privacy/terms (iteration 3).
 - [ ] Enforce CSP after report-only period; move inline onclick handlers out so `unsafe-inline` can go.
 - [x] Account deletion (iteration 4).

@@ -905,7 +905,9 @@ if(FB_READY) firebase.initializeApp(FIREBASE_CONFIG);
 
 // ── Auth state ────────────────────────────────────────
 let currentUser = null;  // Firebase User object
-let currentPlan = 'free';
+let currentPlan = 'free';    // stored plan (badge)
+let effectivePlan = 'free';  // what the API will actually serve (launch grace → pro)
+const hasPro = () => effectivePlan === 'pro' || effectivePlan === 'founder';
 
 async function getIdToken(){
   if(!FB_READY||!currentUser) return null;
@@ -915,22 +917,20 @@ async function getIdToken(){
 if(FB_READY){
   firebase.auth().onAuthStateChanged(async (user)=>{
     currentUser = user;
-    if(user){
-      try{
-        const d = await apiFetch('/users/me');
-        currentPlan = d.plan || 'free';
-      }catch{ currentPlan='free'; }
-    } else {
-      currentPlan = 'free';
-    }
+    try{
+      const d = await apiFetch('/users/me');  // works signed-out too (grace period info)
+      currentPlan = d.plan || 'free';
+      effectivePlan = d.effective_plan || currentPlan;
+    }catch{ currentPlan='free'; effectivePlan='free'; }
     updateAuthUI(user, currentPlan);
     // Now we know the plan — load plan-aware components
     applyPlanUI();
     loadCaptain();
   });
 } else {
-  // Firebase not configured — show lock UI immediately for Pro sections
-  applyPlanUI();
+  // Firebase not configured — still ask the API what anonymous users get
+  apiFetch('/users/me').then(d=>{ effectivePlan = d.effective_plan || 'free'; })
+    .catch(()=>{}).finally(()=>{ applyPlanUI(); loadCaptain(); });
 }
 
 async function deleteAccount(){
@@ -1076,19 +1076,44 @@ async function apiFetch(path, opts={}){
   const token = await getIdToken();
   const headers = {...(opts.headers||{})};
   if(token) headers['Authorization'] = `Bearer ${token}`;
-  const r = await fetch(API+path, {...opts, headers});
-  if(r.status===403){
-    let body={};
-    try{ body=await r.json(); }catch{}
-    if(body.detail==='upgrade_required'||body.error==='upgrade_required'){
-      showUpgrade();
-      throw new Error('Pro feature — upgrade to unlock');
-    }
-    throw new Error('Access denied');
+  let r;
+  try{
+    r = await fetch(API+path, {...opts, headers});
+  }catch{
+    throw new Error(navigator.onLine ? 'Could not reach the server — please try again' : 'You\'re offline — reconnect and try again');
   }
-  if(!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
+  if(r.ok) return r.json();
+
+  let body={};
+  try{ body=await r.json(); }catch{}
+  const detail = body.detail;
+  if(r.status===403 && (detail?.error==='upgrade_required' || detail==='upgrade_required' || body.error==='upgrade_required')){
+    showUpgrade();
+    throw new Error('Pro feature — upgrade to unlock');
+  }
+  const msg = typeof detail==='string' ? detail : (detail?.message || body.error);
+  if(r.status===429) throw new Error(msg || 'Too many requests — wait a moment and try again');
+  if(r.status===503 && body.offline) throw new Error('You\'re offline — reconnect and try again');
+  if(r.status>=500) throw new Error('Something went wrong on our side — please try again shortly');
+  throw new Error(msg || `Request failed (${r.status})`);
 }
+
+// Offline banner
+function _netBanner(){
+  let b=document.getElementById('net-banner');
+  if(!b){
+    b=document.createElement('div');
+    b.id='net-banner';
+    b.setAttribute('role','status');
+    b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:999;background:var(--goldd);color:#fff;text-align:center;font-size:12px;padding:6px 16px;display:none';
+    b.textContent='You\'re offline — showing the last loaded data';
+    document.body.appendChild(b);
+  }
+  b.style.display=navigator.onLine?'none':'block';
+}
+window.addEventListener('online',_netBanner);
+window.addEventListener('offline',_netBanner);
+document.addEventListener('DOMContentLoaded',_netBanner);
 
 // ── Helpers ───────────────────────────────────────────
 const posCol=p=>({GK:'var(--gk)',DEF:'var(--def)',MID:'var(--mid)',FWD:'var(--fwd)'}[p]||'var(--text2)');
@@ -1173,7 +1198,7 @@ document.addEventListener('touchend',e=>{
 async function checkStatus(){
   try{
     const base=window.location.hostname==='localhost'?'http://localhost:8001':'';
-    const d=await fetch(base+'/health').then(r=>r.json());
+    const d=await fetch(base+'/health').then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); });
     document.getElementById('adot').className='dot on';
     document.getElementById('astat').textContent='Online';
     document.getElementById('aver').textContent=' v'+(d.version||'');
@@ -1262,7 +1287,7 @@ const PRO_LOCK_HTML = `
   </div>`;
 
 function applyPlanUI(){
-  const isPro = currentPlan === 'pro';
+  const isPro = hasPro();
   // Captain strip
   if(!isPro){
     document.getElementById('cap-row').innerHTML = PRO_LOCK_HTML;
@@ -1276,7 +1301,7 @@ function applyPlanUI(){
 
 // ── Captain picks ─────────────────────────────────────
 async function loadCaptain(){
-  if(currentPlan !== 'pro'){ applyPlanUI(); return; }
+  if(!hasPro()){ applyPlanUI(); return; }
   try{
     const d=await apiFetch('/players/captain?top_n=6');
     const picks=d.captain_picks||[];
@@ -1710,7 +1735,7 @@ async function loadInjuries(){
 }
 
 async function loadPriceMovers(){
-  if(currentPlan !== 'pro'){ document.getElementById('price-content').innerHTML=PRO_LOCK_HTML; return; }
+  if(!hasPro()){ document.getElementById('price-content').innerHTML=PRO_LOCK_HTML; return; }
   document.getElementById('price-content').innerHTML='<div class="loading"><div class="spin"></div><span>Loading…</span></div>';
   try{
     const d=await apiFetch('/players/price-movers');
@@ -1745,7 +1770,7 @@ async function loadPriceMovers(){
 }
 
 async function loadValue(){
-  if(currentPlan !== 'pro'){ document.getElementById('value-grid').innerHTML=PRO_LOCK_HTML; return; }
+  if(!hasPro()){ document.getElementById('value-grid').innerHTML=PRO_LOCK_HTML; return; }
   document.getElementById('value-grid').innerHTML=skelCards(6);
   try{
     const d=await apiFetch('/players/value?top_n=20');
@@ -1959,7 +1984,7 @@ async function loadTrending(){
 // ── 3-GW Fixture Planner ──────────────────────────────
 let tgwLoaded=false;
 async function loadThreeGW(){
-  if(currentPlan!=='pro'){
+  if(!hasPro()){
     document.getElementById('tgw-content').innerHTML=PRO_LOCK_HTML;
     return;
   }

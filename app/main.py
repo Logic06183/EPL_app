@@ -18,6 +18,7 @@ from .services.data_service import get_data_service
 from .services.prediction_service import get_prediction_service
 from .utils.cache import get_cache_manager
 from .utils.logging import get_logger, setup_logging
+from .utils.rate_limit import RateLimitMiddleware
 
 # Setup logging
 setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
@@ -93,7 +94,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware
+app.add_middleware(RateLimitMiddleware)
+
+# CORS middleware (added last so it wraps everything, incl. 429s)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,

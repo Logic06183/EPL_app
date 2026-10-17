@@ -29,7 +29,7 @@ lint:  ## Lint backend + static-check frontend
 	node scripts/check-frontend.mjs
 
 e2e:  ## Browser regression tests (needs playwright + chromium)
-	node scripts/e2e-xss.mjs
+	node scripts/e2e.mjs
 
 check: lint test  ## Everything CI runs (except docker + e2e)
 
