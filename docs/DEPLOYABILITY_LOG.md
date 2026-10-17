@@ -3,6 +3,41 @@
 Running record of the push to make EPL_app a cleanly deployable product.
 Newest first. Each entry: what changed, why, how it was checked.
 
+## 2026-10-17 — Iteration 3: frontend security, PWA updates, legal pages
+
+**Found**
+- **Stored XSS**: FPL team/manager names (user-chosen) and Gemini reasons were
+  interpolated into `innerHTML` unescaped. A team named
+  `<img src=x onerror=…>` executed script on import — reproduced in Chromium —
+  with access to the Firebase ID token.
+- Service worker served the app shell cache-first under a fixed cache name,
+  so users could stay on an old build indefinitely after a deploy.
+- No security headers on Hosting; no Firestore rules in the repo.
+- No privacy policy or terms — required by PayFast, Google sign-in
+  verification and app stores.
+
+**Changed**
+- `esc()` on 64 interpolation sites; numeric-only team ID; static check fails
+  on new unescaped interpolations; `scripts/e2e-xss.mjs` Playwright regression
+  test (fails on old code, passes now).
+- SW: network-first app shell with offline fallback; only same-origin GETs.
+- `firebase.json`: nosniff, X-Frame-Options DENY, HSTS, Referrer-Policy,
+  Permissions-Policy, COOP `same-origin-allow-popups` (keeps Google popup
+  sign-in), CSP in **Report-Only**; `cleanUrls`.
+- `frontend/firestore.rules`: deny all client access (API uses Admin SDK).
+- `/privacy` and `/terms` describing what the code actually collects/sends
+  (incl. Gemini prompt contents, PayFast, POPIA); linked from sign-in + footer.
+
+**Checked**: ruff clean; pytest 35 passed; frontend static checks pass; XSS
+browser test passes; screenshots of footer and privacy page at 390px.
+
+**Action needed from Craig**
+- Fill `[operator name]` and `[contact email]` in `frontend/privacy.html` and
+  `frontend/terms.html` (highlighted in yellow on the pages).
+- Deploy rules once: `cd frontend && npx firebase-tools deploy --only firestore:rules`.
+- After a week of clean browser consoles, switch the CSP header from
+  `Content-Security-Policy-Report-Only` to `Content-Security-Policy`.
+
 ## 2026-10-17 — Iteration 2: optimiser correctness, briefing reliability
 
 **Found**
@@ -78,7 +113,7 @@ unconfigured. Docker build not run locally (no daemon) — CI covers it.
       and minutes as features → in-sample reconstruction, not a forecast.
       Train on next-GW points from player histories and add a time-split backtest.
 - [~] Gemini cost cap done; general per-client rate limiting still open.
-- [ ] Frontend: CSP/security headers in `firebase.json`; error states; SW cache versioning.
-- [ ] Firestore security rules checked into repo.
-- [ ] Privacy policy / terms pages (needed for app stores + PayFast).
+- [x] Security headers, SW updates, Firestore rules, privacy/terms (iteration 3).
+- [ ] Enforce CSP after report-only period; move inline onclick handlers out so `unsafe-inline` can go.
+- [ ] Account deletion endpoint (privacy policy promises deletion on request).
 - [ ] Staging environment.

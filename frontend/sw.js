@@ -1,4 +1,4 @@
-const CACHE = 'fpl-ai-v3';
+const CACHE = 'fpl-ai-v4';
 const ASSETS = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', e => {
@@ -42,14 +42,22 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Cache-first for app shell
+  // Only handle same-origin GETs from here on (PayFast, Firebase Auth etc. pass straight through)
+  if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
+
+  // Network-first for the app shell so a deploy reaches users on the next load;
+  // fall back to the cached copy when offline.
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).then(resp => {
-      if (resp.ok && e.request.method === 'GET') {
+    fetch(e.request).then(resp => {
+      if (resp.ok) {
         const clone = resp.clone();
         caches.open(CACHE).then(c => c.put(e.request, clone));
       }
       return resp;
-    }))
+    }).catch(() =>
+      caches.match(e.request).then(cached =>
+        cached || (e.request.mode === 'navigate' ? caches.match('/index.html') : Response.error())
+      )
+    )
   );
 });
