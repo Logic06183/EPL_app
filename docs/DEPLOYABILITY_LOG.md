@@ -3,6 +3,29 @@
 Running record of the push to make EPL_app a cleanly deployable product.
 Newest first. Each entry: what changed, why, how it was checked.
 
+## 2026-10-17 — Iteration 4: account deletion, transfer rules, non-blocking training
+
+**Found**
+- Privacy policy promises deletion, but there was no way to delete an account.
+- Transfer suggestions could recommend a 4th player from one club (illegal
+  in FPL) and suspended/unavailable players with no `chance_of_playing`.
+- Nine endpoints called `prediction_service.train()` synchronously inside
+  async handlers: on a cold instance the event loop froze for seconds, and
+  concurrent cold requests each trained the models in parallel.
+
+**Changed**
+- `DELETE /api/users/me` + "Delete account" footer link (signed-in only):
+  cancels a live PayFast subscription first, then removes the Firestore
+  record and Firebase Auth user; nothing is deleted if PayFast cancel fails.
+- Transfers: 3-per-club rule (selling a same-club player frees the slot),
+  status filter; picks now carry `team_id`.
+- `PredictionService.ensure_trained()` — trains once in a worker thread
+  behind an asyncio lock; all call sites (and startup) use it.
+
+**Checked**: ruff clean; pytest 41 passed (+6: account deletion paths,
+transfer rules with a mocked FPL client — fails on the old code — and bank
+units); frontend checks + XSS browser test pass.
+
 ## 2026-10-17 — Iteration 3: frontend security, PWA updates, legal pages
 
 **Found**
@@ -107,7 +130,9 @@ unconfigured. Docker build not run locally (no daemon) — CI covers it.
 ## Backlog (highest value first)
 
 - [x] Optimiser correctness + tests; plan gating / meter tests (iteration 2).
-- [ ] Tests for predictions, FDR, transfers endpoints.
+- [x] Transfer endpoint tests + rule fixes (iteration 4).
+- [ ] Tests for predictions + FDR endpoints.
+- [ ] `free_transfers` in team import is actually `event_transfers` (transfers made) — mislabelled.
 - [ ] Briefing meter is read-then-write; make it a Firestore transaction.
 - [ ] Prediction model: target is `points_per_game` with `total_points`
       and minutes as features → in-sample reconstruction, not a forecast.
@@ -115,5 +140,5 @@ unconfigured. Docker build not run locally (no daemon) — CI covers it.
 - [~] Gemini cost cap done; general per-client rate limiting still open.
 - [x] Security headers, SW updates, Firestore rules, privacy/terms (iteration 3).
 - [ ] Enforce CSP after report-only period; move inline onclick handlers out so `unsafe-inline` can go.
-- [ ] Account deletion endpoint (privacy policy promises deletion on request).
+- [x] Account deletion (iteration 4).
 - [ ] Staging environment.

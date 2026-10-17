@@ -62,7 +62,6 @@ async def lifespan(app: FastAPI):
 
 async def _prewarm():
     try:
-        import asyncio
 
         from .services.data_service import get_data_service
         from .services.prediction_service import get_prediction_service
@@ -75,7 +74,7 @@ async def _prewarm():
         prediction_service = get_prediction_service()
         # train() is CPU-bound (sklearn .fit) — run in a worker thread so the
         # event loop stays responsive to health probes during startup.
-        await asyncio.to_thread(prediction_service.train, elements)
+        await prediction_service.ensure_trained(elements)
         app_state["models_loaded"] = prediction_service._trained
         logger.info(f"Models pre-trained: {app_state['models_loaded']}")
     except Exception as e:

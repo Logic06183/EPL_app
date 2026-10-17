@@ -64,8 +64,8 @@ async def _get_predictions_payload(
     teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
     positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
 
-    if model_type != "basic" and not prediction_service._trained:
-        prediction_service.train(elements)
+    if model_type != "basic":
+        await prediction_service.ensure_trained(elements)
 
     candidates = [
         p for p in elements
@@ -165,8 +165,8 @@ async def get_player_prediction(
     teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
     positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
     selected_model = model or model_type
-    if selected_model != "basic" and not prediction_service._trained:
-        prediction_service.train(elements)
+    if selected_model != "basic":
+        await prediction_service.ensure_trained(elements)
 
     return _enrich(player, teams, positions, prediction_service, selected_model)
 
@@ -189,8 +189,7 @@ async def get_captain_picks(
         positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
         events    = bootstrap.get("events", [])
 
-        if not prediction_service._trained:
-            prediction_service.train(elements)
+        await prediction_service.ensure_trained(elements)
 
         # Get current / next GW id
         cur_gw = next((e for e in events if e.get("is_current") or e.get("is_next")), {})
@@ -296,8 +295,7 @@ async def get_three_gw_picks(
         positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
         events    = bootstrap.get("events", [])
 
-        if not prediction_service._trained:
-            prediction_service.train(elements)
+        await prediction_service.ensure_trained(elements)
 
         # Find next 3 upcoming GW ids
         upcoming = [e for e in events if not e.get("finished", True)][:3]
@@ -438,8 +436,7 @@ async def get_differentials(
         teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
         positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
 
-        if not prediction_service._trained:
-            prediction_service.train(elements)
+        await prediction_service.ensure_trained(elements)
 
         diffs = []
         for player in elements:
@@ -534,8 +531,7 @@ async def get_value_picks(
         teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
         positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
 
-        if not prediction_service._trained:
-            prediction_service.train(elements)
+        await prediction_service.ensure_trained(elements)
 
         values = []
         for player in elements:

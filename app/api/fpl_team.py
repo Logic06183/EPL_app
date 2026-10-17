@@ -6,6 +6,7 @@ build a personalised briefing card for the user's squad.
 
 import logging
 import os
+from collections import Counter
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -76,6 +77,7 @@ async def get_fpl_team(
                 "team_name":        tm.get("name", ""),
                 "position_name":    pos.get("singular_name_short", ""),
                 "position":         p.get("element_type", 0),
+                "team_id":          p.get("team", 0),
                 "price":            float(p.get("now_cost", 0)) / 10,
                 "form":             float(p.get("form", 0)),
                 "total_points":     int(p.get("total_points", 0)),
@@ -137,8 +139,7 @@ async def suggest_transfers(
         teams_map = {t["id"]: t for t in bootstrap.get("teams", [])}
         pos_map   = {p["id"]: p for p in bootstrap.get("element_types", [])}
 
-        if not prediction_service._trained:
-            prediction_service.train(elements)
+        await prediction_service.ensure_trained(elements)
 
         # Build prediction map for all players (single vectorised pass)
         _preds = prediction_service.predict_batch(elements, "random_forest")
@@ -146,6 +147,7 @@ async def suggest_transfers(
 
         squad_ids = {p["id"] for p in picks}
         bank = team_data.get("bank", 0.0)
+        club_counts = Counter(p.get("team_id") for p in picks)
 
         suggestions = []
         for sell_player in starting:
@@ -163,6 +165,12 @@ async def suggest_transfers(
                     continue
                 cand_price = float(candidate.get("now_cost", 0)) / 10
                 if cand_price > available_budget:
+                    continue
+                # FPL rule: max 3 per club (selling a same-club player frees a slot)
+                cand_club = candidate.get("team", 0)
+                if club_counts[cand_club] - (sell_player.get("team_id") == cand_club) >= 3:
+                    continue
+                if candidate.get("status", "a") in ("u", "n", "s", "i"):
                     continue
                 chance = candidate.get("chance_of_playing_next_round")
                 if chance is not None and chance < 50:
@@ -393,8 +401,7 @@ async def get_team_briefing(
     # Build prediction map for the XI in one batched call (vectorised).
     bootstrap = await data_service.get_bootstrap_data()
     elements_by_id = {p["id"]: p for p in bootstrap.get("elements", [])}
-    if not prediction_service._trained:
-        prediction_service.train(list(elements_by_id.values()))
+    await prediction_service.ensure_trained(list(elements_by_id.values()))
 
     starting_elements = [elements_by_id[p["id"]] for p in picks if p.get("is_starting") and p["id"] in elements_by_id]
     starting_preds    = prediction_service.predict_batch(starting_elements, "ensemble")

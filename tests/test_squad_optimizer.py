@@ -107,6 +107,9 @@ class _FakeData:
 class _FakePredictions:
     _trained = False
 
+    async def ensure_trained(self, players):
+        pass
+
     def predict_batch(self, players, model_type):
         return [float(p["form"]) for p in players]
 

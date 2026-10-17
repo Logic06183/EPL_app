@@ -4,6 +4,7 @@ Three real ML models: RandomForest, GradientBoosting, and a form-weighted Ensemb
 All three train on the full player pool and use 12 features from FPL bootstrap data.
 """
 
+import asyncio
 import logging
 from functools import lru_cache
 from typing import Any
@@ -30,6 +31,17 @@ class PredictionService:
         self._mlp:   MLPRegressor | None            = None
         self._scaler = StandardScaler()
         self._trained = False
+        self._train_lock: asyncio.Lock | None = None
+
+    async def ensure_trained(self, players: list[dict[str, Any]]) -> None:
+        """Train once, off the event loop. Concurrent cold requests wait for one training run."""
+        if self._trained:
+            return
+        if self._train_lock is None:
+            self._train_lock = asyncio.Lock()
+        async with self._train_lock:
+            if not self._trained:
+                await asyncio.to_thread(self.train, players)
 
     # ── Feature engineering ────────────────────────────────────────────────────
 
