@@ -97,3 +97,12 @@ def test_track_record_endpoint_serves_backtest():
     body = r.json()
     assert set(body["backtest"]["seasons"]) == {"2024-25", "2025-26"}
     assert "live" in body and "method" in body
+
+
+def test_scheduled_refresh_requires_secret(monkeypatch):
+    c = TestClient(app)
+    monkeypatch.delenv("CRON_SECRET", raising=False)
+    assert c.post("/api/predictions/refresh", headers={"X-Cron-Secret": "x"}).status_code == 403
+    monkeypatch.setenv("CRON_SECRET", "s3cret")
+    assert c.post("/api/predictions/refresh", headers={"X-Cron-Secret": "wrong"}).status_code == 403
+    assert c.post("/api/predictions/refresh").status_code == 403

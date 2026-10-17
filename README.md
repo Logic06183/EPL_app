@@ -64,6 +64,16 @@ saved to `xp_snapshots` before each deadline and scored into `xp_results`
 after. Retrain each summer: `python -m ml.train --data <dir> --download`
 after adding the finished season to `SEASONS`.
 
+So snapshots are taken close to each deadline even with no traffic, set
+`CRON_SECRET` on the service and add an hourly Cloud Scheduler job:
+
+```sh
+gcloud scheduler jobs create http xp-refresh --location us-central1 \
+  --schedule "7 * * * *" --http-method POST \
+  --uri https://epl-prediction-app.web.app/api/predictions/refresh \
+  --headers X-Cron-Secret=$CRON_SECRET
+```
+
 ## Roadmap
 
 See `ROADMAP.md`.

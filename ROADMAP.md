@@ -24,7 +24,7 @@ personal weekly briefing for *your* team.
 - [x] Public track-record page in the frontend
 - [x] Frontend: Pro UI gated on server's effective plan (founders/grace were locked out); app survives Firebase SDK failing to load
 - [ ] Retrain each summer: add the new season to `SEASONS` in `ml/train.py`, rerun, commit `app/ml/*`
-- [ ] Hourly refresh independent of traffic (Cloud Scheduler → endpoint) so snapshots are close to each deadline
+- [x] Hourly refresh endpoint for Cloud Scheduler (`POST /api/predictions/refresh`, `CRON_SECRET`)
 - [x] Optimiser: integer programme for squad + XI + captain over 3 GWs; transfer planner with -4 hits vs hold (`app/services/optimizer.py`, `/api/fpl-team/{id}/plan`)
 - [x] Escape user/LLM-controlled text in the frontend (FPL team names, Gemini briefing text)
 - [x] Estimate free transfers from the manager's history (user can override)
@@ -41,6 +41,7 @@ personal weekly briefing for *your* team.
 - Delete the retired Cloud Run services `epl-api` and `epl-backend-sa` if they still exist
 - Archive the old `EPL_Fantasy_Optimizer` repo
 - Set `ADMIN_EMAILS` on `epl-backend` to read the funnel
+- Set `CRON_SECRET` and create the hourly Cloud Scheduler job (command in README)
 
 ## Log
 
