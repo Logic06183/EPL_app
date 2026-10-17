@@ -498,7 +498,7 @@ async def get_team_briefing(
         }
     )
 
-    reasons = gemini_service.generate_briefing_reasons(
+    reasons = await gemini_service.generate_briefing_reasons_async(
         team_name=team_data.get("team_name", ""),
         alerts=llm_input_alerts,
         captain=llm_input_captain,

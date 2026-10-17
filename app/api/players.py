@@ -8,7 +8,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from ..auth.firebase_auth import get_current_user, plan_limits, require_pro
+from ..auth.firebase_auth import get_current_user, get_effective_plan, plan_limits, require_pro
 from ..services.data_service import FPLDataService, get_data_service
 from ..services.prediction_service import PredictionService, get_prediction_service
 
@@ -83,7 +83,7 @@ async def _get_predictions_payload(
 
     predictions.sort(key=lambda x: x["predicted_points"] or 0, reverse=True)
 
-    limits     = plan_limits(user["plan"])
+    limits     = plan_limits(get_effective_plan(user))
     hard_limit = min(top_n, limits["predictions_limit"])
     locked_out = len(predictions) - hard_limit if len(predictions) > hard_limit else 0
 

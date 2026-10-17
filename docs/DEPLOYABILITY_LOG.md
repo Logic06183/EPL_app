@@ -3,6 +3,33 @@
 Running record of the push to make EPL_app a cleanly deployable product.
 Newest first. Each entry: what changed, why, how it was checked.
 
+## 2026-10-17 — Iteration 2: optimiser correctness, briefing reliability
+
+**Found**
+- `/api/teams/optimize` greedy picker broke FPL rules: no 3-per-club limit,
+  injured/suspended players eligible, XI = insertion order, formation always
+  reported as squad counts (5-5-3), budget often left unspent.
+- Gemini call was synchronous inside an async handler → each briefing froze
+  the whole instance for up to several seconds; the 8s timeout constant was
+  never applied; no cost cap (anonymous users can request briefings for any
+  team id during grace).
+- Prediction limits used the *stored* plan, so anonymous users got the free
+  cap of 10 during grace while every other feature treated them as Pro.
+
+**Changed**
+- `app/services/squad_optimizer.py`: exact MILP (scipy/HiGHS) choosing squad,
+  XI and captain jointly under all FPL rules; runs in a worker thread
+  (~0.8s / 760 players); 422 if the budget can't buy a legal squad. SPA shows (C).
+- Gemini: `generate_briefing_reasons_async` — thread + hard timeout +
+  `GEMINI_MAX_CALLS_PER_MINUTE` (default 30) per instance, falling back to
+  data-only briefings.
+- Prediction limits use the effective plan.
+
+**Checked**: ruff clean; pytest 35 passed (+19: optimiser rules, club limit,
+captain, beats old greedy, infeasible budget, endpoint contract, grace/paywall,
+briefing meter, Gemini cap + timeout). FPL API unreachable from the sandbox,
+so the optimiser is tested on a synthetic 20-club league.
+
 ## 2026-10-17 — Iteration 1: foundations + payment security
 
 **Found**
@@ -44,13 +71,13 @@ unconfigured. Docker build not run locally (no daemon) — CI covers it.
 
 ## Backlog (highest value first)
 
-- [ ] Tests for core API logic: predictions, optimiser constraints (15
-      players, ≤3 per club, budget), FDR, briefing meter, plan gating.
-- [ ] Optimiser correctness: verify squad rules are enforced.
+- [x] Optimiser correctness + tests; plan gating / meter tests (iteration 2).
+- [ ] Tests for predictions, FDR, transfers endpoints.
+- [ ] Briefing meter is read-then-write; make it a Firestore transaction.
 - [ ] Prediction model: target is `points_per_game` with `total_points`
       and minutes as features → in-sample reconstruction, not a forecast.
       Train on next-GW points from player histories and add a time-split backtest.
-- [ ] Rate limiting on expensive endpoints (briefing → Gemini cost).
+- [~] Gemini cost cap done; general per-client rate limiting still open.
 - [ ] Frontend: CSP/security headers in `firebase.json`; error states; SW cache versioning.
 - [ ] Firestore security rules checked into repo.
 - [ ] Privacy policy / terms pages (needed for app stores + PayFast).

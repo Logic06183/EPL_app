@@ -8,9 +8,13 @@ endpoint degrades gracefully to data-only mode. Never raises.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
+import threading
+import time
+from collections import deque
 from functools import lru_cache
 from typing import Any
 
@@ -27,6 +31,23 @@ _TEMPERATURE = 0.3
 _MAX_OUTPUT_TOKENS = 1500
 _THINKING_BUDGET = 0
 _TIMEOUT_S = 8.0
+
+# Per-instance cost guard: at most this many Gemini calls in any 60s window.
+# Beyond it, briefings fall back to data-only. Cache hits never count.
+_MAX_CALLS_PER_MINUTE = int(os.getenv("GEMINI_MAX_CALLS_PER_MINUTE", "30"))
+_call_times: deque[float] = deque()
+_call_lock = threading.Lock()
+
+
+def _take_call_slot(now: float | None = None) -> bool:
+    now = time.monotonic() if now is None else now
+    with _call_lock:
+        while _call_times and now - _call_times[0] >= 60:
+            _call_times.popleft()
+        if len(_call_times) >= _MAX_CALLS_PER_MINUTE:
+            return False
+        _call_times.append(now)
+        return True
 
 
 def _api_key() -> str | None:
@@ -54,6 +75,23 @@ def _client():
 
 def is_available() -> bool:
     return _client() is not None
+
+
+_EMPTY_REASONS: dict[str, Any] = {"summary": "", "captain_reason": "", "transfer_reason": "", "alert_reasons": {}}
+
+
+async def generate_briefing_reasons_async(**kwargs: Any) -> dict[str, Any]:
+    """Non-blocking wrapper: runs the SDK call in a thread with a hard timeout and rate cap."""
+    if _client() is None:
+        return dict(_EMPTY_REASONS)
+    if not _take_call_slot():
+        logger.warning("Gemini per-minute cap reached — serving data-only briefing")
+        return dict(_EMPTY_REASONS)
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(generate_briefing_reasons, **kwargs), timeout=_TIMEOUT_S)
+    except TimeoutError:
+        logger.warning(f"Gemini call exceeded {_TIMEOUT_S}s — serving data-only briefing")
+        return dict(_EMPTY_REASONS)
 
 
 def generate_briefing_reasons(
