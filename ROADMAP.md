@@ -54,3 +54,4 @@ personal weekly briefing for *your* team.
 - 2026-10-17 — optimiser + transfer planner; XSS escaping
 - 2026-10-17 — chip advice (`/plan` + Transfer plan card)
 - 2026-10-17 — deadline calendar feed + `?team=` deep link
+- 2026-10-17 — bootstrap CIs on pick metrics: captaincy gap vs season average is noise in both seasons; top-11 +0.65 significant in 2024-25

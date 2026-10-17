@@ -147,6 +147,27 @@ def evaluate(test: pd.DataFrame) -> dict:
             "captain_pts": round(float(gws.apply(lambda g: g.nlargest(1, "model")["actual"].mean(), include_groups=False).mean()), 2),
             "top11_pts": round(float(gws.apply(lambda g: g.nlargest(11, "model")["actual"].mean(), include_groups=False).mean()), 2),
         }
+    out["model_vs_season_avg"] = paired_differences(pool)
+    return out
+
+
+def paired_differences(pool: pd.DataFrame, n_boot: int = 5000, seed: int = 0) -> dict:
+    """
+    Per-gameweek model minus season-average difference for each pick metric,
+    with a bootstrap 95% interval over gameweeks. If the interval spans zero,
+    the backtest can't tell the two apart on that metric.
+    """
+    rng = np.random.default_rng(seed)
+    out = {}
+    for metric, k in (("captain_pts", 1), ("top3_pts", 3), ("top11_pts", 11)):
+        per_gw = pool.groupby("gw").apply(
+            lambda g: g.nlargest(k, "model")["actual"].mean() - g.nlargest(k, "season_avg")["actual"].mean(),
+            include_groups=False,
+        ).to_numpy()
+        boots = [rng.choice(per_gw, len(per_gw)).mean() for _ in range(n_boot)]
+        lo, hi = np.percentile(boots, [2.5, 97.5])
+        out[metric] = {"diff": round(float(per_gw.mean()), 2), "ci95": [round(float(lo), 2), round(float(hi), 2)],
+                       "significant": bool(lo > 0 or hi < 0)}
     return out
 
 

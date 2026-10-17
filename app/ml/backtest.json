@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-17T19:00:36+00:00",
+  "generated_at": "2026-10-17T20:12:29+00:00",
   "features": [
     "position_code",
     "value",
@@ -67,6 +67,32 @@
           "spearman": 0.396,
           "captain_pts": 7.47,
           "top11_pts": 5.51
+        },
+        "model_vs_season_avg": {
+          "captain_pts": {
+            "diff": -1.59,
+            "ci95": [
+              -4.33,
+              0.92
+            ],
+            "significant": false
+          },
+          "top3_pts": {
+            "diff": 0.29,
+            "ci95": [
+              -0.87,
+              1.52
+            ],
+            "significant": false
+          },
+          "top11_pts": {
+            "diff": 0.65,
+            "ci95": [
+              0.25,
+              1.12
+            ],
+            "significant": true
+          }
         }
       }
     },
@@ -111,6 +137,32 @@
           "spearman": 0.32,
           "captain_pts": 9.1,
           "top11_pts": 4.37
+        },
+        "model_vs_season_avg": {
+          "captain_pts": {
+            "diff": 1.05,
+            "ci95": [
+              -0.51,
+              2.62
+            ],
+            "significant": false
+          },
+          "top3_pts": {
+            "diff": 0.55,
+            "ci95": [
+              -0.38,
+              1.5
+            ],
+            "significant": false
+          },
+          "top11_pts": {
+            "diff": 0.22,
+            "ci95": [
+              -0.23,
+              0.69
+            ],
+            "significant": false
+          }
         }
       }
     }

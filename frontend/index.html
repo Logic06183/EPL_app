@@ -1917,6 +1917,16 @@ function trTable(m,b){
   return `<div class="tr-wrap"><table class="tr-tbl"><thead><tr><th></th><th>Our model</th><th>Season average</th></tr></thead>
     <tbody>${trRows(m,b)}</tbody></table></div>`;
 }
+// Bootstrap 95% intervals for model minus season average (ml/train.py paired_differences)
+function trSig(d){
+  if(!d) return '';
+  const fmt=v=>(v>0?'+':'')+Number(v).toFixed(2);
+  const row=(label,m)=>m?`<div>${label}: ${fmt(m.diff)} pts (95% CI ${fmt(m.ci95[0])} to ${fmt(m.ci95[1])}) —
+    <span style="color:var(${m.significant?(m.diff>0?'--green':'--red'):'--text2'})">${m.significant?(m.diff>0?'model better':'season average better'):'too close to call'}</span></div>`:'';
+  return `<div style="font-size:11px;color:var(--text2);margin-top:8px;line-height:1.6;font-family:'DM Mono',monospace">
+    ${row('Captain',d.captain_pts)}${row('Top 3',d.top3_pts)}${row('Top 11',d.top11_pts)}</div>`;
+}
+
 async function loadRecord(){
   track('track_record_view');
   const el=document.getElementById('record-content');
@@ -1942,7 +1952,7 @@ async function loadRecord(){
       h+=`<div class="tr-card"><h3>BACKTEST ON PAST SEASONS</h3>
         <p>Each season was predicted gameweek by gameweek by a model trained only on earlier seasons,
         so it never saw the results it was tested on. Compared with each player's season points-per-game so far.</p>
-        ${seasons.map(([s,v])=>`<h3 style="margin-top:12px">${escHtml(s)}</h3>${trTable(v.metrics?.model,v.metrics?.season_avg)}`).join('')}
+        ${seasons.map(([s,v])=>`<h3 style="margin-top:12px">${escHtml(s)}</h3>${trTable(v.metrics?.model,v.metrics?.season_avg)}${trSig(v.metrics?.model_vs_season_avg)}`).join('')}
       </div>`;
     }
     h+=`<div class="tr-card"><h3>HOW WE MEASURE</h3><p>${escHtml(d.method)} Rank correlation: 1 = perfect order, 0 = random.
