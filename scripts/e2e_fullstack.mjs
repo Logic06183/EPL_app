@@ -6,7 +6,12 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
+import { createRequire } from "node:module";
 import { chromium } from "playwright";
+
+// axe-core is optional locally (npm i axe-core); CI installs it.
+let axeSource = null;
+try { axeSource = await readFile(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8"); } catch {}
 
 const shots = process.argv.includes("--shots") ? process.argv[process.argv.indexOf("--shots") + 1] : null;
 const root = new URL("../frontend/", import.meta.url).pathname;
@@ -20,7 +25,7 @@ const server = createServer(async (req, res) => {
 const port = 5000;
 
 const browser = await chromium.launch(process.env.PLAYWRIGHT_CHROMIUM ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM } : {});
-const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 900 } });
+const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
 const page = await ctx.newPage();
 const problems = [];
 page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
@@ -44,12 +49,19 @@ async function check(name, selector, mustInclude) {
   if (!text || errEl || (mustInclude && !mustInclude.test(text))) {
     problems.push(`${name}: panel ${selector} shows "${text.slice(0, 100).replace(/\s+/g, " ")}"`);
   } else console.log(`✓ ${name}`);
+  if (axeSource) {
+    await page.addScriptTag({ content: axeSource });
+    const violations = await page.evaluate(async (sel) => (await axe.run(sel, { runOnly: ["wcag2a", "wcag2aa"] })).violations
+      .map((v) => `${v.id} (${v.nodes.length}): ${v.nodes[0].target.join(" ")}`), selector);
+    for (const v of violations) problems.push(`a11y ${name}: ${v}`);
+  }
   if (shots) await page.screenshot({ path: `${shots}/${name.replace(/\W+/g, "-")}.png` });
 }
 
 await page.goto(`http://localhost:${port}/`);
 await check("predictions", "#pred-grid", /\d/);
 await check("captain picks", "#cap-row", /CAPTAIN/);
+if (/TBC/.test(await page.locator("#cap-row").innerText())) problems.push("captain picks: fixture shows TBC (wrong gameweek)");
 await check("gameweek bar (next deadline)", "#gwb-gw", /Gameweek 9/);
 
 await page.click('#nav [data-tab="squad"], nav [data-tab="squad"] >> nth=0');
@@ -80,6 +92,23 @@ await page.evaluate(() => doSearch("Liv"));
 await check("search", "#sres", /Liv/);
 await page.evaluate(() => showTab("gameweek"));
 await check("gameweek", "#gw-content", /Gameweek|GW/);
+
+// Phone width: no tab may scroll horizontally.
+const phone = await browser.newContext({ serviceWorkers: "block", viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true, reducedMotion: "reduce" });
+const mp = await phone.newPage();
+await mp.route(/gstatic\.com\/firebasejs/, (r) => r.fulfill({ contentType: "text/javascript",
+  body: "window.firebase={initializeApp(){},auth(){return{onAuthStateChanged(cb){setTimeout(()=>cb(null),0)},currentUser:null}}};" }));
+await mp.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.fulfill({ body: "" }));
+await mp.goto(`http://localhost:${port}/`);
+for (const tab of ["predict", "squad", "fixtures", "intel", "search", "gameweek"]) {
+  await mp.evaluate((t) => showTab(t), tab);
+  await mp.waitForLoadState("networkidle");
+  await mp.waitForTimeout(500);
+  const w = await mp.evaluate(() => ({ doc: document.documentElement.scrollWidth, vw: window.innerWidth }));
+  if (w.doc > 375 || w.vw > 375) problems.push(`mobile ${tab}: page is ${Math.max(w.doc, w.vw)}px wide at 375px`);
+  else console.log(`✓ mobile ${tab}: no horizontal scroll`);
+}
+await phone.close();
 
 await browser.close();
 server.close();

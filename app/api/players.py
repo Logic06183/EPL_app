@@ -9,7 +9,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..auth.firebase_auth import get_current_user, get_effective_plan, plan_limits, require_pro
-from ..services.data_service import FPLDataService, get_data_service
+from ..services.data_service import FPLDataService, get_data_service, planning_gameweek
 from ..services.prediction_service import PredictionService, get_prediction_service
 
 logger = logging.getLogger(__name__)
@@ -197,7 +197,7 @@ async def get_captain_picks(
         await prediction_service.ensure_trained(elements)
 
         # Get current / next GW id
-        cur_gw = next((e for e in events if e.get("is_current") or e.get("is_next")), {})
+        cur_gw = planning_gameweek(events)
         gw_id  = cur_gw.get("id", 1)
 
         # Fetch upcoming fixtures to add fixture context

@@ -28,7 +28,9 @@ SHORT = ["ARS", "AVL", "BOU", "BRE", "BHA", "BUR", "CHE", "CRY", "EVE", "FUL", "
 PLAYED, NEXT_GW, N_GW = 8, 9, 38
 SQUAD_SHAPE = {1: 3, 2: 8, 3: 9, 4: 5}  # per club
 PRICE = {1: (4.0, 6.0), 2: (4.0, 7.0), 3: (4.5, 13.0), 4: (4.5, 15.0)}
-START = datetime(2026, 8, 15, 14, 0, tzinfo=UTC)
+# Dates are relative to today so the next deadline is always ~3 days away.
+_today = datetime.now(UTC).replace(hour=14, minute=0, second=0, microsecond=0)
+START = _today - timedelta(days=7 * PLAYED - 3)
 
 
 def _build(seed: int = 7):

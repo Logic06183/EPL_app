@@ -250,6 +250,17 @@ class FPLDataService:
 
 
 # Dependency injection
+def planning_gameweek(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """The gameweek decisions are for: the next deadline. Once a deadline passes the
+    current GW is locked, so captain/transfer/fixture advice targets is_next; falls
+    back to the current GW at season end."""
+    return (
+        next((e for e in events if e.get("is_next")), None)
+        or next((e for e in events if e.get("is_current")), None)
+        or {}
+    )
+
+
 @lru_cache
 def get_data_service() -> FPLDataService:
     """Get cached FPL data service instance"""

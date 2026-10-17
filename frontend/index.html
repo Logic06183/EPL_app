@@ -23,8 +23,8 @@
   --b1:#152535; --b2:#1e3a50; --b3:#2a5270;
   --gold:#c9a84c; --goldb:#efc84a; --goldd:#7a5f22;
   --green:#35d967; --greend:#1a6635;
-  --text:#cce8de; --text2:#5f9880; --text3:#2a5040;
-  --gk:#f59e0b; --def:#3b82f6; --mid:#10b981; --fwd:#ef4444;
+  --text:#cce8de; --text2:#86b8a2; --text3:#6d978a;  /* ≥4.5:1 on all card backgrounds (WCAG AA) */
+  --gk:#f59e0b; --def:#60a5fa; --mid:#34d399; --fwd:#f87171;
   --red:#e05555; --orange:#f97316;
   --r:12px; --sh:0 8px 40px rgba(0,0,0,.7);
   --sbh:48px; --navh:52px; --bnavh:68px;
@@ -73,7 +73,7 @@ body::before{content:'';position:fixed;inset:0;
 .ntab:hover{color:var(--text);}
 .ntab.active{color:var(--gold);border-bottom-color:var(--gold);}
 .ntab .ni{font-size:14px;}
-.ntab .badge{background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;font-family:'DM Mono',monospace;margin-left:2px;}
+.ntab .badge{background:#c53030;color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;font-family:'DM Mono',monospace;margin-left:2px;}
 
 /* ── BOTTOM NAV (mobile) ── */
 #bnav{display:none;position:fixed;bottom:0;left:0;right:0;
@@ -89,7 +89,7 @@ body::before{content:'';position:fixed;inset:0;
 .bntab.active .bni{background:rgba(201,168,76,.12);border-color:rgba(201,168,76,.3);}
 .bni{width:38px;height:30px;display:flex;align-items:center;justify-content:center;
   border-radius:9px;border:1px solid transparent;transition:all .2s;font-size:17px;position:relative;}
-.bni .badge{position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;
+.bni .badge{position:absolute;top:-4px;right:-4px;background:#c53030;color:#fff;
   font-size:8px;padding:1px 4px;border-radius:8px;font-family:'DM Mono',monospace;}
 
 @media(max-width:768px){#tnav{display:none;}#bnav{display:flex;}
@@ -153,7 +153,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 /* ── POSITION BADGE ── */
 .pos{display:inline-block;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;
   padding:2px 7px;border-radius:4px;letter-spacing:.5px;flex-shrink:0;}
-.pos-GK{background:rgba(245,158,11,.1);color:var(--gk);border:1px solid rgba(245,158,11,.2);}
+.pos-GK,.pos-GKP{background:rgba(245,158,11,.1);color:var(--gk);border:1px solid rgba(245,158,11,.2);}
 .pos-DEF{background:rgba(59,130,246,.1);color:var(--def);border:1px solid rgba(59,130,246,.2);}
 .pos-MID{background:rgba(16,185,129,.1);color:var(--mid);border:1px solid rgba(16,185,129,.2);}
 .pos-FWD{background:rgba(239,68,68,.1);color:var(--fwd);border:1px solid rgba(239,68,68,.2);}
@@ -246,7 +246,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 .pt{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-family:'DM Mono',monospace;font-size:10px;border:2px solid rgba(255,255,255,.2);
   transition:.2s;box-shadow:0 2px 8px rgba(0,0,0,.5);}
-.pt-GK{background:rgba(245,158,11,.3);border-color:var(--gk);color:var(--gk);}
+.pt-GK,.pt-GKP{background:rgba(245,158,11,.3);border-color:var(--gk);color:var(--gk);}
 .pt-DEF{background:rgba(59,130,246,.3);border-color:var(--def);color:var(--def);}
 .pt-MID{background:rgba(16,185,129,.3);border-color:var(--mid);color:var(--mid);}
 .pt-FWD{background:rgba(239,68,68,.3);border-color:var(--fwd);color:var(--fwd);}
@@ -471,11 +471,12 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 .gwb-pill .cd{color:var(--gold);}
 
 /* ── TRENDING CARDS ── */
-.trend-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;}
+.trend-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:8px;}
+.trend-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px;}
 .trend-card{background:var(--card);border:1px solid var(--b1);border-radius:var(--r);
   padding:11px 12px;display:flex;align-items:center;gap:10px;
   opacity:0;animation:up .25s forwards;}
-.trend-rank{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--b2);
+.trend-rank{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--text3);
   min-width:28px;text-align:center;line-height:1;}
 .trend-body{flex:1;min-width:0;}
 .trend-name{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -577,6 +578,9 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   font-weight:600;cursor:pointer;transition:.2s;margin-top:16px;}
 .cancel-btn:hover{background:rgba(224,85,85,.1);}
 .cancel-btn:disabled{opacity:.4;cursor:not-allowed;}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}
+}
 </style>
 </head>
 <body>
@@ -666,12 +670,12 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <!-- Captain Hub -->
   <div class="captain-strip" id="cap-strip">
     <h2 class="cap-title">🏅 CAPTAIN PICKS <span style="font-size:11px;color:var(--text3);font-weight:400;letter-spacing:0">this gameweek</span></h2>
-    <div class="cap-row" id="cap-row"><div class="loading" style="padding:12px"><div class="spin"></div></div></div>
+    <div class="cap-row" id="cap-row" tabindex="0" role="region" aria-label="Captain picks"><div class="loading" style="padding:12px"><div class="spin"></div></div></div>
   </div>
 
   <div class="ctrl">
     <div class="cg"><span class="cl">MODEL</span>
-      <div class="sw"><select id="pred-model" onchange="loadPred()">
+      <div class="sw"><select id="pred-model" aria-label="Prediction model" onchange="loadPred()">
         <option value="basic">Form-Based</option>
         <option value="random_forest">Random Forest ML</option>
         <option value="deep_learning">Deep Learning CNN</option>
@@ -679,13 +683,13 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
       </select></div>
     </div>
     <div class="cg"><span class="cl">POSITION</span>
-      <div class="sw"><select id="pred-pos" onchange="renderPred()">
+      <div class="sw"><select id="pred-pos" aria-label="Position filter" onchange="renderPred()">
         <option value="">All</option><option value="GK">GK</option>
         <option value="DEF">DEF</option><option value="MID">MID</option><option value="FWD">FWD</option>
       </select></div>
     </div>
     <div class="cg"><span class="cl">TOP <span id="topnv" class="rv">20</span></span>
-      <input type="range" id="pred-topn" min="5" max="50" value="20"
+      <input type="range" id="pred-topn" aria-label="Number of players to show" min="5" max="50" value="20"
         oninput="document.getElementById('topnv').textContent=this.value" onchange="loadPred()">
     </div>
     <div class="cg" style="margin-left:auto">
@@ -738,7 +742,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div id="squad-threegw" style="display:none">
     <div class="ctrl">
       <div class="cg"><span class="cl">POSITION</span>
-        <div class="sw"><select id="tgw-pos" onchange="loadThreeGW()">
+        <div class="sw"><select id="tgw-pos" aria-label="Position filter" onchange="loadThreeGW()">
           <option value="">All</option><option value="1">GK</option>
           <option value="2">DEF</option><option value="3">MID</option><option value="4">FWD</option>
         </select></div>
@@ -753,7 +757,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div id="squad-optimize" style="display:none">
     <div class="ctrl">
       <div class="cg"><span class="cl">BUDGET £<span id="budv" class="rv">100.0</span>m</span>
-        <input type="range" id="squad-budget" min="80" max="105" value="100" step="0.5" style="width:150px"
+        <input type="range" id="squad-budget" aria-label="Squad budget in £m" min="80" max="105" value="100" step="0.5" style="width:150px"
           oninput="document.getElementById('budv').textContent=parseFloat(this.value).toFixed(1)">
       </div>
       <button class="btn" id="opt-btn" onclick="optimizeSquad()">⚡ Optimize Squad</button>
@@ -775,7 +779,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div id="fix-list">
     <div class="ctrl">
       <div class="cg"><span class="cl">FILTER</span>
-        <div class="sw"><select id="fix-filter" onchange="loadFix()">
+        <div class="sw"><select id="fix-filter" aria-label="Fixture filter" onchange="loadFix()">
           <option value="upcoming">Upcoming</option>
           <option value="recent">Recent</option>
           <option value="live">Live</option>
@@ -792,7 +796,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div id="fix-fdr" style="display:none">
     <div class="ctrl">
       <div class="cg"><span class="cl">GAMEWEEKS</span>
-        <div class="sw"><select id="fdr-gws" onchange="loadFDR()">
+        <div class="sw"><select id="fdr-gws" aria-label="Number of gameweeks" onchange="loadFDR()">
           <option value="6">Next 6</option><option value="8">Next 8</option><option value="10">Next 10</option>
         </select></div>
       </div>
@@ -1681,7 +1685,7 @@ async function loadFDR(){
       <div style="margin-bottom:10px;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace">
         Teams sorted by easiest upcoming run · (H)=Home (A)=Away
       </div>
-      <div class="fdr-wrap"><table class="fdrtbl"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+      <div class="fdr-wrap" tabindex="0" role="region" aria-label="Fixture difficulty table"><table class="fdrtbl"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
     fdrLoaded=true;
   }catch(e){
     document.getElementById('fdr-content').innerHTML=`<div class="err">⚠ ${esc(e.message)}</div>`;
@@ -1968,7 +1972,7 @@ async function loadTrending(){
       </div>
     </div>`;
     document.getElementById('trend-content').innerHTML=`
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="trend-cols">
         <div>
           <div class="sh" style="margin-bottom:10px"><h2 class="st" style="color:var(--green)">↑ TRANSFERS IN</h2></div>
           <div class="trend-grid">${inList.map((p,i)=>card(p,i,1)).join('')}</div>

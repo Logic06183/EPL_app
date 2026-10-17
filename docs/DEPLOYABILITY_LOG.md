@@ -3,6 +3,39 @@
 Running record of the push to make EPL_app a cleanly deployable product.
 Newest first. Each entry: what changed, why, how it was checked.
 
+## 2026-10-17 — Iteration 8: mobile + accessibility, planning-gameweek fixes
+
+Audited every tab at 375–390 px and with axe-core (WCAG 2 A/AA) against the
+demo stack.
+
+**Found**
+- 217 colour-contrast failures: `--text3` was 2.2:1 and `--text2` borderline;
+  defender/forward/midfielder accents, Intel badges and trend ranks also
+  under 4.5:1.
+- Unlabelled selects and range sliders (critical); horizontally scrollable
+  captain row and FDR table not keyboard-focusable.
+- Intel → Trending forced two 240 px columns, widening the page to 516 px on
+  phones.
+- FPL calls goalkeepers `GKP`; the CSS only styled `.pos-GK`, so every
+  goalkeeper badge was unstyled with live data.
+- Captain picks showed fixtures as "TBC" and the FDR started from a finished
+  gameweek: both used `is_current` (already played) instead of the next deadline.
+- No `prefers-reduced-motion` support.
+
+**Changed**
+- Text/accents lifted to ≥4.5:1 on every card background; badges darkened.
+- `aria-label`s on all selects/sliders; focusable labelled scroll regions.
+- Responsive trend columns; `.pos-GKP`/`.pt-GKP` styles.
+- `planning_gameweek()` helper (next deadline, falls back to current) used by
+  captain picks and FDR.
+- Reduced-motion media query.
+- Mock FPL dates are relative to today (next deadline always ~3 days away).
+- `e2e_fullstack.mjs` now also runs axe on every panel and checks no tab
+  scrolls horizontally at 375 px (23 checks).
+
+**Checked**: ruff clean; pytest 59 passed; full-stack 23/23 with zero axe
+violations; unit browser tests 6/6.
+
 ## 2026-10-17 — Iteration 7: full-stack run against a mock FPL API
 
 Built `scripts/mock_fpl.py` (deterministic 20-club league, 8 GWs played,

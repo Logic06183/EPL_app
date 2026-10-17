@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ..auth.firebase_auth import get_current_user, require_pro
-from ..services.data_service import FPLDataService, get_data_service
+from ..services.data_service import FPLDataService, get_data_service, planning_gameweek
 from ..services.prediction_service import PredictionService, get_prediction_service
 from ..services.squad_optimizer import POS_NAME, Candidate, InfeasibleSquad, optimise_squad
 
@@ -47,9 +47,7 @@ async def get_fixture_difficulty(
         events       = bootstrap.get("events", [])
 
         # Determine starting GW
-        current_gw = next(
-            (e for e in events if e.get("is_current") or e.get("is_next")), {}
-        )
+        current_gw = planning_gameweek(events)
         current_gw_id = current_gw.get("id", 1)
 
         upcoming_gw_ids = [
