@@ -1,240 +1,108 @@
 """
-Prediction Service
-Three real ML models: RandomForest, GradientBoosting, and a form-weighted Ensemble.
-All three train on the full player pool and use 12 features from FPL bootstrap data.
+Prediction Service — the interface the API routes use for predicted points.
+
+"xp" is the trained expected-points model (app/services/xp_service.py),
+backtested on held-out seasons (app/ml/backtest.json). "basic" is a
+transparent form/points-per-game blend, also used as the fallback while the
+model's inputs can't be fetched.
+
+The old model names ("random_forest", "deep_learning", "ensemble") are kept as
+aliases for "xp" so existing clients keep working.
 """
 
 import logging
-import numpy as np
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import StandardScaler
+from .xp_service import XPService, get_xp_service
 
 logger = logging.getLogger(__name__)
 
-# Weights for the ensemble blend
-_W_RF   = 0.35
-_W_GB   = 0.35
-_W_MLP  = 0.30
+LEGACY_ALIASES = {"random_forest", "deep_learning", "ensemble"}
+
+
+def _basic(player: Dict[str, Any]) -> float:
+    form = float(player.get("form", 0) or 0)
+    ppg = float(player.get("points_per_game", 0) or 0)
+    ict = float(player.get("ict_index", 0) or 0) / 10
+    return round(form * 0.5 + ppg * 0.4 + ict * 0.1, 2)
 
 
 class PredictionService:
-    """Multi-model ML prediction service for FPL player points."""
+    def __init__(self, xp: Optional[XPService] = None):
+        self.xp = xp or get_xp_service()
 
-    def __init__(self):
-        self._rf:    Optional[RandomForestRegressor]   = None
-        self._gb:    Optional[GradientBoostingRegressor] = None
-        self._mlp:   Optional[MLPRegressor]            = None
-        self._scaler = StandardScaler()
-        self._trained = False
+    @property
+    def _trained(self) -> bool:
+        return self.xp.ready
 
-    # ── Feature engineering ────────────────────────────────────────────────────
+    async def ensure_ready(self, data_service) -> None:
+        """Refresh the model's inputs if they're more than an hour old."""
+        await self.xp.ensure_fresh(data_service)
 
-    def _features(self, player: Dict[str, Any]) -> List[float]:
-        """12-feature vector from FPL bootstrap player element."""
-        pos = int(player.get("element_type", 2))  # 1=GK 2=DEF 3=MID 4=FWD
-        return [
-            float(player.get("now_cost", 0)) / 10,          # price (£m)
-            float(player.get("total_points", 0)),            # season total pts
-            float(player.get("form", 0)),                    # rolling 30-day form
-            float(player.get("selected_by_percent", 0)),     # ownership %
-            float(player.get("minutes", 0)) / 90,            # 90s played (normalised)
-            float(player.get("goals_scored", 0)),
-            float(player.get("assists", 0)),
-            float(player.get("ict_index", 0)),               # composite threat index
-            float(player.get("bonus", 0)),                   # bonus pts
-            float(player.get("bps", 0)) / 10,               # bonus pts system score
-            float(player.get("clean_sheets", 0)),            # useful for GK/DEF
-            float(pos),                                      # position code
-        ]
+    def predict_batch(self, players: List[Dict[str, Any]], model_type: str = "xp") -> List[float]:
+        if model_type == "basic" or not self.xp.ready:
+            return [max(0.0, _basic(p)) for p in players]
+        out = []
+        for p in players:
+            v = self.xp.next_xp(p["id"])
+            out.append(round(v, 2) if v is not None else 0.0)
+        return out
 
-    # ── Training ───────────────────────────────────────────────────────────────
+    def predict(self, player: Dict[str, Any], model_type: str = "xp") -> float:
+        return self.predict_batch([player], model_type)[0]
 
-    def train(self, players: List[Dict[str, Any]]) -> None:
-        """Train all three models on the full player dataset."""
-        # Filter out players with zero minutes (never played — no signal)
-        active = [p for p in players if float(p.get("minutes", 0)) > 0]
-        if len(active) < 30:
-            logger.warning("Too few active players to train — skipping")
-            return
+    def gw_xp(self, player_id: int, gw: int) -> Optional[float]:
+        """xP for one upcoming gameweek (all fixtures in it), or None if unknown."""
+        by_gw = self.xp.xp.get(player_id)
+        return None if by_gw is None else by_gw.get(gw)
 
-        X = np.array([self._features(p) for p in active])
-        y = np.array([float(p.get("points_per_game", 0)) for p in active])
-
-        try:
-            X_scaled = self._scaler.fit_transform(X)
-
-            # Random Forest — good baseline, robust to noise
-            self._rf = RandomForestRegressor(
-                n_estimators=200, max_depth=12,
-                min_samples_leaf=2, random_state=42, n_jobs=-1
-            )
-            self._rf.fit(X_scaled, y)
-
-            # Gradient Boosting — captures non-linear interactions better than RF
-            self._gb = GradientBoostingRegressor(
-                n_estimators=200, max_depth=4, learning_rate=0.05,
-                subsample=0.8, random_state=42
-            )
-            self._gb.fit(X_scaled, y)
-
-            # Neural Network — learns complex feature combinations
-            self._mlp = MLPRegressor(
-                hidden_layer_sizes=(64, 32), activation="relu",
-                max_iter=500, random_state=42, early_stopping=True,
-                validation_fraction=0.1
-            )
-            self._mlp.fit(X_scaled, y)
-
-            self._trained = True
-            logger.info(
-                f"All 3 models trained on {len(active)} players "
-                f"({len(players) - len(active)} excluded — never played)"
-            )
-        except Exception as e:
-            logger.error(f"Training failed: {e}")
-
-    # ── Prediction ─────────────────────────────────────────────────────────────
-
-    def _raw_predict(self, player: Dict[str, Any]) -> Dict[str, float]:
-        """Return per-model raw predictions. Falls back to form if not trained."""
-        form = float(player.get("form", 0))
-
-        if not self._trained:
-            return {"rf": form, "gb": form, "mlp": form}
-
-        try:
-            X = np.array([self._features(player)])
-            Xs = self._scaler.transform(X)
-            rf_pred  = float(self._rf.predict(Xs)[0])
-            gb_pred  = float(self._gb.predict(Xs)[0])
-            mlp_pred = float(self._mlp.predict(Xs)[0])
-            return {"rf": rf_pred, "gb": gb_pred, "mlp": mlp_pred}
-        except Exception as e:
-            logger.debug(f"Prediction error for {player.get('web_name')}: {e}")
-            return {"rf": form, "gb": form, "mlp": form}
-
-    def predict_batch(
-        self, players: List[Dict[str, Any]], model_type: str = "random_forest"
-    ) -> List[float]:
-        """
-        Vectorised inference for many players in one shot.
-        ~50-100x faster than calling predict() per player because each sklearn
-        .predict() call has fixed Python overhead regardless of batch size.
-        """
-        if not players:
-            return []
-
-        if model_type == "basic":
-            out = []
-            for p in players:
-                form = float(p.get("form", 0))
-                ppg  = float(p.get("points_per_game", 0))
-                ict  = float(p.get("ict_index", 0)) / 10
-                out.append(round((form * 0.5 + ppg * 0.4 + ict * 0.1), 2))
-            return out
-
-        forms = np.array([float(p.get("form", 0)) for p in players])
-
-        if not self._trained:
-            return [max(0.0, f) for f in forms]
-
-        try:
-            X = np.array([self._features(p) for p in players])
-            Xs = self._scaler.transform(X)
-            rf  = self._rf.predict(Xs)
-            gb  = self._gb.predict(Xs)
-            mlp = self._mlp.predict(Xs)
-        except Exception as e:
-            logger.debug(f"Batch prediction error, falling back to form: {e}")
-            return [max(0.0, f) for f in forms]
-
-        if model_type == "random_forest":
-            return [max(0.0, float(v)) for v in rf]
-        if model_type == "deep_learning":
-            blended = gb * 0.55 + mlp * 0.45
-            return [max(0.0, float(v)) for v in blended]
-        if model_type == "ensemble":
-            blended = _W_RF * rf + _W_GB * gb + _W_MLP * mlp + forms * 0.05
-            return [max(0.0, float(v)) for v in blended]
-        return [max(0.0, float(v)) for v in rf]
-
-    def predict(self, player: Dict[str, Any], model_type: str = "random_forest") -> float:
-        """
-        Return a single predicted points value for the given model_type.
-        model_type: "basic" | "random_forest" | "deep_learning" | "ensemble"
-        """
-        form = float(player.get("form", 0))
-
-        if model_type == "basic":
-            # Pure form score — no ML
-            ppg  = float(player.get("points_per_game", 0))
-            ict  = float(player.get("ict_index", 0)) / 10
-            return round((form * 0.5 + ppg * 0.4 + ict * 0.1), 2)
-
-        preds = self._raw_predict(player)
-
-        if model_type == "random_forest":
-            return max(0.0, preds["rf"])
-
-        if model_type == "deep_learning":
-            # GradientBoosting + MLP blend — stronger non-linear model
-            return max(0.0, preds["gb"] * 0.55 + preds["mlp"] * 0.45)
-
-        if model_type == "ensemble":
-            # Weighted blend of all three models
-            blended = (
-                _W_RF  * preds["rf"]  +
-                _W_GB  * preds["gb"]  +
-                _W_MLP * preds["mlp"]
-            )
-            # Small form recency boost (+5% form signal keeps hot streaks visible)
-            recency = form * 0.05
-            return max(0.0, blended + recency)
-
-        # Unknown type — fall back to RF
-        return max(0.0, preds["rf"])
-
-    # ── Metadata ───────────────────────────────────────────────────────────────
+    def horizon(self, player_id: int) -> List[float]:
+        """xP for each of the next few gameweeks (empty if the model isn't ready)."""
+        return self.xp.horizon_xp(player_id)
 
     async def get_model_info(self) -> Dict[str, Any]:
+        bt = self.xp.backtest or {}
+        seasons = bt.get("seasons", {})
+        track_record = {
+            season: {
+                "model": v["metrics"].get("model"),
+                "season_average_baseline": v["metrics"].get("season_avg"),
+                "trained_on": v.get("trained_on"),
+            }
+            for season, v in seasons.items()
+        }
         return {
             "models": {
+                "xp": {
+                    "name": "Expected points",
+                    "description": (
+                        "Gradient-boosted model of next-gameweek points from recent form, "
+                        "minutes, xG/xA, team and opponent strength, home/away and last "
+                        "season's output, scaled by FPL's chance of playing."
+                    ),
+                    "available": True,
+                    "trained": self.xp.ready,
+                    "gameweek": self.xp.next_gw,
+                    "updated_at": self.xp.updated_at.isoformat() if self.xp.updated_at else None,
+                },
                 "basic": {
-                    "name": "Form + PPG (No ML)",
-                    "description": "Weighted blend of current form, points-per-game, and ICT index. Fast and transparent.",
-                    "accuracy": "65-70%",
+                    "name": "Form-based",
+                    "description": "Weighted blend of current form, points-per-game and ICT index. No ML.",
                     "available": True,
                     "trained": True,
                 },
-                "random_forest": {
-                    "name": "Random Forest",
-                    "description": "200-tree ensemble trained on 12 player features. Robust and reliable baseline.",
-                    "accuracy": "72-78%",
-                    "available": True,
-                    "trained": self._trained,
-                },
-                "deep_learning": {
-                    "name": "Gradient Boost + Neural Net",
-                    "description": "GradientBoosting + MLP blend. Captures complex non-linear interactions.",
-                    "accuracy": "76-82%",
-                    "available": True,
-                    "trained": self._trained,
-                },
-                "ensemble": {
-                    "name": "Full Ensemble",
-                    "description": "Weighted blend of all three models plus form recency signal. Best overall accuracy.",
-                    "accuracy": "80-86%",
-                    "available": True,
-                    "trained": self._trained,
-                },
             },
-            "recommendation": "ensemble",
-            "feature_count": 12,
-            "trained_on_full_squad": self._trained,
+            "recommendation": "xp",
+            "aliases": {alias: "xp" for alias in sorted(LEGACY_ALIASES)},
+            "track_record": track_record,
+            "track_record_note": (
+                "Walk-forward backtest: each season is predicted by a model trained only on "
+                "earlier seasons. Metrics are averaged per gameweek over players averaging "
+                "30+ minutes. Spearman = rank correlation with actual points; captain_pts = "
+                "actual points of the top-ranked player; top11_pts = average actual points "
+                "of the top 11."
+            ),
         }
 
 

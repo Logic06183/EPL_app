@@ -134,11 +134,10 @@ async def suggest_transfers(
         teams_map = {t["id"]: t for t in bootstrap.get("teams", [])}
         pos_map   = {p["id"]: p for p in bootstrap.get("element_types", [])}
 
-        if not prediction_service._trained:
-            prediction_service.train(elements)
+        await prediction_service.ensure_ready(data_service)
 
         # Build prediction map for all players (single vectorised pass)
-        _preds = prediction_service.predict_batch(elements, "random_forest")
+        _preds = prediction_service.predict_batch(elements, "xp")
         pred_map = {p["id"]: max(0.0, v) for p, v in zip(elements, _preds)}
 
         squad_ids = {p["id"] for p in picks}
@@ -404,11 +403,10 @@ async def get_team_briefing(
     # Build prediction map for the XI in one batched call (vectorised).
     bootstrap = await data_service.get_bootstrap_data()
     elements_by_id = {p["id"]: p for p in bootstrap.get("elements", [])}
-    if not prediction_service._trained:
-        prediction_service.train(list(elements_by_id.values()))
+    await prediction_service.ensure_ready(data_service)
 
     starting_elements = [elements_by_id[p["id"]] for p in picks if p.get("is_starting") and p["id"] in elements_by_id]
-    starting_preds    = prediction_service.predict_batch(starting_elements, "ensemble")
+    starting_preds    = prediction_service.predict_batch(starting_elements, "xp")
     pred_map = {p["id"]: float(v) for p, v in zip(starting_elements, starting_preds)}
 
     # Alerts + price-drop overlay (price-drop pulled from the raw FPL element)

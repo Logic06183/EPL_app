@@ -126,7 +126,8 @@ async def optimize_squad(
         elements  = bootstrap.get("elements", [])
         teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
 
-        model_type = "ensemble" if prediction_service._trained else "basic"
+        await prediction_service.ensure_ready(data_service)
+        model_type = "xp"
 
         viable = [
             p for p in elements

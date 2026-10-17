@@ -6,7 +6,7 @@ pydantic==2.6.1
 httpx==0.28.1
 python-multipart==0.0.20
 
-# ML models
+# ML models (app/ml, xp_service)
 scikit-learn==1.4.0
 numpy==1.26.4
 
@@ -19,3 +19,4 @@ python-dotenv==1.0.1
 
 # Gemini AI (briefing reasons)
 google-genai==1.13.0
+pandas==2.2.3

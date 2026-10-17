@@ -42,25 +42,22 @@ async def lifespan(app: FastAPI):
     app_state["cache"] = cache_manager
     logger.info("Cache manager initialized")
 
-    # Pre-warm FPL bootstrap cache and train ML models so first user request is fast.
-    # Without this, the first dashboard hit pays a ~25s RF training cost.
+    # Pre-warm the FPL bootstrap cache and compute expected points so the first
+    # user request is fast.
     app_state["models_loaded"] = False
     try:
-        import asyncio
         from .services.data_service import get_data_service
-        from .services.prediction_service import get_prediction_service
+        from .services.xp_service import get_xp_service
 
         data_service = get_data_service()
         bootstrap = await data_service.get_bootstrap_data()
         elements = bootstrap.get("elements", [])
         logger.info(f"Bootstrap cache pre-warmed: {len(elements)} players loaded")
 
-        prediction_service = get_prediction_service()
-        # train() is CPU-bound (sklearn .fit) — run in a worker thread so the
-        # event loop stays responsive to health probes during startup.
-        await asyncio.to_thread(prediction_service.train, elements)
-        app_state["models_loaded"] = prediction_service._trained
-        logger.info(f"Models pre-trained: {app_state['models_loaded']}")
+        xp_service = get_xp_service()
+        await xp_service.refresh(data_service)
+        app_state["models_loaded"] = xp_service.ready
+        logger.info(f"Expected points ready: {app_state['models_loaded']}")
     except Exception as e:
         logger.warning(f"Startup pre-warm failed (non-fatal, will train lazily): {e}")
 
@@ -280,8 +277,9 @@ async def get_models_performance(
     info = await prediction_service.get_model_info()
     return {
         "models": info.get("models", {}),
-        "recommendation": "ensemble",
-        "note": "Ensemble combines all available models for best accuracy",
+        "recommendation": info.get("recommendation"),
+        "track_record": info.get("track_record"),
+        "note": info.get("track_record_note"),
     }
 
 

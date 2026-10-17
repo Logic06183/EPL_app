@@ -671,10 +671,8 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div class="ctrl">
     <div class="cg"><span class="cl">MODEL</span>
       <div class="sw"><select id="pred-model" onchange="loadPred()">
-        <option value="basic">Form-Based</option>
-        <option value="random_forest">Random Forest ML</option>
-        <option value="deep_learning">Deep Learning CNN</option>
-        <option value="ensemble">AI Ensemble</option>
+        <option value="xp">Expected points (ML)</option>
+        <option value="basic">Form only</option>
       </select></div>
     </div>
     <div class="cg"><span class="cl">POSITION</span>
@@ -1885,7 +1883,7 @@ async function loadGWBar(){
     }
     // Hot pick from predictions
     try{
-      const preds=await apiFetch('/players/predictions?top_n=1&model_type=ensemble');
+      const preds=await apiFetch('/players/predictions?top_n=1&model_type=xp');
       const top=(preds.predictions||[])[0];
       if(top) document.getElementById('gwb-hot').textContent=`${top.name} · ${top.predicted_points}pts`;
     }catch{}
