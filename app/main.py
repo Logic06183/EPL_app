@@ -283,6 +283,50 @@ async def get_models_performance(
     }
 
 
+@app.get(f"{settings.API_PREFIX}/models/track-record", tags=["Models"])
+async def get_track_record():
+    """
+    How good are the predictions? The walk-forward backtest on past seasons,
+    plus this season's gameweeks scored against actual points.
+    """
+    import asyncio
+    from .auth.firebase_auth import get_db
+    from .services import track_record
+    from .services.data_service import get_data_service
+    from .services.xp_service import get_xp_service
+
+    cache = app_state.get("cache")
+    cached = cache.get("track_record") if cache else None
+    if cached is not None:
+        return cached
+
+    xp = get_xp_service()
+    live = {"season": None, "gameweeks": [], "summary": None}
+    try:
+        bootstrap = await get_data_service().get_bootstrap_data()
+        season = track_record.season_label(bootstrap.get("events", []))
+        db = get_db()
+        if db is not None:
+            results = await asyncio.to_thread(track_record.load_results, db, season)
+            live = {"season": season, "gameweeks": results, "summary": track_record.summarise(results)}
+    except Exception as e:
+        logger.warning(f"Track record load failed: {e}")
+
+    payload = {
+        "backtest": xp.backtest,
+        "live": live,
+        "method": (
+            "Predictions are saved before each deadline and scored once the gameweek "
+            "finishes, against the same players and metrics as the backtest: players "
+            "averaging 30+ minutes over their last 6 gameweeks. 'Season average' is each "
+            "player's points per game so far this season."
+        ),
+    }
+    if cache:
+        cache.set("track_record", payload)
+    return payload
+
+
 # Development endpoints
 if settings.DEBUG:
     @app.get("/debug/cache")

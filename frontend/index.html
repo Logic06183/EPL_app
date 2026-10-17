@@ -429,6 +429,19 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 
 /* ── EMPTY / ERROR / LOADING ── */
 .empty{text-align:center;padding:52px 20px;color:var(--text3);}
+/* Track record */
+.tr-link{display:flex;align-items:center;gap:8px;width:100%;margin:-4px 0 16px;padding:10px 14px;background:var(--bg3);
+  border:1px solid var(--b2);border-radius:var(--r);color:var(--text2);font-size:13px;cursor:pointer;text-align:left;}
+.tr-link b{color:var(--green);font-weight:700;margin-left:auto;white-space:nowrap;}
+.tr-card{background:var(--card);border:1px solid var(--b1);border-radius:var(--r);padding:16px;margin-bottom:16px;}
+.tr-card h3{font-size:14px;letter-spacing:.5px;margin-bottom:4px;}
+.tr-card p{color:var(--text2);font-size:13px;line-height:1.5;margin-bottom:12px;}
+.tr-tbl{width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:12px;}
+.tr-tbl th{color:var(--text2);font-weight:400;text-align:right;padding:6px 8px;border-bottom:1px solid var(--b1);}
+.tr-tbl td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--b1);}
+.tr-tbl th:first-child,.tr-tbl td:first-child{text-align:left;}
+.tr-tbl .win{color:var(--green);font-weight:700;}
+.tr-wrap{overflow-x:auto;}
 .eico{font-size:38px;margin-bottom:10px;opacity:.3;}
 .etxt{font-size:13px;}
 .loading{display:flex;flex-direction:column;align-items:center;gap:10px;padding:52px 20px;color:var(--text2);font-size:13px;}
@@ -656,6 +669,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <button class="ntab" data-tab="intel" onclick="showTab('intel')"><span class="ni">🚨</span>Intel<span class="badge" id="inj-badge" style="display:none">!</span></button>
   <button class="ntab" data-tab="search" onclick="showTab('search')"><span class="ni">🔍</span>Search</button>
   <button class="ntab" data-tab="gameweek" onclick="showTab('gameweek')"><span class="ni">🗓</span>Gameweek</button>
+  <button class="ntab" data-tab="record" onclick="showTab('record')"><span class="ni">📊</span>Track record</button>
 </nav>
 
 <main>
@@ -667,6 +681,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
     <h2 class="cap-title">🏅 CAPTAIN PICKS <span style="font-size:11px;color:var(--text3);font-weight:400;letter-spacing:0">this gameweek</span></h2>
     <div class="cap-row" id="cap-row"><div class="loading" style="padding:12px"><div class="spin"></div></div></div>
   </div>
+  <button class="tr-link" onclick="showTab('record')">📊 How accurate are these? Tested on seasons the model never saw<b>Track record →</b></button>
 
   <div class="ctrl">
     <div class="cg"><span class="cl">MODEL</span>
@@ -846,6 +861,12 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div id="sres" class="pgrid"></div>
 </section>
 
+<!-- ═══════════════ TRACK RECORD ═══════════════ -->
+<section class="tab" id="tab-record">
+  <div class="sh"><h2 class="st">TRACK RECORD</h2><span class="ss">every prediction, scored</span></div>
+  <div id="record-content"><div class="loading"><div class="spin"></div><span>Loading track record…</span></div></div>
+</section>
+
 <!-- ═══════════════ GAMEWEEK ═══════════════ -->
 <section class="tab" id="tab-gameweek">
   <div id="gw-content"><div class="loading"><div class="spin"></div><span>Loading gameweek…</span></div></div>
@@ -890,12 +911,26 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "77913915885",
   appId:             "1:77913915885:web:d9387909bfe99bc8e927e4",
 };
-const FB_READY = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('REPLACE');
+// If the Firebase SDK fails to load (ad-blocker, CDN outage) the rest of the app
+// must still work — sign-in just becomes unavailable.
+const FB_READY = typeof firebase !== 'undefined' &&
+  FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('REPLACE');
 if(FB_READY) firebase.initializeApp(FIREBASE_CONFIG);
 
 // ── Auth state ────────────────────────────────────────
 let currentUser = null;  // Firebase User object
 let currentPlan = 'free';
+// Whether Pro features are unlocked: paid Pro, Founder, or everyone during the
+// launch free period. Comes from /users/me so it matches the server's gating.
+let hasPro = false;
+
+async function refreshPlan(){
+  try{
+    const d = await apiFetch('/users/me');
+    currentPlan = d.plan || 'free';
+    hasPro = currentPlan === 'pro' || currentPlan === 'founder' || !!(d.grace && d.grace.in_grace_period);
+  }catch{ currentPlan = 'free'; hasPro = false; }
+}
 
 async function getIdToken(){
   if(!FB_READY||!currentUser) return null;
@@ -905,22 +940,16 @@ async function getIdToken(){
 if(FB_READY){
   firebase.auth().onAuthStateChanged(async (user)=>{
     currentUser = user;
-    if(user){
-      try{
-        const d = await apiFetch('/users/me');
-        currentPlan = d.plan || 'free';
-      }catch{ currentPlan='free'; }
-    } else {
-      currentPlan = 'free';
-    }
+    await refreshPlan();
     updateAuthUI(user, currentPlan);
     // Now we know the plan — load plan-aware components
     applyPlanUI();
     loadCaptain();
   });
 } else {
-  // Firebase not configured — show lock UI immediately for Pro sections
-  applyPlanUI();
+  // No Firebase (SDK blocked or not configured): anonymous access only.
+  // Deferred so the rest of the script has finished initialising.
+  setTimeout(async ()=>{ await refreshPlan(); applyPlanUI(); loadCaptain(); }, 0);
 }
 
 function updateAuthUI(user, plan){
@@ -1108,6 +1137,7 @@ function showTab(id){
   if(id==='fixtures') loadFix();
   if(id==='gameweek') loadGW();
   if(id==='intel') loadIntel();
+  if(id==='record') loadRecord();
 }
 
 function showSubtab(tab,sub){
@@ -1239,7 +1269,7 @@ const PRO_LOCK_HTML = `
   </div>`;
 
 function applyPlanUI(){
-  const isPro = currentPlan === 'pro';
+  const isPro = hasPro;
   // Captain strip
   if(!isPro){
     document.getElementById('cap-row').innerHTML = PRO_LOCK_HTML;
@@ -1253,7 +1283,7 @@ function applyPlanUI(){
 
 // ── Captain picks ─────────────────────────────────────
 async function loadCaptain(){
-  if(currentPlan !== 'pro'){ applyPlanUI(); return; }
+  if(!hasPro){ applyPlanUI(); return; }
   try{
     const d=await apiFetch('/players/captain?top_n=6');
     const picks=d.captain_picks||[];
@@ -1686,7 +1716,7 @@ async function loadInjuries(){
 }
 
 async function loadPriceMovers(){
-  if(currentPlan !== 'pro'){ document.getElementById('price-content').innerHTML=PRO_LOCK_HTML; return; }
+  if(!hasPro){ document.getElementById('price-content').innerHTML=PRO_LOCK_HTML; return; }
   document.getElementById('price-content').innerHTML='<div class="loading"><div class="spin"></div><span>Loading…</span></div>';
   try{
     const d=await apiFetch('/players/price-movers');
@@ -1721,7 +1751,7 @@ async function loadPriceMovers(){
 }
 
 async function loadValue(){
-  if(currentPlan !== 'pro'){ document.getElementById('value-grid').innerHTML=PRO_LOCK_HTML; return; }
+  if(!hasPro){ document.getElementById('value-grid').innerHTML=PRO_LOCK_HTML; return; }
   document.getElementById('value-grid').innerHTML=skelCards(6);
   try{
     const d=await apiFetch('/players/value?top_n=20');
@@ -1792,6 +1822,58 @@ async function doSearch(q){
 
 // ── Gameweek ──────────────────────────────────────────
 let cdTimer;
+// ── Track record ──────────────────────────────────────
+function escHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function trNum(v,dp){return v==null?'—':Number(v).toFixed(dp);}
+function trRows(m,b){
+  // [label, key, decimals, higherIsBetter]
+  return [['Rank correlation','spearman',2,true],['Avg error (pts)','mae',2,false],
+          ['Captain pick pts','captain_pts',1,true],['Top-11 pts per player','top11_pts',2,true]]
+    .map(([label,k,dp,up])=>{
+      const mv=m?.[k], bv=b?.[k];
+      const mw=mv!=null&&bv!=null&&(up?mv>bv:mv<bv), bw=mv!=null&&bv!=null&&(up?bv>mv:bv<mv);
+      return `<tr><td>${label}</td><td class="${mw?'win':''}">${trNum(mv,dp)}</td><td class="${bw?'win':''}">${trNum(bv,dp)}</td></tr>`;
+    }).join('');
+}
+function trTable(m,b){
+  return `<div class="tr-wrap"><table class="tr-tbl"><thead><tr><th></th><th>Our model</th><th>Season average</th></tr></thead>
+    <tbody>${trRows(m,b)}</tbody></table></div>`;
+}
+async function loadRecord(){
+  const el=document.getElementById('record-content');
+  try{
+    const d=await apiFetch('/models/track-record');
+    const live=d.live||{}, gws=live.gameweeks||[];
+    let h='';
+    if(gws.length){
+      h+=`<div class="tr-card"><h3>THIS SEASON (${escHtml(live.season)}) · ${gws.length} GAMEWEEK${gws.length>1?'S':''}</h3>
+        <p>Predictions are locked at each deadline and scored when the gameweek ends. Green = better.</p>
+        ${trTable(live.summary?.model,live.summary?.season_avg)}</div>
+        <div class="tr-card"><h3>GAMEWEEK BY GAMEWEEK</h3><div class="tr-wrap"><table class="tr-tbl">
+        <thead><tr><th>GW</th><th>Our captain</th><th>Predicted</th><th>Scored</th><th>Top-11 avg</th></tr></thead><tbody>
+        ${gws.slice().reverse().map(r=>`<tr><td>${r.gw}</td><td>${escHtml(r.captain?.name)}</td>
+          <td>${trNum(r.captain?.xp,1)}</td><td>${trNum(r.captain?.actual,0)}</td><td>${trNum(r.model?.top11_pts,2)}</td></tr>`).join('')}
+        </tbody></table></div></div>`;
+    } else {
+      h+=`<div class="tr-card"><h3>THIS SEASON</h3><p>Live scoring has just started: this gameweek's predictions are saved
+        before the deadline and will appear here, scored against real points, once the gameweek finishes.</p></div>`;
+    }
+    const seasons=Object.entries(d.backtest?.seasons||{});
+    if(seasons.length){
+      h+=`<div class="tr-card"><h3>BACKTEST ON PAST SEASONS</h3>
+        <p>Each season was predicted gameweek by gameweek by a model trained only on earlier seasons,
+        so it never saw the results it was tested on. Compared with each player's season points-per-game so far.</p>
+        ${seasons.map(([s,v])=>`<h3 style="margin-top:12px">${escHtml(s)}</h3>${trTable(v.metrics?.model,v.metrics?.season_avg)}`).join('')}
+      </div>`;
+    }
+    h+=`<div class="tr-card"><h3>HOW WE MEASURE</h3><p>${escHtml(d.method)} Rank correlation: 1 = perfect order, 0 = random.
+      Captain pick pts: actual points of the player we ranked first. Top-11: average actual points of our 11 highest-ranked players.</p></div>`;
+    el.innerHTML=h;
+  }catch(e){
+    el.innerHTML='<div class="empty">Could not load the track record. Try again shortly.</div>';
+  }
+}
+
 async function loadGW(){
   document.getElementById('gw-content').innerHTML='<div class="loading"><div class="spin"></div><span>Loading gameweek…</span></div>';
   try{
@@ -1935,7 +2017,7 @@ async function loadTrending(){
 // ── 3-GW Fixture Planner ──────────────────────────────
 let tgwLoaded=false;
 async function loadThreeGW(){
-  if(currentPlan!=='pro'){
+  if(!hasPro){
     document.getElementById('tgw-content').innerHTML=PRO_LOCK_HTML;
     return;
   }

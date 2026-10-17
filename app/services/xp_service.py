@@ -21,6 +21,8 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from . import track_record
+from ..auth.firebase_auth import get_db
 from ..ml.features import (
     POSITIONS, add_position_code, attach_fixture_features, fixture_rows, form_as_of, team_form,
 )
@@ -213,9 +215,44 @@ class XPService:
             self.updated_at = datetime.now(timezone.utc)
             self._failed_at = None
             logger.info(f"xP refreshed for GW{next_gw}: {len(raw)} players, {len(live_by_gw)} GWs of history")
+            await self._record(events, nxt, elements, player_gw, fixtures, live_by_gw)
         except Exception as e:
             self._failed_at = datetime.now(timezone.utc)
             logger.error(f"xP refresh failed: {e}")
+
+    async def _record(self, events, nxt, elements, player_gw, fixtures, live_by_gw) -> None:
+        """Snapshot this gameweek's predictions and score finished ones (best effort)."""
+        try:
+            db = get_db()
+            if db is None:
+                return
+            next_gw = int(nxt["id"])
+            form = (form_as_of(player_gw, next_gw).set_index("element")
+                    if not player_gw.empty else pd.DataFrame(columns=["pts_season", "mins_l6"]))
+            team_fix = fixtures[fixtures["gw"] == next_gw]
+            nfix = pd.concat([team_fix["team_h"], team_fix["team_a"]]).value_counts().to_dict()
+            team_of = {e["id"]: e["team"] for e in elements}
+            baseline = {
+                el: float(form["pts_season"].get(el, 0) or 0) * nfix.get(team_of.get(el), 0)
+                for el in team_of if el in form.index
+            }
+            pool = [int(el) for el, m in form["mins_l6"].items() if pd.notna(m) and m >= 30]
+            names = {e["id"]: e.get("web_name", "") for e in elements}
+            snap = track_record.build_snapshot(
+                next_gw, {el: v.get(next_gw, 0.0) for el, v in self.xp.items()},
+                baseline, pool, names, nxt["deadline_time"],
+            )
+            season = track_record.season_label(events)
+            actual = {
+                gw: {r["id"]: float(r.get("stats", {}).get("total_points", 0)) for r in live.get("elements", [])}
+                for gw, live in live_by_gw.items()
+            }
+            await asyncio.to_thread(track_record.save_snapshot, db, season, snap)
+            n = await asyncio.to_thread(track_record.score_pending, db, season, sorted(actual), actual)
+            if n:
+                logger.info(f"Track record: scored {n} gameweek(s)")
+        except Exception as e:
+            logger.warning(f"Track record update failed: {e}")
 
     def next_xp(self, element_id: int) -> Optional[float]:
         by_gw = self.xp.get(element_id)

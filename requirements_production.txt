@@ -9,6 +9,7 @@ python-multipart==0.0.20
 # ML models (app/ml, xp_service)
 scikit-learn==1.4.0
 numpy==1.26.4
+pandas==2.2.3
 
 # Firebase / Firestore
 firebase-admin==6.4.0
@@ -19,4 +20,3 @@ python-dotenv==1.0.1
 
 # Gemini AI (briefing reasons)
 google-genai==1.13.0
-pandas==2.2.3
