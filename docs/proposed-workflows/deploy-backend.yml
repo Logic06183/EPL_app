@@ -1,0 +1,94 @@
+name: Deploy Backend to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - 'requirements_production.txt'
+      - 'Dockerfile'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: 'epl-prediction-app'
+  SERVICE_NAME: 'epl-backend'
+  REGION: 'us-central1'
+
+jobs:
+  test:
+    uses: ./.github/workflows/test-and-lint.yml
+
+  deploy:
+    name: Build and Deploy Backend
+    needs: test
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --source . \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --timeout=300 \
+            --memory=2Gi \
+            --cpu=2 \
+            --max-instances=10 \
+            --update-env-vars="GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }},ENVIRONMENT=production"
+          # --update-env-vars (not --set-env-vars) so PAYFAST_* and
+          # LAUNCH_FREE_UNTIL set on the service in the console survive deploys.
+
+      - name: Get Service URL
+        id: get-url
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --format='value(status.url)')
+          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          echo "Backend deployed to: $SERVICE_URL"
+
+      - name: Test API Health
+        run: |
+          API_URL="${{ steps.get-url.outputs.url }}"
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" $API_URL/health)
+          if [ $STATUS -eq 200 ]; then
+            echo "✅ API health check passed"
+          else
+            echo "❌ API health check failed with status: $STATUS"
+            exit 1
+          fi
+
+      - name: Test Predictions Endpoint
+        run: |
+          API_URL="${{ steps.get-url.outputs.url }}"
+          RESPONSE=$(curl -s "$API_URL/api/players/predictions/enhanced?top_n=5")
+          if echo "$RESPONSE" | jq -e '.predictions | length > 0' > /dev/null; then
+            echo "✅ Predictions endpoint working"
+          else
+            echo "❌ Predictions endpoint returned unexpected response"
+            exit 1
+          fi
+

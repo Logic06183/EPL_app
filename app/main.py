@@ -3,7 +3,6 @@ FPL AI Pro - Production FastAPI Application
 Consolidated API with multi-model predictions, xG/xA analytics, and Gemini AI
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import Optional
 from contextlib import asynccontextmanager
@@ -15,7 +14,6 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .utils.logging import setup_logging, get_logger
 from .utils.cache import get_cache_manager
-from .schemas.common import HealthResponse, ErrorResponse
 from .api import players, predictions, teams, payments, fpl_team, users
 
 # Setup logging

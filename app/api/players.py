@@ -7,7 +7,6 @@ differentials, price movers, and value analysis.
 import logging
 from typing import Optional
 
-import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..services.data_service import FPLDataService, get_data_service

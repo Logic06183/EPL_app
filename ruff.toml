@@ -1,0 +1,6 @@
+target-version = "py311"
+line-length = 120
+
+[lint]
+# Real errors only; style is not gated in CI.
+select = ["E9", "F"]

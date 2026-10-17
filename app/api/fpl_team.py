@@ -14,7 +14,7 @@ from ..services.prediction_service import PredictionService, get_prediction_serv
 from ..services import gemini_service
 from ..utils.cache import get_cache_manager
 from ..auth.firebase_auth import (
-    get_current_user, require_pro, get_effective_plan, _in_grace_period, get_db,
+    get_current_user, get_effective_plan, get_db,
 )
 
 logger = logging.getLogger(__name__)

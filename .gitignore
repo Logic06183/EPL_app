@@ -199,3 +199,4 @@ models/
 *.temp
 .gstack/
 frontend/.firebase/
+.ruff_cache/

@@ -1,11 +1,22 @@
+## Project layout
+
+- `app/` — FastAPI backend (the only backend). Cloud Run service `epl-backend`, us-central1.
+- `frontend/` — static site (`index.html`, `sw.js`, `manifest.json`) on Firebase Hosting;
+  `/api/**` is rewritten to `epl-backend`.
+- `mobile/` — Capacitor wrapper around `frontend/`.
+- `tests/` — pytest suite for `app/`; `production-site-test.spec.js` is a Playwright smoke
+  test against the live site.
+- `ROADMAP.md` — the improvement loop's backlog and log. Read it first.
+
 ## Health Stack
 
-- typecheck: cd /Users/craig/Desktop/EPL_app/frontend && tsc --noEmit
-- lint: cd /Users/craig/Desktop/EPL_app/frontend && npx next lint
-- pylint: cd /Users/craig/Desktop/EPL_app/backend && ruff check .
-- test: cd /Users/craig/Desktop/EPL_app/backend && pytest --tb=short -q
-- e2etest: cd /Users/craig/Desktop/EPL_app && npx playwright test
-- shell: shellcheck /Users/craig/Desktop/EPL_app/*.sh
+Run from the repo root.
+
+- setup: pip install -r requirements-dev.txt
+- pylint: ruff check .
+- test: pytest
+- run: uvicorn app.main:app --port 8001
+- e2etest: npx playwright test
 
 ## Skill routing
 
