@@ -3,6 +3,7 @@ Teams API Router
 Endpoints for team data, squad optimisation, and fixture difficulty ratings.
 """
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,6 +12,7 @@ from pydantic import BaseModel, Field
 from ..auth.firebase_auth import get_current_user, require_pro
 from ..services.data_service import FPLDataService, get_data_service
 from ..services.prediction_service import PredictionService, get_prediction_service
+from ..services.squad_optimizer import POS_NAME, Candidate, InfeasibleSquad, optimise_squad
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -112,6 +114,16 @@ async def get_fixture_difficulty(
         raise HTTPException(status_code=500, detail="Failed to fetch fixture difficulty")
 
 
+def _is_selectable(p: dict) -> bool:
+    """Exclude players who can't help: unpriced, transferred out, injured or doubtful (<75%)."""
+    if p.get("now_cost", 0) <= 0 or p.get("element_type") not in (1, 2, 3, 4):
+        return False
+    if p.get("status", "a") in ("u", "n", "s", "i"):  # unavailable, not in squad, suspended, injured
+        return False
+    chance = p.get("chance_of_playing_next_round")
+    return chance is None or chance >= 75
+
+
 class OptimizeRequest(BaseModel):
     budget: float = Field(100.0, ge=50.0, le=200.0, description="Squad budget in £m")
 
@@ -132,59 +144,57 @@ async def optimize_squad(
 
         model_type = "ensemble" if prediction_service._trained else "basic"
 
-        viable = [
-            p for p in elements
-            if p.get("now_cost", 0) > 0 and p.get("element_type") in [1, 2, 3, 4]
-        ]
+        viable = [p for p in elements if _is_selectable(p)]
         preds = prediction_service.predict_batch(viable, model_type)
-        for player, pred in zip(viable, preds, strict=False):
-            player["_predicted"] = max(pred, 0)
-            price = player.get("now_cost", 50) / 10
-            player["_value"] = player["_predicted"] / max(price, 0.1)
+        by_id = {p["id"]: p for p in viable}
+        candidates = [
+            Candidate(
+                id=p["id"], position=p["element_type"], club=p.get("team", 0),
+                price=p["now_cost"] / 10, predicted=max(float(pred), 0.0),
+            )
+            for p, pred in zip(viable, preds, strict=True)
+        ]
 
-        viable.sort(key=lambda x: x["_value"], reverse=True)
+        try:
+            # CPU-bound solve (~1s) — keep the event loop free
+            result = await asyncio.to_thread(optimise_squad, candidates, budget)
+        except InfeasibleSquad as e:
+            raise HTTPException(status_code=422, detail=str(e))
 
-        formation   = {"GK": 2, "DEF": 5, "MID": 5, "FWD": 3}
-        starting_11 = {"GK": 1, "DEF": 4, "MID": 4, "FWD": 2}
-        pos_map     = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
+        pred_by_id = {c.id: c.predicted for c in candidates}
+        starting   = set(result.starting_ids)
+        order      = {1: 0, 2: 1, 3: 2, 4: 3}
+        squad = []
+        for pid in sorted(result.squad_ids, key=lambda i: (i not in starting, order[by_id[i]["element_type"]], -pred_by_id[i])):
+            player = by_id[pid]
+            squad.append({
+                "id":               pid,
+                "name":             player.get("web_name", "Unknown"),
+                "team":             teams.get(player.get("team", 0), {}).get("name", "Unknown"),
+                "position":         POS_NAME[player["element_type"]],
+                "price":            player["now_cost"] / 10,
+                "predicted_points": round(pred_by_id[pid], 1),
+                "form":             float(player.get("form", 0)),
+                "ownership":        float(player.get("selected_by_percent", 0)),
+                "is_starting":      pid in starting,
+                "is_captain":       pid == result.captain_id,
+            })
 
-        squad     = []
-        counts    = {"GK": 0, "DEF": 0, "MID": 0, "FWD": 0}
-        remaining = budget
-
-        for player in viable:
-            if len(squad) >= 15:
-                break
-            position = pos_map.get(player.get("element_type", 1), "MID")
-            price    = player.get("now_cost", 50) / 10
-            team     = teams.get(player.get("team", 0), {})
-
-            if counts[position] < formation[position] and price <= remaining:
-                squad.append({
-                    "id":               player.get("id"),
-                    "name":             player.get("web_name", "Unknown"),
-                    "team":             team.get("name", "Unknown"),
-                    "position":         position,
-                    "price":            price,
-                    "predicted_points": round(player["_predicted"], 1),
-                    "form":             float(player.get("form", 0)),
-                    "ownership":        float(player.get("selected_by_percent", 0)),
-                    "is_starting":      counts[position] < starting_11.get(position, 0),
-                })
-                counts[position] += 1
-                remaining -= price
-
-        total_cost      = sum(p["price"] for p in squad)
-        predicted_total = sum(p["predicted_points"] for p in squad if p.get("is_starting"))
+        xi_counts = {pos: sum(1 for p in squad if p["is_starting"] and p["position"] == pos) for pos in ("DEF", "MID", "FWD")}
+        predicted_total = sum(p["predicted_points"] for p in squad if p["is_starting"]) + round(pred_by_id[result.captain_id], 1)
 
         return {
             "squad":            squad,
-            "total_cost":       round(total_cost, 1),
-            "remaining_budget": round(remaining, 1),
+            "captain_id":       result.captain_id,
+            "total_cost":       result.total_cost,
+            "remaining_budget": round(budget - result.total_cost, 1),
             "predicted_points": round(predicted_total, 1),
-            "formation":        f"{counts['DEF']}-{counts['MID']}-{counts['FWD']}",
+            "formation":        f"{xi_counts['DEF']}-{xi_counts['MID']}-{xi_counts['FWD']}",
+            "model_type":       model_type,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Squad optimisation error: {e}")
         raise HTTPException(status_code=500, detail="Squad optimisation failed")

@@ -1539,12 +1539,12 @@ function renderSquad(d){
   starting.forEach(p=>{if(byPos[p.position])byPos[p.position].push(p);});
   const tok=players=>players.map(p=>`<div class="pp">
     <div class="pt pt-${p.position}">${p.position}</div>
-    <div class="pn">${p.name}</div>
+    <div class="pn">${p.name}${p.is_captain?' <span title="Captain">(C)</span>':''}</div>
     <div class="pp2">£${p.price.toFixed(1)}m</div>
   </div>`).join('');
   const listHtml=squad.map(p=>`<div class="sli">
     <span class="pos pos-${p.position}">${p.position}</span>
-    <span class="slin">${p.name}</span>
+    <span class="slin">${p.name}${p.is_captain?' (C)':''}</span>
     <span class="slit">${p.team}</span>
     ${p.is_starting?'<span class="xtag">XI</span>':'<span></span>'}
     <span class="slip">${(p.predicted_points||0).toFixed(1)}</span>

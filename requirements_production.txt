@@ -8,6 +8,7 @@ python-multipart==0.0.20  # required for PayFast ITN form parsing
 # ML models
 scikit-learn==1.4.0
 numpy==1.26.4
+scipy==1.14.1  # squad optimiser (MILP via HiGHS)
 
 # Firebase / Firestore
 firebase-admin==6.4.0
