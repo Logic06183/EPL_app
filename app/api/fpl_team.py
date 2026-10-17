@@ -4,12 +4,14 @@ Fetch a user's live FPL team by team ID, suggest optimal transfers, and
 build a personalised briefing card for the user's squad.
 """
 
+import asyncio
 import logging
 import os
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..services.data_service import FPLDataService, get_data_service
+from ..services.optimizer import candidates_from_elements, optimise
 from ..services.prediction_service import PredictionService, get_prediction_service
 from ..services import gemini_service
 from ..utils.cache import get_cache_manager
@@ -94,7 +96,7 @@ async def get_fpl_team(
             "gameweek_points":  team_meta.get("summary_event_points", 0),
             "bank":             team_meta.get("last_deadline_bank", 0) / 10,
             "team_value":       team_meta.get("last_deadline_value", 0) / 10,
-            "free_transfers":   picks_data.get("entry_history", {}).get("event_transfers", 0),
+            "transfers_this_gw": picks_data.get("entry_history", {}).get("event_transfers", 0),
             "active_chip":      picks_data.get("active_chip"),
             "picks":            enriched,
             "gameweek":         gw_id,
@@ -216,6 +218,86 @@ async def suggest_transfers(
     except Exception as e:
         logger.error(f"Transfer suggestion error for team {team_id}: {e}")
         raise HTTPException(status_code=500, detail="Transfer suggestion failed")
+
+
+@router.get("/{team_id}/plan")
+async def plan_transfers(
+    team_id:        int,
+    free_transfers: int = Query(1, ge=0, le=5, description="Free transfers available this gameweek"),
+    max_transfers:  int = Query(3, ge=0, le=5),
+    data_service:   FPLDataService    = Depends(get_data_service),
+    prediction_service: PredictionService = Depends(get_prediction_service),
+    user:           dict              = Depends(get_current_user),
+):
+    """
+    Best transfers to make now for the next 3 gameweeks, including whether a
+    -4 hit pays for itself, versus holding. Also picks XI and captain per GW.
+    """
+    team_data = await get_fpl_team(team_id, data_service=data_service, user=user)
+    try:
+        bootstrap = await data_service.get_bootstrap_data()
+        elements  = bootstrap.get("elements", [])
+        by_id     = {e["id"]: e for e in elements}
+        teams_map = {t["id"]: t for t in bootstrap.get("teams", [])}
+        await prediction_service.ensure_ready(data_service)
+
+        current = [p["id"] for p in team_data["picks"]]
+        # Current players valued at today's price (selling prices aren't public)
+        budget = sum(by_id[i]["now_cost"] for i in current if i in by_id) / 10 + team_data.get("bank", 0.0)
+        cands = candidates_from_elements(elements, prediction_service)
+        owned = {c.id for c in cands}
+        missing = [i for i in current if i not in owned]
+        if missing:
+            raise HTTPException(status_code=422, detail="Squad contains players no longer in the game")
+
+        best, hold = await asyncio.gather(
+            asyncio.to_thread(optimise, cands, budget, current, free_transfers, max_transfers),
+            asyncio.to_thread(optimise, cands, budget, current, free_transfers, 0),
+        )
+
+        def player(pid: int) -> dict:
+            el = by_id[pid]
+            return {
+                "id":   pid,
+                "name": el.get("web_name", ""),
+                "team_name": teams_map.get(el.get("team", 0), {}).get("short_name", ""),
+                "position": el.get("element_type"),
+                "price": el["now_cost"] / 10,
+                "predicted_next_3": prediction_service.horizon(pid),
+            }
+
+        gain = round(best.expected_points - hold.expected_points, 2)
+        if not best.transfers_in:
+            advice = "Hold: no transfer improves your next 3 gameweeks enough. Roll the free transfer."
+        elif best.hits:
+            advice = (f"Make {len(best.transfers_in)} transfers (-{4 * best.hits} hit): "
+                      f"+{gain} expected points over 3 gameweeks after the hit.")
+        else:
+            advice = f"Make {len(best.transfers_in)} free transfer(s): +{gain} expected points over 3 gameweeks."
+
+        return {
+            "team_id":        team_id,
+            "gameweek":       prediction_service.xp.next_gw,
+            "advice":         advice,
+            "gain":           gain,
+            "hits":           best.hits,
+            "transfers_out":  [player(p) for p in best.transfers_out],
+            "transfers_in":   [player(p) for p in best.transfers_in],
+            "expected_points": {"with_transfers": best.expected_points, "hold": hold.expected_points},
+            "per_gameweek":   [
+                {"lineup": lineup, "captain": cap, "points": pts}
+                for lineup, cap, pts in zip(best.lineups, best.captains, best.per_gw_points)
+            ],
+            "assumptions": (
+                f"{free_transfers} free transfer(s); current players valued at today's price "
+                "(your selling price may be lower); bench points weighted 0.1."
+            ),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Transfer plan error for team {team_id}: {e}")
+        raise HTTPException(status_code=500, detail="Transfer planning failed")
 
 
 # ── Briefing ──────────────────────────────────────────────────────────────────

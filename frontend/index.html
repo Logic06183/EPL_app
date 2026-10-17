@@ -1370,7 +1370,7 @@ function renderBriefing(b){
         <div class="brief-title" style="color:var(--gold)">Today — GW ${b.gameweek}</div>
         <span class="brief-deadline" style="color:var(--gold);border:1px solid rgba(201,168,76,.3)">⚡ Pro</span>
       </div>
-      <div class="brief-summary">${b.message}</div>
+      <div class="brief-summary">${escHtml(b.message)}</div>
       <div class="brief-section">
         <div class="brief-h">What you'd get</div>
         <div class="brief-row" style="border:none;padding:4px 0">→ Daily briefing refresh when team news drops</div>
@@ -1393,16 +1393,16 @@ function renderBriefing(b){
     <div class="brief-row">
       <span class="brief-tag ${flagClass(a.flag)}">${flagLabel(a.flag)}</span>
       <div style="flex:1;min-width:0">
-        <div class="brief-name">${a.name} <span style="color:var(--text3);font-weight:400">· ${a.team_name}</span></div>
-        ${a.news?`<div class="brief-meta">${a.news}</div>`:''}
-        ${a.reason?`<div class="brief-reason">${a.reason}</div>`:''}
+        <div class="brief-name">${escHtml(a.name)} <span style="color:var(--text3);font-weight:400">· ${escHtml(a.team_name)}</span></div>
+        ${a.news?`<div class="brief-meta">${escHtml(a.news)}</div>`:''}
+        ${a.reason?`<div class="brief-reason">${escHtml(a.reason)}</div>`:''}
       </div>
     </div>`).join('') : '<div class="brief-empty">No injury or price-drop concerns in your XI.</div>';
 
   let capBlock='';
   if(cap){
     const switchHint = !cap.currently_captained && cap.current_captain
-      ? ` <span style="color:var(--orange);font-size:11px">· consider switching from ${cap.current_captain.name} (${cap.current_captain.predicted_points})</span>`
+      ? ` <span style="color:var(--orange);font-size:11px">· consider switching from ${escHtml(cap.current_captain.name)} (${cap.current_captain.predicted_points})</span>`
       : '';
     capBlock=`
     <div class="brief-section">
@@ -1410,9 +1410,9 @@ function renderBriefing(b){
       <div class="brief-cap">
         <span style="font-size:18px">©</span>
         <div style="flex:1">
-          <span class="brief-cap-name">${cap.name}</span>
-          <span class="brief-meta"> · ${cap.team_name}</span>${switchHint}
-          ${cap.reason?`<div class="brief-reason">${cap.reason}</div>`:''}
+          <span class="brief-cap-name">${escHtml(cap.name)}</span>
+          <span class="brief-meta"> · ${escHtml(cap.team_name)}</span>${switchHint}
+          ${cap.reason?`<div class="brief-reason">${escHtml(cap.reason)}</div>`:''}
         </div>
         <span class="brief-cap-pred">${cap.predicted_points} pts</span>
       </div>
@@ -1426,23 +1426,23 @@ function renderBriefing(b){
       <div class="brief-h">Top transfer</div>
       <div class="brief-row" style="border-bottom:none">
         <div style="flex:1;min-width:0">
-          <div class="brief-name" style="color:var(--red)">↓ ${xfer.sell.name}</div>
+          <div class="brief-name" style="color:var(--red)">↓ ${escHtml(xfer.sell.name)}</div>
           <div class="brief-meta">£${xfer.sell.price.toFixed(1)}m · ${xfer.sell.predicted_points} pred</div>
         </div>
         <div class="brief-cap-pred" style="color:var(--green);font-size:13px">+${xfer.improvement}</div>
         <div style="flex:1;min-width:0;text-align:right">
-          <div class="brief-name" style="color:var(--green)">↑ ${xfer.buy.name}</div>
+          <div class="brief-name" style="color:var(--green)">↑ ${escHtml(xfer.buy.name)}</div>
           <div class="brief-meta">£${xfer.buy.price.toFixed(1)}m · ${xfer.buy.predicted_points} pred</div>
         </div>
       </div>
-      ${xfer.reason?`<div class="brief-reason" style="margin-top:4px">${xfer.reason}</div>`:''}
+      ${xfer.reason?`<div class="brief-reason" style="margin-top:4px">${escHtml(xfer.reason)}</div>`:''}
     </div>`;
   }
 
   const summary = b.summary
-    ? `<div class="brief-summary">${b.summary}</div>`
+    ? `<div class="brief-summary">${escHtml(b.summary)}</div>`
     : (alerts.length===0 && cap && !xfer
-        ? `<div class="brief-summary">Your XI looks settled. Captain ${cap.name} for the highest predicted return.</div>`
+        ? `<div class="brief-summary">Your XI looks settled. Captain ${escHtml(cap.name)} for the highest predicted return.</div>`
         : '');
 
   return `
@@ -1483,14 +1483,15 @@ function renderTeam(d,id,briefing){
 
   const rankFmt=r=>r?r.toLocaleString():'—';
 
+  _teamNames=Object.fromEntries((d.picks||[]).map(p=>[p.id,p.name]));
   document.getElementById('team-content').innerHTML=`
   ${renderBriefing(briefing)}
   <div class="team-card">
     <div class="tc-top">
-      <div class="tc-name">${d.team_name}</div>
-      <button class="ghost" onclick="loadTransfers(${id})" style="font-size:11px">🔄 Suggest Transfers</button>
+      <div class="tc-name">${escHtml(d.team_name)}</div>
+      <button class="ghost" onclick="loadTransfers(${id})" style="font-size:11px">🔄 Plan Transfers</button>
     </div>
-    <div class="tc-mgr">${d.manager_name||''}</div>
+    <div class="tc-mgr">${escHtml(d.manager_name||'')}</div>
     <div class="tc-stats">
       <div class="tc-stat"><div class="tc-sl">GW POINTS</div><div class="tc-sv">${d.gameweek_points||0}</div></div>
       <div class="tc-stat"><div class="tc-sl">TOTAL POINTS</div><div class="tc-sv">${d.overall_points||0}</div></div>
@@ -1506,20 +1507,60 @@ function renderTeam(d,id,briefing){
 }
 
 async function loadTransfers(id){
-  document.getElementById('transfers-content').innerHTML='<div class="loading" style="padding:24px"><div class="spin"></div><span>Analysing transfers…</span></div>';
+  const box=document.getElementById('transfers-content');
+  box.innerHTML='<div id="plan-content"></div><div id="sugg-content"></div>';
+  loadPlan(id);
+  document.getElementById('sugg-content').innerHTML='<div class="loading" style="padding:24px"><div class="spin"></div><span>Analysing transfers…</span></div>';
   try{
     const d=await apiFetch(`/fpl-team/${id}/transfers`);
     renderTransfers(d);
   }catch(e){
-    document.getElementById('transfers-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('sugg-content').innerHTML=`<div class="err">⚠ ${escHtml(e.message)}</div>`;
   }
 }
 
+async function loadPlan(id){
+  const el=document.getElementById('plan-content');
+  const ft=document.getElementById('plan-ft')?.value||'1';
+  el.innerHTML='<div class="loading" style="padding:24px"><div class="spin"></div><span>Solving your best transfers for the next 3 gameweeks…</span></div>';
+  try{
+    const d=await apiFetch(`/fpl-team/${id}/plan?free_transfers=${encodeURIComponent(ft)}`);
+    const names={};
+    [...d.transfers_in,...d.transfers_out].forEach(p=>names[p.id]=p.name);
+    const row=(p,dir)=>`<div class="tplayer"><div class="tpn" style="color:var(${dir==='in'?'--green':'--red'})">${dir==='in'?'↑':'↓'} ${escHtml(p.name)}</div>
+      <div class="tpt">${escHtml(p.team_name)} · £${p.price.toFixed(1)}m</div>
+      <div class="tpp" style="color:var(--text3)">next 3: ${(p.predicted_next_3||[]).map(v=>v.toFixed(1)).join(' / ')||'—'}</div></div>`;
+    const ftOpts=[0,1,2,3,4,5].map(n=>`<option value="${n}" ${String(n)===ft?'selected':''}>${n}</option>`).join('');
+    el.innerHTML=`
+    <div class="sh" style="margin-top:16px"><h2 class="st">TRANSFER PLAN</h2><span class="ss">next 3 gameweeks · solved, not guessed</span></div>
+    <div class="tcard">
+      <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+        <div class="tcard-impr" style="font-size:15px">${escHtml(d.advice)}</div>
+        <label style="font-size:11px;color:var(--text2)">Free transfers
+          <select id="plan-ft" onchange="loadPlan(${id})" style="margin-left:4px">${ftOpts}</select></label>
+      </div>
+      ${d.transfers_in.length?`<div class="tarrow" style="margin-top:10px">
+        <div>${d.transfers_out.map(p=>row(p,'out')).join('')}</div><div class="tarr-icon">→</div>
+        <div>${d.transfers_in.map(p=>row(p,'in')).join('')}</div></div>`:''}
+      <div style="font-size:11px;color:var(--text2);margin-top:10px;font-family:'DM Mono',monospace">
+        Expected: ${d.expected_points.with_transfers.toFixed(1)} vs ${d.expected_points.hold.toFixed(1)} if you hold
+        · Captain: ${d.per_gameweek.map((g,i)=>`GW${(d.gameweek||0)+i} ${escHtml(names[g.captain]||capName(g.captain))}`).join(', ')}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">${escHtml(d.assumptions)}</div>
+    </div>`;
+  }catch(e){
+    el.innerHTML=`<div class="err">⚠ Transfer plan unavailable: ${escHtml(e.message)}</div>`;
+  }
+}
+
+// Name lookup for captain ids that aren't in the transfer lists (squad players)
+let _teamNames={};
+function capName(id){ return _teamNames[id]||('#'+id); }
+
 function renderTransfers(d){
   const sug=d.suggestions||[];
-  if(!sug.length){document.getElementById('transfers-content').innerHTML='<div class="empty"><div class="eico">✓</div><div class="etxt">No obvious improvements found</div></div>';return;}
-  document.getElementById('transfers-content').innerHTML=`
-  <div class="sh" style="margin-top:16px"><h2 class="st">TRANSFER SUGGESTIONS</h2><span class="ss">ranked by predicted pts improvement</span></div>
+  if(!sug.length){document.getElementById('sugg-content').innerHTML='<div class="empty"><div class="eico">✓</div><div class="etxt">No obvious improvements found</div></div>';return;}
+  document.getElementById('sugg-content').innerHTML=`
+  <div class="sh" style="margin-top:16px"><h2 class="st">SINGLE SWAPS</h2><span class="ss">ranked by predicted pts improvement</span></div>
   <div class="tsugg">${sug.map(s=>`
     <div class="tcard">
       <div class="tcard-impr">+${s.improvement}</div>

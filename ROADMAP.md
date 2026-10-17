@@ -25,7 +25,9 @@ personal weekly briefing for *your* team.
 - [x] Frontend: Pro UI gated on server's effective plan (founders/grace were locked out); app survives Firebase SDK failing to load
 - [ ] Retrain each summer: add the new season to `SEASONS` in `ml/train.py`, rerun, commit `app/ml/*`
 - [ ] Hourly refresh independent of traffic (Cloud Scheduler → endpoint) so snapshots are close to each deadline
-- [ ] Optimiser: proper ILP squad selection + multi-GW transfer planner (with hits)
+- [x] Optimiser: integer programme for squad + XI + captain over 3 GWs; transfer planner with -4 hits vs hold (`app/services/optimizer.py`, `/api/fpl-team/{id}/plan`)
+- [x] Escape user/LLM-controlled text in the frontend (FPL team names, Gemini briefing text)
+- [ ] Estimate free transfers from the manager's history instead of asking (FPL rules: +1/GW, max 5, chips)
 - [ ] Briefing: use the new model; chip advice (bench boost / triple captain timing)
 - [ ] Analytics: privacy-friendly event tracking for the funnel (visit → import team → sign in → briefing → upgrade)
 - [ ] Retention: email capture + deadline reminder carrying the briefing
@@ -43,4 +45,5 @@ personal weekly briefing for *your* team.
 
 - 2026-10-17 — security + PayFast fixes (`eac827f`); repo clean-up and CI (`d518a29`)
 - 2026-10-17 — expected-points model + walk-forward backtest (`cfe03e1`): rank corr 0.40/0.36 vs 0.31/0.25 for season average
-- 2026-10-17 — live track record (snapshot before deadline, score after) + Track record page; frontend plan-gating fix
+- 2026-10-17 — live track record (snapshot before deadline, score after) + Track record page; frontend plan-gating fix (`49800af`)
+- 2026-10-17 — optimiser + transfer planner; XSS escaping
