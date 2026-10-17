@@ -3,6 +3,7 @@ FPL AI Pro - Production FastAPI Application
 Consolidated API with multi-model predictions, xG/xA analytics, and Gemini AI
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
@@ -62,10 +63,6 @@ async def lifespan(app: FastAPI):
 
 async def _prewarm():
     try:
-
-        from .services.data_service import get_data_service
-        from .services.prediction_service import get_prediction_service
-
         data_service = get_data_service()
         bootstrap = await data_service.get_bootstrap_data()
         elements = bootstrap.get("elements", [])
@@ -77,14 +74,18 @@ async def _prewarm():
         await prediction_service.ensure_trained(elements)
         app_state["models_loaded"] = prediction_service._trained
         logger.info(f"Models pre-trained: {app_state['models_loaded']}")
+
+        # Next-GW model needs ~500 history fetches; do it while startup has CPU.
+        await asyncio.wait_for(prediction_service.refresh_next_gw(data_service), timeout=180)
     except Exception as e:
         logger.warning(f"Startup pre-warm failed (non-fatal, will train lazily): {e}")
+
 
 
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Production FPL API with RandomForest, CNN, and Gemini AI predictions featuring xG/xA analytics",
+    description="Fantasy Premier League predictions, squad optimisation, transfer suggestions and AI briefings",
     version=settings.APP_VERSION,
     lifespan=lifespan,
 )
@@ -98,6 +99,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+_refresh_task: asyncio.Task | None = None
+
+
+@app.middleware("http")
+async def refresh_next_gw_model(request: Request, call_next):
+    """Kick off a background next-GW refresh when the model is >6h old (Cloud Run only
+    gives CPU during requests, so piggy-back on traffic rather than a timer)."""
+    global _refresh_task
+    ps = get_prediction_service()
+    if (
+        not settings.SKIP_PREWARM
+        and settings.PREDICTION_MODEL != "legacy"
+        and ps.next_gw_stale()
+        and (_refresh_task is None or _refresh_task.done())
+    ):
+        _refresh_task = asyncio.create_task(ps.refresh_next_gw(get_data_service()))
+    return await call_next(request)
 
 
 # Global exception handler
@@ -288,8 +308,8 @@ async def get_models_performance(
     info = await prediction_service.get_model_info()
     return {
         "models": info.get("models", {}),
-        "recommendation": "ensemble",
-        "note": "Ensemble combines all available models for best accuracy",
+        "active": info.get("active"),
+        "backtest_note": info.get("backtest_note"),
     }
 
 

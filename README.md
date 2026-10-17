@@ -84,9 +84,24 @@ Interactive docs at `/docs` on any running instance. Main routes:
 | `GET /api/users/me` | plan, limits, subscription (bearer token) |
 | `POST /api/payments/initialize`, `/cancel`, `/webhook` | PayFast |
 
-## A note on the predictions
+## Predictions
 
-The models are trained on the current season's FPL bootstrap data at startup
-and predict a points-per-game style score. There is no held-out backtest in
-this repo yet, so treat outputs as a ranking aid, not a forecast with known
-accuracy.
+Two layers (see `app/services/prediction_service.py`, `app/ml/next_gw.py`):
+
+- **Next-gameweek model** — gradient boosting on per-fixture player
+  histories (recent points, minutes, xG, xA, ICT, price, home/away, fixture
+  difficulty), predicting points for the coming gameweek. Each refresh runs a
+  walk-forward backtest on the last three completed rounds against two naive
+  baselines (rolling 4-round mean, points-per-round so far). With the default
+  `PREDICTION_MODEL=auto` it is only used if it beats both; the result is
+  published at `GET /api/models/info`. Refreshes at startup and every 6 hours.
+- **Season-snapshot models** (RF / GB / MLP) — fallback early in the season
+  or if the next-GW model doesn't earn its place. These fit season
+  points-per-game from season totals, so they describe form so far rather
+  than forecast.
+
+Check the model against live data any time:
+
+```bash
+python -m app.ml.report
+```

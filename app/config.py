@@ -19,6 +19,10 @@ class Settings:
     # Skip the startup FPL fetch + model training (CI smoke tests, offline dev).
     SKIP_PREWARM: bool = os.getenv("SKIP_PREWARM", "false").lower() == "true"
 
+    # auto: use the next-GW model only if it beats naive baselines in its own backtest
+    # next_gw: always use it once trained · legacy: season-snapshot models only
+    PREDICTION_MODEL: str = os.getenv("PREDICTION_MODEL", "auto").lower()
+
     CACHE_TTL: int = int(os.getenv("CACHE_TTL", "300"))
     CACHE_MAX_SIZE: int = int(os.getenv("CACHE_MAX_SIZE", "1000"))
 

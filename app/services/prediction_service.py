@@ -1,11 +1,18 @@
 """
 Prediction Service
-Three real ML models: RandomForest, GradientBoosting, and a form-weighted Ensemble.
-All three train on the full player pool and use 12 features from FPL bootstrap data.
+
+Two layers:
+  * Season-snapshot models (RF / GB / MLP) on 12 bootstrap features. Their
+    target is season points-per-game, so they mostly describe the season so far.
+  * Next-gameweek model (app/ml/next_gw.py) trained on per-fixture histories
+    and walk-forward backtested at refresh time. With PREDICTION_MODEL=auto it
+    replaces the snapshot models only when it beats the naive baselines on the
+    most recent rounds; PREDICTION_MODEL=next_gw forces it, =legacy disables it.
 """
 
 import asyncio
 import logging
+import time
 from functools import lru_cache
 from typing import Any
 
@@ -13,6 +20,10 @@ import numpy as np
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
+from threadpoolctl import threadpool_limits
+
+from ..config import settings
+from ..ml import next_gw
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +43,86 @@ class PredictionService:
         self._scaler = StandardScaler()
         self._trained = False
         self._train_lock: asyncio.Lock | None = None
+        # Next-gameweek model state
+        self._next_gw_preds: dict[int, float] = {}
+        self._next_gw_round: int | None = None
+        self._next_gw_report: dict[str, Any] | None = None
+        self._next_gw_refreshed_at: float = 0.0
+        self._next_gw_lock: asyncio.Lock | None = None
+
+    @property
+    def next_gw_active(self) -> bool:
+        return bool(self._next_gw_preds)
+
+    async def refresh_next_gw(self, data_service, concurrency: int = 8) -> None:
+        """Fetch per-player histories, backtest, and (if it earns it) activate the next-GW model."""
+        if settings.PREDICTION_MODEL == "legacy":
+            return
+        if self._next_gw_lock is None:
+            self._next_gw_lock = asyncio.Lock()
+        async with self._next_gw_lock:
+            try:
+                await self._refresh_next_gw(data_service, concurrency)
+                self._next_gw_refreshed_at = time.monotonic()
+            except Exception as e:
+                logger.warning(f"Next-GW model refresh failed, keeping previous state: {e}")
+                # Retry in ~30 min rather than waiting the full 6h.
+                self._next_gw_refreshed_at = time.monotonic() - (6 * 3600 - 1800)
+
+    async def _refresh_next_gw(self, data_service, concurrency: int) -> None:
+        bootstrap = await data_service.get_bootstrap_data()
+        events = bootstrap.get("events", [])
+        nxt = next((e for e in events if e.get("is_next")), None)
+        finished = [e["id"] for e in events if e.get("finished")]
+        if nxt is None or len(finished) < 5:
+            logger.info("Next-GW model: not enough completed rounds yet — using snapshot models")
+            return
+        elements = [p for p in bootstrap.get("elements", []) if float(p.get("minutes", 0)) > 0]
+        positions = {p["id"]: int(p.get("element_type", 3)) for p in elements}
+        prices = {p["id"]: float(p.get("now_cost", 50)) / 10 for p in elements}
+
+        fixtures = await data_service.get_all_fixtures()
+        difficulty = {}
+        for f in fixtures:
+            difficulty[(f["id"], True)] = float(f.get("team_h_difficulty", 3))
+            difficulty[(f["id"], False)] = float(f.get("team_a_difficulty", 3))
+
+        sem = asyncio.Semaphore(concurrency)
+
+        async def fetch(pid: int):
+            async with sem:
+                return pid, await data_service.get_player_history(pid)
+
+        results = await asyncio.gather(*(fetch(pid) for pid in positions))
+        histories = {pid: (r or {}).get("history", []) for pid, r in results}
+        upcoming = {pid: (r or {}).get("fixtures", []) for pid, r in results}
+        fetched = sum(1 for _, r in results if r)
+        if fetched < 0.8 * len(results):
+            raise RuntimeError(f"only fetched {fetched}/{len(results)} player histories")
+
+        def fit():
+            # OpenMP sizes itself to the host, not the container; in a worker thread that
+            # oversubscribes badly (~10× slower). Cloud Run gives us 2 vCPUs.
+            with threadpool_limits(limits=2):
+                return _fit()
+
+        def _fit():
+            ds = next_gw.build_dataset(histories, positions, difficulty)
+            report = next_gw.walk_forward_backtest(ds)
+            model = next_gw.new_model().fit(ds.X, ds.y)
+            preds = next_gw.predict_next_round(model, histories, upcoming, positions, prices, nxt["id"])
+            return report, preds
+
+        report, preds = await asyncio.to_thread(fit)
+        self._next_gw_report = {**report.as_dict(), "beats_baselines": report.beats_baselines(),
+                                "next_round": nxt["id"], "players": len(preds)}
+        use = settings.PREDICTION_MODEL == "next_gw" or report.beats_baselines()
+        self._next_gw_preds = preds if use else {}
+        self._next_gw_round = nxt["id"] if use else None
+        logger.info(f"Next-GW model {'ACTIVE' if use else 'not used'}: {self._next_gw_report}")
+
+    def next_gw_stale(self, max_age_s: float = 6 * 3600) -> bool:
+        return time.monotonic() - self._next_gw_refreshed_at > max_age_s
 
     async def ensure_trained(self, players: list[dict[str, Any]]) -> None:
         """Train once, off the event loop. Concurrent cold requests wait for one training run."""
@@ -149,6 +240,9 @@ class PredictionService:
                 out.append(round((form * 0.5 + ppg * 0.4 + ict * 0.1), 2))
             return out
 
+        if self._next_gw_preds:
+            return [round(self._next_gw_preds.get(p.get("id"), 0.0), 2) for p in players]
+
         forms = np.array([float(p.get("form", 0)) for p in players])
 
         if not self._trained:
@@ -187,6 +281,9 @@ class PredictionService:
             ict  = float(player.get("ict_index", 0)) / 10
             return round((form * 0.5 + ppg * 0.4 + ict * 0.1), 2)
 
+        if self._next_gw_preds:
+            return round(self._next_gw_preds.get(player.get("id"), 0.0), 2)
+
         preds = self._raw_predict(player)
 
         if model_type == "random_forest":
@@ -213,40 +310,35 @@ class PredictionService:
     # ── Metadata ───────────────────────────────────────────────────────────────
 
     async def get_model_info(self) -> dict[str, Any]:
+        snapshot_note = "Fits season points-per-game from season totals — describes form so far, not a backtested forecast."
         return {
+            "active": "next_gw" if self.next_gw_active else "snapshot",
             "models": {
                 "basic": {
-                    "name": "Form + PPG (No ML)",
-                    "description": "Weighted blend of current form, points-per-game, and ICT index. Fast and transparent.",
-                    "accuracy": "65-70%",
+                    "name": "Form + PPG (no ML)",
+                    "description": "0.5×form + 0.4×points-per-game + 0.1×ICT/10. Fast and transparent.",
                     "available": True,
                     "trained": True,
                 },
-                "random_forest": {
-                    "name": "Random Forest",
-                    "description": "200-tree ensemble trained on 12 player features. Robust and reliable baseline.",
-                    "accuracy": "72-78%",
-                    "available": True,
-                    "trained": self._trained,
+                "next_gw": {
+                    "name": "Next-gameweek model",
+                    "description": "Gradient boosting on per-fixture history (recent points, minutes, xG, xA, ICT, "
+                                   "price, home/away, fixture difficulty). Predicts expected points for the next "
+                                   "gameweek; doubles summed, blanks zero. Used for all ML model types when active.",
+                    "available": self.next_gw_active,
+                    "next_round": self._next_gw_round,
+                    "backtest": self._next_gw_report,
                 },
-                "deep_learning": {
-                    "name": "Gradient Boost + Neural Net",
-                    "description": "GradientBoosting + MLP blend. Captures complex non-linear interactions.",
-                    "accuracy": "76-82%",
-                    "available": True,
-                    "trained": self._trained,
-                },
-                "ensemble": {
-                    "name": "Full Ensemble",
-                    "description": "Weighted blend of all three models plus form recency signal. Best overall accuracy.",
-                    "accuracy": "80-86%",
-                    "available": True,
-                    "trained": self._trained,
-                },
+                "random_forest": {"name": "Random Forest (season snapshot)", "description": snapshot_note,
+                                  "available": True, "trained": self._trained},
+                "deep_learning": {"name": "Gradient Boost + MLP (season snapshot)", "description": snapshot_note,
+                                  "available": True, "trained": self._trained},
+                "ensemble": {"name": "Snapshot ensemble", "description": snapshot_note,
+                             "available": True, "trained": self._trained},
             },
             "recommendation": "ensemble",
-            "feature_count": 12,
-            "trained_on_full_squad": self._trained,
+            "backtest_note": "MAE in FPL points per player-fixture on the most recent completed rounds, "
+                             "versus rolling 4-round mean and points-per-round-to-date baselines.",
         }
 
 

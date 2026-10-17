@@ -3,6 +3,44 @@
 Running record of the push to make EPL_app a cleanly deployable product.
 Newest first. Each entry: what changed, why, how it was checked.
 
+## 2026-10-17 — Iteration 5: fixtures bug, honest model metrics, next-GW model
+
+**Found**
+- `get_fixtures()` truncated every result to 10 matches, so the FDR heatmap
+  (up to 10 GWs), the 3-GW planner and captain fixture context only ever saw
+  the first gameweek.
+- Cache ignored per-key TTLs; `get_cache_manager()` could hand out
+  different instances depending on call arguments.
+- `/api/models/info` advertised invented accuracy figures ("80-86%").
+- Models predicted season PPG from season totals (target leakage, no
+  out-of-sample evaluation).
+- HistGradientBoosting fits ran ~10× slower in worker threads (OpenMP sized
+  to the host, not the container).
+
+**Changed**
+- Fixtures: `limit` param (UI keeps 10; internal callers get everything);
+  raw fixtures cached 5 min. Cache rewritten with per-key expiry, one instance.
+- `app/ml/next_gw.py`: per-fixture dataset (features strictly from earlier
+  rounds), walk-forward backtest vs rolling-4 and PPG-to-date baselines,
+  next-round prediction (doubles summed, blanks 0).
+- `PredictionService.refresh_next_gw()`: fetches ~500 element-summaries
+  (8 concurrent), backtests, activates only if it beats both baselines
+  (`PREDICTION_MODEL=auto|next_gw|legacy`); runs at startup and on traffic
+  every 6h (30 min retry after failure); OpenMP capped at 2 threads.
+- `/api/models/info` and `/models/performance` report the measured backtest
+  instead of made-up percentages. `python -m app.ml.report` prints it for live data.
+
+**Checked**: ruff clean; pytest 51 passed (+10: fixture completeness, FDR
+multi-GW, per-key TTL, leakage test — tampering with round ≥ r leaves round-r
+features identical — backtest beats baselines on synthetic data with a
+fixture effect, double/blank handling, service activation, legacy mode,
+failure retry). Synthetic backtest: MAE 1.42 vs 1.78 (rolling-4) / 1.66 (PPG).
+**Not checked on real FPL data** — the sandbox can't reach the FPL API.
+
+**Action needed from Craig**: run `python -m app.ml.report` locally and paste
+the numbers into this log; the auto gate already protects production if the
+model underperforms.
+
 ## 2026-10-17 — Iteration 4: account deletion, transfer rules, non-blocking training
 
 **Found**
@@ -131,12 +169,11 @@ unconfigured. Docker build not run locally (no daemon) — CI covers it.
 
 - [x] Optimiser correctness + tests; plan gating / meter tests (iteration 2).
 - [x] Transfer endpoint tests + rule fixes (iteration 4).
-- [ ] Tests for predictions + FDR endpoints.
+- [x] FDR tests (iteration 5).
 - [ ] `free_transfers` in team import is actually `event_transfers` (transfers made) — mislabelled.
 - [ ] Briefing meter is read-then-write; make it a Firestore transaction.
-- [ ] Prediction model: target is `points_per_game` with `total_points`
-      and minutes as features → in-sample reconstruction, not a forecast.
-      Train on next-GW points from player histories and add a time-split backtest.
+- [x] Next-GW model with walk-forward backtest + auto gate (iteration 5).
+- [ ] Record real-data backtest numbers; consider adding previous seasons for early-season rounds.
 - [~] Gemini cost cap done; general per-client rate limiting still open.
 - [x] Security headers, SW updates, Firestore rules, privacy/terms (iteration 3).
 - [ ] Enforce CSP after report-only period; move inline onclick handlers out so `unsafe-inline` can go.
