@@ -75,8 +75,11 @@ async def _prewarm():
         app_state["models_loaded"] = prediction_service._trained
         logger.info(f"Models pre-trained: {app_state['models_loaded']}")
 
-        # Next-GW model needs ~500 history fetches; do it while startup has CPU.
-        await asyncio.wait_for(prediction_service.refresh_next_gw(data_service), timeout=180)
+        # Next-GW model needs ~500 history fetches — run it in the background so the
+        # port opens immediately (Cloud Run startup probe); snapshot models serve meanwhile.
+        global _refresh_task
+        if settings.PREDICTION_MODEL != "legacy":
+            _refresh_task = asyncio.create_task(prediction_service.refresh_next_gw(data_service))
     except Exception as e:
         logger.warning(f"Startup pre-warm failed (non-fatal, will train lazily): {e}")
 
