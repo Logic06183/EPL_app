@@ -103,3 +103,19 @@ def test_optimize_endpoint_returns_valid_squad():
     assert sum(p["is_starting"] for p in body["squad"]) == 11
     assert sum(p["is_captain"] for p in body["squad"]) == 1
     assert body["total_cost"] <= 100
+
+
+def test_estimate_free_transfers():
+    from app.services.optimizer import estimate_free_transfers
+
+    def hist(transfers, chips=()):
+        return {"current": [{"event": i + 1, "event_transfers": t} for i, t in enumerate(transfers)],
+                "chips": [{"event": e, "name": n} for e, n in chips]}
+
+    assert estimate_free_transfers(hist([0])) == 1               # after GW1
+    assert estimate_free_transfers(hist([0, 0, 0])) == 3         # banked two
+    assert estimate_free_transfers(hist([0] * 10)) == 5          # capped at 5
+    assert estimate_free_transfers(hist([0, 0, 2])) == 1         # used both, +1
+    assert estimate_free_transfers(hist([0, 3])) == 1            # took a hit
+    assert estimate_free_transfers(hist([0, 0, 9], [(3, "wildcard")])) == 3  # wildcard keeps bank
+    assert estimate_free_transfers({}) == 1

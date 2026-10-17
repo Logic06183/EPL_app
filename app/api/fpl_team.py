@@ -7,11 +7,12 @@ build a personalised briefing card for the user's squad.
 import asyncio
 import logging
 import os
+from typing import Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..services.data_service import FPLDataService, get_data_service
-from ..services.optimizer import candidates_from_elements, optimise
+from ..services.optimizer import candidates_from_elements, estimate_free_transfers, optimise
 from ..services.prediction_service import PredictionService, get_prediction_service
 from ..services import gemini_service
 from ..utils.cache import get_cache_manager
@@ -223,7 +224,8 @@ async def suggest_transfers(
 @router.get("/{team_id}/plan")
 async def plan_transfers(
     team_id:        int,
-    free_transfers: int = Query(1, ge=0, le=5, description="Free transfers available this gameweek"),
+    free_transfers: Optional[int] = Query(None, ge=0, le=5,
+                                          description="Free transfers available; estimated from history if omitted"),
     max_transfers:  int = Query(3, ge=0, le=5),
     data_service:   FPLDataService    = Depends(get_data_service),
     prediction_service: PredictionService = Depends(get_prediction_service),
@@ -240,6 +242,17 @@ async def plan_transfers(
         by_id     = {e["id"]: e for e in elements}
         teams_map = {t["id"]: t for t in bootstrap.get("teams", [])}
         await prediction_service.ensure_ready(data_service)
+
+        estimated = free_transfers is None
+        if estimated:
+            free_transfers = 1
+            try:
+                client = await data_service._get_client()
+                resp = await client.get(f"https://fantasy.premierleague.com/api/entry/{team_id}/history/")
+                resp.raise_for_status()
+                free_transfers = estimate_free_transfers(resp.json())
+            except Exception as e:
+                logger.warning(f"Free transfer estimate failed for {team_id}: {e}")
 
         current = [p["id"] for p in team_data["picks"]]
         # Current players valued at today's price (selling prices aren't public)
@@ -279,6 +292,8 @@ async def plan_transfers(
             "team_id":        team_id,
             "gameweek":       prediction_service.xp.next_gw,
             "advice":         advice,
+            "free_transfers": free_transfers,
+            "free_transfers_estimated": estimated,
             "gain":           gain,
             "hits":           best.hits,
             "transfers_out":  [player(p) for p in best.transfers_out],

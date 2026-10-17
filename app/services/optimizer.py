@@ -53,6 +53,26 @@ class Plan:
     per_gw_points: List[float] = field(default_factory=list)
 
 
+def estimate_free_transfers(history: dict) -> int:
+    """
+    Free transfers available for the next deadline, replayed from a manager's
+    /entry/{id}/history/: 1 per gameweek from GW2, banked up to 5; a Wildcard
+    or Free Hit doesn't use banked transfers. Ignores one-off top-ups FPL
+    occasionally grants, so the UI lets the user override it.
+    """
+    chips = {c.get("event"): c.get("name") for c in history.get("chips", [])}
+    ft = 0
+    for gw in sorted(history.get("current", []), key=lambda e: e["event"]):
+        event = gw["event"]
+        if event == 1:
+            ft = 1
+            continue
+        if chips.get(event) not in ("wildcard", "freehit"):
+            ft = max(0, ft - int(gw.get("event_transfers", 0)))
+        ft = min(5, ft + 1)
+    return max(1, ft) if history.get("current") else 1
+
+
 def candidates_from_elements(elements: List[dict], prediction_service) -> List[Candidate]:
     """Build optimiser candidates from FPL bootstrap elements and the xP model."""
     out = []

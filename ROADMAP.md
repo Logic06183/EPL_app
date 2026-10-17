@@ -27,7 +27,7 @@ personal weekly briefing for *your* team.
 - [ ] Hourly refresh independent of traffic (Cloud Scheduler → endpoint) so snapshots are close to each deadline
 - [x] Optimiser: integer programme for squad + XI + captain over 3 GWs; transfer planner with -4 hits vs hold (`app/services/optimizer.py`, `/api/fpl-team/{id}/plan`)
 - [x] Escape user/LLM-controlled text in the frontend (FPL team names, Gemini briefing text)
-- [ ] Estimate free transfers from the manager's history instead of asking (FPL rules: +1/GW, max 5, chips)
+- [x] Estimate free transfers from the manager's history (user can override)
 - [ ] Briefing: use the new model; chip advice (bench boost / triple captain timing)
 - [ ] Analytics: privacy-friendly event tracking for the funnel (visit → import team → sign in → briefing → upgrade)
 - [ ] Retention: email capture + deadline reminder carrying the briefing

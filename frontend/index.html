@@ -1521,10 +1521,13 @@ async function loadTransfers(id){
 
 async function loadPlan(id){
   const el=document.getElementById('plan-content');
-  const ft=document.getElementById('plan-ft')?.value||'1';
+  // First load: let the server estimate free transfers from the manager's history
+  const ftSel=document.getElementById('plan-ft');
+  const ftq=ftSel?`?free_transfers=${encodeURIComponent(ftSel.value)}`:'';
   el.innerHTML='<div class="loading" style="padding:24px"><div class="spin"></div><span>Solving your best transfers for the next 3 gameweeks…</span></div>';
   try{
-    const d=await apiFetch(`/fpl-team/${id}/plan?free_transfers=${encodeURIComponent(ft)}`);
+    const d=await apiFetch(`/fpl-team/${id}/plan${ftq}`);
+    const ft=String(d.free_transfers);
     const names={};
     [...d.transfers_in,...d.transfers_out].forEach(p=>names[p.id]=p.name);
     const row=(p,dir)=>`<div class="tplayer"><div class="tpn" style="color:var(${dir==='in'?'--green':'--red'})">${dir==='in'?'↑':'↓'} ${escHtml(p.name)}</div>
@@ -1536,7 +1539,7 @@ async function loadPlan(id){
     <div class="tcard">
       <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap">
         <div class="tcard-impr" style="font-size:15px">${escHtml(d.advice)}</div>
-        <label style="font-size:11px;color:var(--text2)">Free transfers
+        <label style="font-size:11px;color:var(--text2)">Free transfers${d.free_transfers_estimated?' (estimated)':''}
           <select id="plan-ft" onchange="loadPlan(${id})" style="margin-left:4px">${ftOpts}</select></label>
       </div>
       ${d.transfers_in.length?`<div class="tarrow" style="margin-top:10px">
