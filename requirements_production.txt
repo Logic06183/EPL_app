@@ -10,6 +10,7 @@ python-multipart==0.0.20
 scikit-learn==1.4.0
 numpy==1.26.4
 pandas==2.2.3
+scipy==1.17.1   # optimiser (MILP); also required by scikit-learn
 
 # Firebase / Firestore
 firebase-admin==6.4.0
