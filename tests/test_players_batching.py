@@ -53,3 +53,25 @@ def test_list_endpoints_predict_in_one_batch(client, path):
     r = client.get(path)
     assert r.status_code == 200, r.text
     assert _Preds.batch_calls == 1
+
+
+def test_three_gw_does_not_double_count_difficulty_with_next_gw_model(client):
+    class _NextGw(_Preds):
+        next_gw_active = True
+
+    class _HardFirstGw(_Data):
+        async def get_fixtures(self, filter_type="upcoming", gameweek=None, limit=10):
+            fx = await super().get_fixtures(filter_type, gameweek, limit)
+            return [{**f, "team_h_difficulty": 5, "team_a_difficulty": 5} if f["event"] == 9 else f for f in fx]
+
+    app.dependency_overrides[get_prediction_service] = lambda: _NextGw()
+    app.dependency_overrides[get_data_service] = lambda: _HardFirstGw()
+    picks = client.get("/api/players/three-gw?top_n=50").json()["picks"]
+    assert picks
+    for p in picks:
+        gw9, gw10 = p["fixtures"][0], p["fixtures"][1]
+        assert gw9["difficulty"] == 5
+        # The next-GW model already priced in GW9's difficulty: GW9 = model output, untouched…
+        assert gw9["predicted"] == round(p["predicted_points"], 1)
+        # …and an easier GW10 (3 vs 5) scores higher, not lower.
+        assert gw10["predicted"] >= gw9["predicted"]

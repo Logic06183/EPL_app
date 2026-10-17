@@ -3,6 +3,23 @@
 Running record of the push to make EPL_app a cleanly deployable product.
 Newest first. Each entry: what changed, why, how it was checked.
 
+## 2026-10-17 — Iteration 9: correctness backlog
+
+**Found / changed**
+- Briefing meter was read-then-write: two concurrent requests could both pass
+  the free limit. Now atomic — Firestore `Increment`, read back, roll back if
+  over the limit. Test simulates the interleaving: exactly one request served.
+- Team import's `free_transfers` was actually `event_transfers` (transfers
+  made). Renamed to `transfers_made` + `transfers_cost` (unused by the SPA).
+- 3-GW planner applied the first fixture's difficulty on top of the next-GW
+  model, which already includes it. Later GWs are now scaled relative to the
+  first. Test fails on the old code.
+- Dialogs: `role="dialog"`, `aria-modal`, labelled titles, close buttons
+  labelled; focus moves in on open, returns to the opener on close, Escape
+  closes, Tab is trapped. Browser test added.
+
+**Checked**: ruff clean; pytest 61 passed; browser tests 7/7; full-stack 23/23.
+
 ## 2026-10-17 — Iteration 8: mobile + accessibility, planning-gameweek fixes
 
 Audited every tab at 375–390 px and with axe-core (WCAG 2 A/AA) against the
@@ -264,8 +281,8 @@ unconfigured. Docker build not run locally (no daemon) — CI covers it.
 - [x] Optimiser correctness + tests; plan gating / meter tests (iteration 2).
 - [x] Transfer endpoint tests + rule fixes (iteration 4).
 - [x] FDR tests (iteration 5).
-- [ ] `free_transfers` in team import is actually `event_transfers` (transfers made) — mislabelled.
-- [ ] Briefing meter is read-then-write; make it a Firestore transaction.
+- [x] `free_transfers` mislabel (iteration 9).
+- [x] Atomic briefing meter (iteration 9).
 - [x] Next-GW model with walk-forward backtest + auto gate (iteration 5).
 - [ ] Record real-data backtest numbers; consider adding previous seasons for early-season rounds.
 - [x] Gemini cost cap + per-client rate limiting (iterations 2, 6). Per-instance only — use Cloud Armor if abuse appears.
@@ -273,4 +290,4 @@ unconfigured. Docker build not run locally (no daemon) — CI covers it.
 - [ ] Enforce CSP after report-only period; move inline onclick handlers out so `unsafe-inline` can go.
 - [x] Account deletion (iteration 4).
 - [ ] Staging environment.
-- [ ] 3-GW planner multiplies predictions by difficulty; when the next-GW model is active that double-counts fixture difficulty for the first GW.
+- [x] 3-GW difficulty double-count (iteration 9).

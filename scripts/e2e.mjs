@@ -104,6 +104,22 @@ for (const [name, handler, expected] of cases) {
   await page.context().close();
 }
 
+{
+  // Dialogs: focus moves in, Escape closes, focus returns to the opener.
+  const page = await newPage((r) => r.fulfill({ body: "{}" }));
+  await page.waitForTimeout(500);
+  await page.click("#auth-btn");
+  await page.waitForTimeout(100);
+  const inside = await page.evaluate(() => !!document.activeElement?.closest("#signin-modal"));
+  await page.keyboard.press("Escape");
+  const closed = await page.locator("#signin-modal").evaluate((el) => el.classList.contains("hidden"));
+  await page.waitForTimeout(50);
+  const back = await page.evaluate(() => document.activeElement?.id);
+  if (!inside || !closed || back !== "auth-btn") fail(`dialog keyboard: focusInside=${inside} escCloses=${closed} focusReturnedTo=${back}`);
+  else console.log("✓ dialog focus management + Escape");
+  await page.context().close();
+}
+
 await browser.close();
 server.close();
 if (failures) process.exit(1);

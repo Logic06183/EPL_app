@@ -344,9 +344,14 @@ async def get_three_gw_picks(
             fixtures    = fix_map.get(team_id, [])
             fixtures    = sorted(fixtures, key=lambda x: x["gw"])[:3]
 
+            # The next-GW model already prices in the first fixture's difficulty,
+            # so scale later GWs relative to it instead of applying it twice.
+            first_mult = diff_mult.get(fixtures[0]["difficulty"], 1.0) if fixtures else 1.0
+            norm = first_mult if getattr(prediction_service, "next_gw_active", False) else 1.0
+
             gw_scores = []
             for fx in fixtures:
-                mult  = diff_mult.get(fx["difficulty"], 1.0)
+                mult  = diff_mult.get(fx["difficulty"], 1.0) / norm
                 score = max(0, base_pred * mult)
                 gw_scores.append({
                     "gw":         fx["gw"],

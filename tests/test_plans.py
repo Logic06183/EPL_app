@@ -1,6 +1,7 @@
 """Plan gating, launch grace period, briefing meter and the Gemini cost guard."""
 
 import asyncio
+import sys
 import time
 
 import pytest
@@ -57,7 +58,21 @@ class _Doc:
         return type("Snap", (), {"exists": data is not None, "to_dict": lambda _self: dict(data or {})})()
 
     def set(self, data, merge=False):
-        self.store[self.key] = {**(self.store.get(self.key) or {}), **data} if merge else data
+        """Mimics Firestore merge semantics incl. nested Increment transforms."""
+        from google.cloud.firestore import Increment
+
+        def apply(cur, new):
+            out = dict(cur or {})
+            for k, v in new.items():
+                if isinstance(v, Increment):
+                    out[k] = (out.get(k) or 0) + v.value
+                elif isinstance(v, dict):
+                    out[k] = apply(out.get(k), v)
+                else:
+                    out[k] = v
+            return out
+
+        self.store[self.key] = apply(self.store.get(self.key) if merge else {}, data)
 
 
 class _FakeDb:
@@ -80,6 +95,29 @@ def test_meter_free_user_gets_one_per_gameweek(grace_over, fake_db):
     assert fpl_team._briefing_meter_check_and_increment(FREE, 7) == (True, 1)
     assert fpl_team._briefing_meter_check_and_increment(FREE, 7) == (False, 1)
     assert fpl_team._briefing_meter_check_and_increment(FREE, 8) == (True, 1)  # resets next GW
+
+
+def test_meter_concurrent_requests_cannot_exceed_limit(grace_over, fake_db, monkeypatch):
+    """Simulate the race: a second request increments before the first reads back."""
+    from app.api import fpl_team as ft
+
+    real_doc = _Doc
+
+    class RacingDoc(real_doc):
+        raced = False
+
+        def get(self):
+            if not RacingDoc.raced:
+                RacingDoc.raced = True
+                inner.append(ft._briefing_meter_check_and_increment(FREE, 9))  # other request lands mid-flight
+            return super().get()
+
+    inner = []
+    monkeypatch.setattr(sys.modules[__name__], "_Doc", RacingDoc)
+    outer = ft._briefing_meter_check_and_increment(FREE, 9)
+    allowed = [r[0] for r in (outer, inner[0])]
+    assert allowed.count(True) == 1                               # exactly one request served
+    assert fake_db.store["u-free"]["briefing_usage"]["9"] == 1    # and counted once
 
 
 def test_meter_anon_blocked_after_grace(grace_over, fake_db):

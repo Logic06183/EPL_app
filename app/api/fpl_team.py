@@ -100,7 +100,9 @@ async def get_fpl_team(
             "gameweek_points":  team_meta.get("summary_event_points", 0),
             "bank":             team_meta.get("last_deadline_bank", 0) / 10,
             "team_value":       team_meta.get("last_deadline_value", 0) / 10,
-            "free_transfers":   picks_data.get("entry_history", {}).get("event_transfers", 0),
+            # FPL's public API doesn't expose free transfers; these are what was used this GW.
+            "transfers_made":   picks_data.get("entry_history", {}).get("event_transfers", 0),
+            "transfers_cost":   picks_data.get("entry_history", {}).get("event_transfers_cost", 0),
             "active_chip":      picks_data.get("active_chip"),
             "picks":            enriched,
             "gameweek":         gw_id,
@@ -303,16 +305,19 @@ def _briefing_meter_check_and_increment(user: dict, gw_id: int) -> tuple[bool, i
         return (True, 0)
 
     try:
+        # Atomic: increment first, then check. Two concurrent requests can't both
+        # slip under the limit; the loser rolls its increment back.
+        from google.cloud.firestore import Increment
+
         doc_ref = db.collection("users").document(uid)
+        key = str(gw_id)
+        doc_ref.set({"briefing_usage": {key: Increment(1)}}, merge=True)
         snapshot = doc_ref.get()
-        data = snapshot.to_dict() if snapshot.exists else {}
-        usage = (data.get("briefing_usage") or {})
-        used = int(usage.get(str(gw_id), 0))
-        if used >= _FREE_BRIEFINGS_PER_GW:
-            return (False, used)
-        usage[str(gw_id)] = used + 1
-        doc_ref.set({"briefing_usage": usage}, merge=True)
-        return (True, used + 1)
+        used = int(((snapshot.to_dict() or {}).get("briefing_usage") or {}).get(key, 0))
+        if used > _FREE_BRIEFINGS_PER_GW:
+            doc_ref.set({"briefing_usage": {key: Increment(-1)}}, merge=True)
+            return (False, used - 1)
+        return (True, used)
     except Exception as e:
         logger.warning(f"Briefing meter Firestore op failed: {e} — failing open")
         return (True, 0)
