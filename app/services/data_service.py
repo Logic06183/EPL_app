@@ -169,13 +169,11 @@ class FPLDataService:
         self,
         filter_type: str = "upcoming",
         gameweek: int | None = None,
+        limit: int | None = 10,
     ) -> list[dict[str, Any]]:
-        """Get fixtures from FPL API with filtering"""
+        """Get fixtures from FPL API with filtering. limit=None returns every match."""
         try:
-            client = await self._get_client()
-            response = await client.get(f"{self.base_url}/fixtures/")
-            response.raise_for_status()
-            fixtures = response.json()
+            fixtures = await self.get_all_fixtures()
 
             filtered = []
             today = datetime.now(UTC).date()
@@ -213,17 +211,27 @@ class FPLDataService:
                     filtered,
                     key=lambda fixture: fixture.get("kickoff_time") or "",
                     reverse=True,
-                )[:10]
+                )
             elif filter_type == "upcoming":
-                filtered = sorted(filtered, key=kickoff_sort_value)[:10]
-            else:
-                filtered = filtered[:10]
+                filtered = sorted(filtered, key=kickoff_sort_value)
 
-            return filtered
+            return filtered if limit is None else filtered[:limit]
 
         except Exception as e:
             logger.error(f"Error fetching fixtures: {e}")
             return []
+
+    async def get_all_fixtures(self) -> list[dict[str, Any]]:
+        """Every fixture of the season (raw FPL shape), cached for 5 minutes."""
+        cached = self.cache.get("fixtures_all")
+        if cached is not None:
+            return cached
+        client = await self._get_client()
+        response = await client.get(f"{self.base_url}/fixtures/")
+        response.raise_for_status()
+        fixtures = response.json()
+        self.cache.set("fixtures_all", fixtures, ttl=300)
+        return fixtures
 
     async def get_gameweek_info(self) -> dict[str, Any]:
         """Get current gameweek information"""

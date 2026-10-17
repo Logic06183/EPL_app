@@ -58,7 +58,7 @@ async def get_fixture_difficulty(
         ][:gameweeks]
 
         # Fetch all fixtures (upcoming only, then filter by GW)
-        all_fixtures = await data_service.get_fixtures(filter_type="upcoming")
+        all_fixtures = await data_service.get_fixtures(filter_type="upcoming", limit=None)
 
         teams_by_id   = {t["id"]: t for t in teams_list}
         fdr: dict[int, dict] = {}

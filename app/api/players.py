@@ -196,7 +196,7 @@ async def get_captain_picks(
         gw_id  = cur_gw.get("id", 1)
 
         # Fetch upcoming fixtures to add fixture context
-        fixtures = await data_service.get_fixtures(filter_type="upcoming")
+        fixtures = await data_service.get_fixtures(filter_type="upcoming", limit=None)
         gw_fixtures = [f for f in fixtures if f.get("event") == gw_id]
         # Map team_id -> fixture difficulty + opponent
         fix_map: dict = {}
@@ -305,7 +305,7 @@ async def get_three_gw_picks(
             raise HTTPException(status_code=404, detail="No upcoming gameweeks found")
 
         # Fetch fixtures for those GWs
-        all_fixtures = await data_service.get_fixtures(filter_type="upcoming")
+        all_fixtures = await data_service.get_fixtures(filter_type="upcoming", limit=None)
         gw_fixtures  = [f for f in all_fixtures if f.get("event") in gw_ids]
 
         # Build fixture map: team_id → list of {gw, difficulty, is_home, opponent}
