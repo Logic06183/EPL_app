@@ -146,6 +146,8 @@ class XPService:
         self._prior: Optional[pd.DataFrame] = None
         self._backtest: Optional[Dict[str, Any]] = None
         self.xp: Dict[int, Dict[int, float]] = {}
+        # (team, gw) -> number of fixtures, for double/blank gameweek detection
+        self.fixture_counts: Dict[tuple, int] = {}
         self.next_gw: Optional[int] = None
         self.updated_at: Optional[datetime] = None
         self._failed_at: Optional[datetime] = None
@@ -212,6 +214,9 @@ class XPService:
                 by_gw[next_gw] = by_gw.get(next_gw, 0.0) * avail.get(el, 1.0)
             self.xp = raw
             self.next_gw = next_gw
+            counts = pd.concat([fixtures[["team_h", "gw"]].rename(columns={"team_h": "team"}),
+                                fixtures[["team_a", "gw"]].rename(columns={"team_a": "team"})]).value_counts()
+            self.fixture_counts = {(int(t), int(g)): int(n) for (t, g), n in counts.items()}
             self.updated_at = datetime.now(timezone.utc)
             self._failed_at = None
             logger.info(f"xP refreshed for GW{next_gw}: {len(raw)} players, {len(live_by_gw)} GWs of history")

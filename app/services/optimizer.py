@@ -211,3 +211,83 @@ def optimise(
         status="optimal" if res.status == 0 else "time_limit",
         per_gw_points=[round(v, 2) for v in per_gw],
     )
+
+
+# ── Chips ────────────────────────────────────────────────────────────────────
+
+CHIPS = ("wildcard", "freehit", "bboost", "3xc")
+CHIP_LABELS = {"wildcard": "Wildcard", "freehit": "Free Hit", "bboost": "Bench Boost", "3xc": "Triple Captain"}
+WILDCARD_GAIN = 15.0      # xP over the horizon a rebuild must add over the best normal plan
+BB_MIN_DOUBLES = 3        # squad players with two fixtures in the gw
+FH_MIN_BLANKS = 4         # starters with no fixture in the gw
+
+
+def chips_available(history: dict, next_gw: int) -> List[str]:
+    """
+    Chips not yet used in the current half of the season. Since 2025-26 each
+    chip can be played once in GW1-19 and once in GW20-38.
+    """
+    half = (1, 19) if next_gw <= 19 else (20, 38)
+    used = {c.get("name") for c in history.get("chips", []) if half[0] <= c.get("event", 0) <= half[1]}
+    return [c for c in CHIPS if c not in used]
+
+
+def chip_advice(
+    plan: Plan,
+    hold: Plan,
+    wildcard_points: Optional[float],
+    gws: List[int],
+    team_of: Dict[int, int],
+    fixture_counts: Dict[tuple, int],
+    xp_of: Dict[int, Sequence[float]],
+    available: List[str],
+) -> List[dict]:
+    """
+    One entry per available chip: the best gameweek in the horizon, its
+    expected gain, and whether the signal says play it now. Rules are simple
+    and stated in each reason, so users can disagree with them.
+    """
+    def n_fix(pid: int, g: int) -> int:
+        return fixture_counts.get((team_of.get(pid), gws[g]), 0)
+
+    out = []
+    for chip in available:
+        if chip == "3xc":
+            gains = [xp_of[cap][g] for g, cap in enumerate(plan.captains)]
+            g = max(range(len(gws)), key=lambda i: gains[i])
+            double = n_fix(plan.captains[g], g) >= 2
+            reason = ("Your captain has two fixtures" if double else
+                      "Save it for a captain with a double gameweek")
+        elif chip == "bboost":
+            gains = [sum(xp_of[p][g] for p in plan.squad if p not in set(plan.lineups[g])) for g in range(len(gws))]
+            g = max(range(len(gws)), key=lambda i: gains[i])
+            doubles = sum(1 for p in plan.squad if n_fix(p, g) >= 2)
+            double = doubles >= BB_MIN_DOUBLES
+            reason = (f"{doubles} of your squad have two fixtures" if double else
+                      f"Save it for a double gameweek ({BB_MIN_DOUBLES}+ of your squad with two fixtures)")
+        elif chip == "freehit":
+            blanks = [sum(1 for p in hold.lineups[0] if n_fix(p, g) == 0) for g in range(len(gws))]
+            g = max(range(len(gws)), key=lambda i: blanks[i])
+            gains = [float(b) for b in blanks]
+            double = blanks[g] >= FH_MIN_BLANKS
+            reason = (f"{blanks[g]} of your starters have no fixture" if double else
+                      f"Save it for a blank gameweek ({FH_MIN_BLANKS}+ starters without a fixture)")
+        else:  # wildcard
+            if wildcard_points is None:
+                continue
+            gain = round(wildcard_points - plan.expected_points, 1)
+            g, gains = 0, [gain] * len(gws)
+            double = gain >= WILDCARD_GAIN
+            reason = (f"A rebuild adds {gain} expected points over {len(gws)} gameweeks" if double else
+                      f"A rebuild only adds {gain} expected points over {len(gws)} gameweeks "
+                      f"(play at {WILDCARD_GAIN:g}+)")
+        out.append({
+            "chip": chip,
+            "label": CHIP_LABELS[chip],
+            "best_gameweek": gws[g],
+            "value": round(gains[g], 1),
+            "play_now": bool(double) and g == 0,
+            "play_in_horizon": bool(double),
+            "reason": reason,
+        })
+    return out

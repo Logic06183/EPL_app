@@ -119,3 +119,63 @@ def test_estimate_free_transfers():
     assert estimate_free_transfers(hist([0, 3])) == 1            # took a hit
     assert estimate_free_transfers(hist([0, 0, 9], [(3, "wildcard")])) == 3  # wildcard keeps bank
     assert estimate_free_transfers({}) == 1
+
+
+def _chip_setup(doubles=(), blanks=()):
+    from app.services.optimizer import Plan
+
+    squad = list(range(1, 16))
+    xi = squad[:11]
+    plan = Plan(squad=squad, transfers_in=[], transfers_out=[], hits=0,
+                lineups=[xi] * 3, captains=[1, 1, 1], expected_points=150.0, cost=100.0,
+                per_gw_points=[50.0] * 3)
+    team_of = {p: p for p in squad}                     # everyone on a different club
+    counts = {(p, gw): 1 for p in squad for gw in (10, 11, 12)}
+    for p, gw in doubles:
+        counts[(p, gw)] = 2
+    for p, gw in blanks:
+        counts[(p, gw)] = 0
+    xp_of = {p: [5.0, 5.0, 5.0] for p in squad}
+    for p, gw in doubles:
+        xp_of[p][gw - 10] = 10.0
+    return plan, team_of, counts, xp_of
+
+
+def test_chips_available_by_half_season():
+    from app.services.optimizer import chips_available
+
+    hist = {"chips": [{"name": "wildcard", "event": 3}, {"name": "3xc", "event": 22}]}
+    assert chips_available(hist, 10) == ["freehit", "bboost", "3xc"]
+    assert chips_available(hist, 25) == ["wildcard", "freehit", "bboost"]
+
+
+def test_triple_captain_only_on_a_double():
+    from app.services.optimizer import chip_advice
+
+    plan, team_of, counts, xp_of = _chip_setup()
+    tc = chip_advice(plan, plan, None, [10, 11, 12], team_of, counts, xp_of, ["3xc"])[0]
+    assert not tc["play_in_horizon"]
+
+    plan, team_of, counts, xp_of = _chip_setup(doubles=[(1, 11)])
+    tc = chip_advice(plan, plan, None, [10, 11, 12], team_of, counts, xp_of, ["3xc"])[0]
+    assert tc["play_in_horizon"] and tc["best_gameweek"] == 11 and not tc["play_now"]
+
+
+def test_bench_boost_and_free_hit_signals():
+    from app.services.optimizer import chip_advice
+
+    plan, team_of, counts, xp_of = _chip_setup(doubles=[(12, 10), (13, 10), (14, 10)],
+                                               blanks=[(p, 12) for p in range(1, 6)])
+    tips = {t["chip"]: t for t in chip_advice(plan, plan, None, [10, 11, 12], team_of, counts, xp_of,
+                                              ["bboost", "freehit"])}
+    assert tips["bboost"]["play_now"] and tips["bboost"]["best_gameweek"] == 10
+    assert tips["freehit"]["play_in_horizon"] and tips["freehit"]["best_gameweek"] == 12
+
+
+def test_wildcard_needs_a_big_gain():
+    from app.services.optimizer import chip_advice
+
+    plan, team_of, counts, xp_of = _chip_setup()
+    small = chip_advice(plan, plan, 160.0, [10, 11, 12], team_of, counts, xp_of, ["wildcard"])[0]
+    big = chip_advice(plan, plan, 170.0, [10, 11, 12], team_of, counts, xp_of, ["wildcard"])[0]
+    assert not small["play_now"] and big["play_now"]

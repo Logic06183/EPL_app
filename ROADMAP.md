@@ -28,7 +28,8 @@ personal weekly briefing for *your* team.
 - [x] Optimiser: integer programme for squad + XI + captain over 3 GWs; transfer planner with -4 hits vs hold (`app/services/optimizer.py`, `/api/fpl-team/{id}/plan`)
 - [x] Escape user/LLM-controlled text in the frontend (FPL team names, Gemini briefing text)
 - [x] Estimate free transfers from the manager's history (user can override)
-- [ ] Briefing: use the new model; chip advice (bench boost / triple captain timing)
+- [x] Briefing uses the new model (via PredictionService)
+- [x] Chip advice in `/plan`: TC on captain doubles, BB on 3+ squad doubles, FH on 4+ blank starters, WC when a rebuild adds 15+ xP; only chips left this half-season
 - [x] Analytics: anonymous daily event counts for the funnel; `/api/admin/funnel` (needs `ADMIN_EMAILS`)
 - [ ] Retention: email capture + deadline reminder carrying the briefing — needs an email provider account (Resend/Postmark) from Craig
 - [x] Pricing review → `docs/pricing.md` (recommendation only; Craig decides)
@@ -50,3 +51,4 @@ personal weekly briefing for *your* team.
 - 2026-10-17 — expected-points model + walk-forward backtest (`cfe03e1`): rank corr 0.40/0.36 vs 0.31/0.25 for season average
 - 2026-10-17 — live track record (snapshot before deadline, score after) + Track record page; frontend plan-gating fix (`49800af`)
 - 2026-10-17 — optimiser + transfer planner; XSS escaping
+- 2026-10-17 — chip advice (`/plan` + Transfer plan card)

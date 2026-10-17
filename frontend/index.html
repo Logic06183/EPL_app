@@ -1562,6 +1562,13 @@ async function loadPlan(id){
       <div style="font-size:11px;color:var(--text2);margin-top:10px;font-family:'DM Mono',monospace">
         Expected: ${d.expected_points.with_transfers.toFixed(1)} vs ${d.expected_points.hold.toFixed(1)} if you hold
         · Captain: ${d.per_gameweek.map((g,i)=>`GW${(d.gameweek||0)+i} ${escHtml(names[g.captain]||capName(g.captain))}`).join(', ')}</div>
+      ${(d.chips||[]).length?`<div style="margin-top:12px;border-top:1px solid var(--b1);padding-top:10px">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:6px;letter-spacing:.5px">CHIPS</div>
+        ${d.chips.map(c=>`<div style="display:flex;gap:8px;align-items:baseline;font-size:12px;margin-bottom:4px">
+          <span style="min-width:110px;font-weight:700">${escHtml(c.label)}</span>
+          <span style="min-width:70px;font-family:'DM Mono',monospace;color:var(${c.play_now?'--green':c.play_in_horizon?'--gold':'--text3'})">${c.play_now?'PLAY NOW':c.play_in_horizon?'GW'+c.best_gameweek:'SAVE'}</span>
+          <span style="color:var(--text2)">${escHtml(c.reason)}</span></div>`).join('')}
+      </div>`:''}
       <div style="font-size:10px;color:var(--text3);margin-top:6px">${escHtml(d.assumptions)}</div>
     </div>`;
   }catch(e){

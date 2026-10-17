@@ -12,7 +12,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..services.data_service import FPLDataService, get_data_service
-from ..services.optimizer import candidates_from_elements, estimate_free_transfers, optimise
+from ..services.optimizer import (
+    candidates_from_elements, chip_advice, chips_available, estimate_free_transfers, optimise,
+)
 from ..services.prediction_service import PredictionService, get_prediction_service
 from ..services import gemini_service
 from ..utils.cache import get_cache_manager
@@ -243,16 +245,18 @@ async def plan_transfers(
         teams_map = {t["id"]: t for t in bootstrap.get("teams", [])}
         await prediction_service.ensure_ready(data_service)
 
+        history = None
+        try:
+            client = await data_service._get_client()
+            resp = await client.get(f"https://fantasy.premierleague.com/api/entry/{team_id}/history/")
+            resp.raise_for_status()
+            history = resp.json()
+        except Exception as e:
+            logger.warning(f"History fetch failed for {team_id}: {e}")
+
         estimated = free_transfers is None
         if estimated:
-            free_transfers = 1
-            try:
-                client = await data_service._get_client()
-                resp = await client.get(f"https://fantasy.premierleague.com/api/entry/{team_id}/history/")
-                resp.raise_for_status()
-                free_transfers = estimate_free_transfers(resp.json())
-            except Exception as e:
-                logger.warning(f"Free transfer estimate failed for {team_id}: {e}")
+            free_transfers = estimate_free_transfers(history) if history else 1
 
         current = [p["id"] for p in team_data["picks"]]
         # Current players valued at today's price (selling prices aren't public)
@@ -263,9 +267,23 @@ async def plan_transfers(
         if missing:
             raise HTTPException(status_code=422, detail="Squad contains players no longer in the game")
 
-        best, hold = await asyncio.gather(
+        next_gw = prediction_service.xp.next_gw
+        chips = chips_available(history or {}, next_gw) if (history and next_gw) else []
+        best, hold, wildcard = await asyncio.gather(
             asyncio.to_thread(optimise, cands, budget, current, free_transfers, max_transfers),
             asyncio.to_thread(optimise, cands, budget, current, free_transfers, 0),
+            # Wildcard: unlimited free transfers
+            asyncio.to_thread(optimise, cands, budget, current, 15, 15)
+            if "wildcard" in chips else asyncio.sleep(0, result=None),
+        )
+        horizon = len(best.lineups)
+        chip_tips = chip_advice(
+            best, hold, wildcard.expected_points if wildcard else None,
+            [next_gw + i for i in range(horizon)] if next_gw else list(range(1, horizon + 1)),
+            {e["id"]: e["team"] for e in elements},
+            prediction_service.xp.fixture_counts,
+            {c.id: list(c.xp) for c in cands},
+            chips,
         )
 
         def player(pid: int) -> dict:
@@ -294,6 +312,7 @@ async def plan_transfers(
             "advice":         advice,
             "free_transfers": free_transfers,
             "free_transfers_estimated": estimated,
+            "chips": chip_tips,
             "gain":           gain,
             "hits":           best.hits,
             "transfers_out":  [player(p) for p in best.transfers_out],
