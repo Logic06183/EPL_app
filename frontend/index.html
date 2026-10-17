@@ -538,6 +538,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:900;display:flex;
   align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(8px);}
 .modal-bg.hidden{display:none;}
+#delete-account-wrap.hidden{display:none;}
 .modal{background:var(--bg2);border:1px solid var(--b2);border-radius:16px;
   padding:28px 24px;max-width:380px;width:100%;position:relative;box-shadow:var(--sh);}
 .modal-close{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--text3);
@@ -855,6 +856,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 
   <footer style="text-align:center;font-size:11px;color:var(--text3);padding:24px 16px 96px">
     <a href="/privacy" style="color:var(--text2)">Privacy</a> · <a href="/terms" style="color:var(--text2)">Terms</a> · Not affiliated with the Premier League
+    <span id="delete-account-wrap" class="hidden"> · <a href="#" onclick="deleteAccount();return false" style="color:var(--text2)">Delete account</a></span>
   </footer>
 </main>
 
@@ -931,7 +933,20 @@ if(FB_READY){
   applyPlanUI();
 }
 
+async function deleteAccount(){
+  if(!currentUser) return;
+  if(!confirm('Delete your FPL AI Pro account? Any Pro subscription is cancelled and your data is removed. This cannot be undone.')) return;
+  try{
+    await apiFetch('/users/me',{method:'DELETE'});
+    await firebase.auth().signOut().catch(()=>{});
+    toast('Account deleted','success');
+  }catch(e){
+    toast('Could not delete account: '+e.message,'error');
+  }
+}
+
 function updateAuthUI(user, plan){
+  document.getElementById('delete-account-wrap')?.classList.toggle('hidden', !user);
   const btn   = document.getElementById('auth-btn');
   const badge = document.getElementById('plan-badge');
   if(user){

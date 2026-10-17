@@ -4,7 +4,7 @@ Users API — plan info, account management.
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth.firebase_auth import (
     _LAUNCH_FREE_UNTIL_RAW,
@@ -57,3 +57,39 @@ async def get_me(user: dict = Depends(get_current_user)):
         "subscription":  subscription,
         "grace":         grace_info,
     }
+
+
+@router.delete("/me")
+async def delete_me(user: dict = Depends(get_current_user)):
+    """
+    Delete the signed-in user's account (POPIA / GDPR erasure).
+
+    Cancels any live PayFast subscription first so they aren't billed again,
+    then removes the Firestore record and the Firebase Auth user. PayFast keeps
+    its own payment records.
+    """
+    if not user["uid"]:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    db = get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    doc_ref = db.collection("users").document(user["uid"])
+    doc = doc_ref.get()
+    data = doc.to_dict() if doc.exists else {}
+
+    if data.get("payfast_token") and not data.get("subscription_cancelled"):
+        from .payments import cancel_payfast_subscription
+        await cancel_payfast_subscription(data["payfast_token"])
+
+    doc_ref.delete()
+    try:
+        from firebase_admin import auth as fb_auth
+        fb_auth.delete_user(user["uid"])
+    except Exception as e:
+        # Firestore data is already gone; a lingering auth record holds only the email.
+        logger.error(f"Firebase Auth delete failed for uid={user['uid']}: {e}")
+
+    logger.info(f"Deleted account uid={user['uid']}")
+    return {"deleted": True}

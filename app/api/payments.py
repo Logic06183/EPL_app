@@ -280,6 +280,25 @@ async def handle_itn(request: Request):
         raise HTTPException(status_code=500, detail="ITN processing failed")
 
 
+async def cancel_payfast_subscription(token: str) -> None:
+    """Cancel a PayFast recurring subscription. Raises HTTPException(502) on failure."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.put(
+                f"{PAYFAST_API}/subscriptions/{token}/cancel",
+                headers=_payfast_api_headers(),
+            )
+    except httpx.HTTPError as e:
+        logger.error(f"PayFast cancel error: {e}")
+        raise HTTPException(status_code=502, detail="Could not reach PayFast to cancel")
+    if resp.status_code not in (200, 204):
+        logger.error(f"PayFast cancel API returned {resp.status_code}: {resp.text}")
+        raise HTTPException(
+            status_code=502,
+            detail="PayFast could not cancel subscription. Please try again or contact support."
+        )
+
+
 @router.post("/cancel")
 async def cancel_subscription(user: dict = Depends(get_current_user)):
     """
@@ -306,26 +325,8 @@ async def cancel_subscription(user: dict = Depends(get_current_user)):
             detail="No active subscription found. Contact support if you believe this is an error."
         )
 
-    # Call PayFast API to cancel recurring subscription
-    try:
-        headers = _payfast_api_headers()
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.put(
-                f"{PAYFAST_API}/subscriptions/{token}/cancel",
-                headers=headers,
-            )
-        if resp.status_code not in (200, 204):
-            logger.error(f"PayFast cancel API returned {resp.status_code}: {resp.text}")
-            raise HTTPException(
-                status_code=502,
-                detail="PayFast could not cancel subscription. Please try again or contact support."
-            )
-        logger.info(f"PayFast subscription {token} cancelled for {user['email']}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"PayFast cancel error: {e}")
-        raise HTTPException(status_code=502, detail="Could not reach PayFast to cancel")
+    await cancel_payfast_subscription(token)
+    logger.info(f"PayFast subscription cancelled for uid={user['uid']}")
 
     # Mark as cancelled in Firestore — keep plan active until expiry
     db.collection("users").document(user["uid"]).update({
