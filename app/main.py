@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .utils.logging import setup_logging, get_logger
 from .utils.cache import get_cache_manager
-from .api import players, predictions, teams, payments, fpl_team, users
+from .api import events, players, predictions, teams, payments, fpl_team, users
 
 # Setup logging
 setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
@@ -194,6 +194,18 @@ app.include_router(
     users.router,
     prefix=f"{settings.API_PREFIX}/users",
     tags=["Users"],
+)
+
+app.include_router(
+    events.router,
+    prefix=f"{settings.API_PREFIX}/events",
+    tags=["Analytics"],
+)
+
+app.include_router(
+    events.admin_router,
+    prefix=f"{settings.API_PREFIX}/admin",
+    tags=["Admin"],
 )
 
 

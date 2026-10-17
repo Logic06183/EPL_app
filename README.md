@@ -48,6 +48,22 @@ ruff check . && pytest
   `PAYFAST_SANDBOX=true` to test with sandbox credentials first.
 - PayFast notifies `https://epl-prediction-app.web.app/api/payments/webhook`.
 
+## Analytics
+
+The frontend posts anonymous event names (visit, team import, briefing view,
+sign-in, paywall view, upgrade click, checkout start/return, …) to
+`/api/events`; the backend keeps daily counts in Firestore `analytics_daily`.
+No ids, cookies or IPs are stored. Set `ADMIN_EMAILS` on the service and
+call `/api/admin/funnel?days=30` signed in as that account to see the funnel.
+
+## Prediction track record
+
+`/api/models/track-record` (and the Track record tab) shows the walk-forward
+backtest from `ml/train.py` plus this season's gameweeks: predictions are
+saved to `xp_snapshots` before each deadline and scored into `xp_results`
+after. Retrain each summer: `python -m ml.train --data <dir> --download`
+after adding the finished season to `SEASONS`.
+
 ## Roadmap
 
 See `ROADMAP.md`.

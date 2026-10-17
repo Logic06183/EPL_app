@@ -29,7 +29,7 @@ personal weekly briefing for *your* team.
 - [x] Escape user/LLM-controlled text in the frontend (FPL team names, Gemini briefing text)
 - [x] Estimate free transfers from the manager's history (user can override)
 - [ ] Briefing: use the new model; chip advice (bench boost / triple captain timing)
-- [ ] Analytics: privacy-friendly event tracking for the funnel (visit → import team → sign in → briefing → upgrade)
+- [x] Analytics: anonymous daily event counts for the funnel; `/api/admin/funnel` (needs `ADMIN_EMAILS`)
 - [ ] Retention: email capture + deadline reminder carrying the briefing
 - [ ] Pricing review (R199/month is high vs competitors; consider a cheaper season pass)
 
@@ -40,6 +40,7 @@ personal weekly briefing for *your* team.
 - Merge `claude/loving-allen-fd1rpb` → `main` to deploy
 - Delete the retired Cloud Run services `epl-api` and `epl-backend-sa` if they still exist
 - Archive the old `EPL_Fantasy_Optimizer` repo
+- Set `ADMIN_EMAILS` on `epl-backend` to read the funnel
 
 ## Log
 

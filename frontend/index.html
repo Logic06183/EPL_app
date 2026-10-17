@@ -987,23 +987,24 @@ function signInGoogle(){
   if(!FB_READY){ toast('Firebase not configured yet','error'); return; }
   const provider = new firebase.auth.GoogleAuthProvider();
   firebase.auth().signInWithPopup(provider)
-    .then(()=>{ closeModal('signin-modal'); toast('Signed in!','success'); })
+    .then(()=>{ closeModal('signin-modal'); toast('Signed in!','success'); track('sign_in'); })
     .catch(e=>{ toast('Sign-in failed: '+e.message,'error'); });
 }
 
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
 
 function goUpgrade(){
+  track('upgrade_click');
   closeModal('upgrade-modal');
   if(!currentUser){ document.getElementById('signin-modal').classList.remove('hidden'); return; }
   apiFetch('/payments/initialize',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({plan_id:'pro',email:currentUser.email||'',return_url:window.location.origin+'/?upgraded=1'})})
-    .then(d=>{ if(d.authorization_url) window.location.href=d.authorization_url; })
+    .then(d=>{ if(d.authorization_url){ track('checkout_start'); window.location.href=d.authorization_url; } })
     .catch(()=>toast('Could not start checkout — check PayFast config','error'));
 }
 
 // Show upgrade modal (called by locked features)
-function showUpgrade(){ document.getElementById('upgrade-modal').classList.remove('hidden'); }
+function showUpgrade(){ track('paywall_view'); document.getElementById('upgrade-modal').classList.remove('hidden'); }
 
 // ── Subscription management ───────────────────────────
 function handleBadgeClick(){
@@ -1075,6 +1076,15 @@ function toast(msg,type='info',ms=3200){
   el.innerHTML=`<span>${{error:'⚠',success:'✓',info:'ℹ'}[type]||''}</span><span>${msg}</span>`;
   document.getElementById('toasts').appendChild(el);
   setTimeout(()=>{el.style.transition='opacity .3s';el.style.opacity='0';setTimeout(()=>el.remove(),320);},ms);
+}
+
+// ── Analytics: anonymous event counts, no ids or cookies (see app/api/events.py) ──
+function track(name){
+  try{
+    const body=JSON.stringify({name});
+    if(navigator.sendBeacon) navigator.sendBeacon(API+'/events', new Blob([body],{type:'application/json'}));
+    else fetch(API+'/events',{method:'POST',headers:{'Content-Type':'application/json'},body,keepalive:true});
+  }catch{}
 }
 
 // ── Fetch helper (auth-aware) ─────────────────────────
@@ -1312,6 +1322,7 @@ function sharePreds(){
   const top5=predData.slice(0,5);
   if(!top5.length){toast('Load predictions first','error');return;}
   const text=`🏆 FPL AI Top Picks\n\n${top5.map((p,i)=>`${i+1}. ${p.name} (${p.team_name}) — ${(p.predicted_points||0).toFixed(1)} pts predicted`).join('\n')}\n\nfpl-prediction-app.web.app`;
+  track('share');
   if(navigator.share){navigator.share({title:'FPL AI Predictions',text}).catch(()=>{});}
   else{navigator.clipboard.writeText(text).then(()=>toast('Copied to clipboard ✓','success'));}
 }
@@ -1329,6 +1340,8 @@ async function loadTeam(){
       apiFetch(`/fpl-team/${id}/briefing`).catch(()=>null),
     ]);
     renderTeam(team,id,briefing);
+    track('team_import');
+    if(briefing) track(briefing.paywall?'paywall_view':'briefing_view');
   }catch(e){
     document.getElementById('team-content').innerHTML=`<div class="err">⚠ ${e.message}. Check team ID is correct.</div>`;
     toast('Team not found','error');
@@ -1527,6 +1540,7 @@ async function loadPlan(id){
   el.innerHTML='<div class="loading" style="padding:24px"><div class="spin"></div><span>Solving your best transfers for the next 3 gameweeks…</span></div>';
   try{
     const d=await apiFetch(`/fpl-team/${id}/plan${ftq}`);
+    track('plan_view');
     const ft=String(d.free_transfers);
     const names={};
     [...d.transfers_in,...d.transfers_out].forEach(p=>names[p.id]=p.name);
@@ -1596,7 +1610,7 @@ async function optimizeSquad(){
   document.getElementById('squad-content').innerHTML='<div class="loading"><div class="spin"></div><span>Building optimal squad…</span></div>';
   try{
     const d=await apiFetch('/teams/optimize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({budget})});
-    renderSquad(d);toast('Squad optimized!','success');
+    renderSquad(d);toast('Squad optimized!','success');track('optimise');
   }catch(e){
     document.getElementById('squad-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
     toast('Optimization failed','error');
@@ -1884,6 +1898,7 @@ function trTable(m,b){
     <tbody>${trRows(m,b)}</tbody></table></div>`;
 }
 async function loadRecord(){
+  track('track_record_view');
   const el=document.getElementById('record-content');
   try{
     const d=await apiFetch('/models/track-record');
@@ -2118,11 +2133,14 @@ function shareCaptain(){
   const name=first.querySelector('.cap-name')?.textContent||'my captain';
   const pts=first.querySelector('.cap-pts')?.textContent?.trim()||'';
   const text=`🏆 My FPL captain pick this week: ${name} (${pts}) — via FPL AI Pro https://epl-prediction-app.web.app`;
+  track('share');
   if(navigator.share){ navigator.share({text}); }
   else{ navigator.clipboard.writeText(text).then(()=>toast('Captain pick copied!','success')); }
 }
 
 // ── Init ──────────────────────────────────────────────
+track('visit');
+if(new URLSearchParams(location.search).get('upgraded')==='1') track('checkout_return');
 checkStatus();
 loadPred();
 // Captain only auto-loads once we know the user's plan (see onAuthStateChanged)
