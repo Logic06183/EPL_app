@@ -3,9 +3,7 @@ Users API — plan info, account management.
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from ..auth.firebase_auth import (
     get_current_user, get_db, PLANS, _in_grace_period, _LAUNCH_FREE_UNTIL_RAW,
@@ -54,31 +52,3 @@ async def get_me(user: dict = Depends(get_current_user)):
         "subscription":  subscription,
         "grace":         grace_info,
     }
-
-
-@router.post("/upgrade-manual")
-async def manual_upgrade(
-    payload: dict,
-    user: dict = Depends(get_current_user),
-):
-    """
-    Internal endpoint — called by PayStack webhook after verifying payment.
-    Can also be called manually for testing.
-    """
-    if not user["uid"]:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    db = get_db()
-    if db is None:
-        raise HTTPException(status_code=503, detail="Database not available")
-
-    plan = payload.get("plan", "pro")
-    expires = datetime.now(timezone.utc) + timedelta(days=30)
-
-    db.collection("users").document(user["uid"]).update({
-        "plan":             plan,
-        "plan_expires_at":  expires.isoformat(),
-        "updated_at":       datetime.now(timezone.utc).isoformat(),
-    })
-
-    return {"success": True, "plan": plan, "expires": expires.isoformat()}

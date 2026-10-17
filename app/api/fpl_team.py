@@ -267,14 +267,17 @@ def _has_unlimited_briefings(user: dict) -> bool:
     return get_effective_plan(user) in ("pro", "founder")
 
 
-def _briefing_meter_check_and_increment(user: dict, gw_id: int) -> tuple[bool, int]:
+def _briefing_meter_check_and_increment(
+    user: dict, gw_id: int, team_id: int
+) -> tuple[bool, int]:
     """
     Returns (allowed, used_count) for this user/gameweek.
 
     Anonymous users post-grace: not allowed (must sign in to use the meter).
-    Signed-in free users post-grace: allowed up to _FREE_BRIEFINGS_PER_GW per GW.
-    Increments the counter on success — cache hits in the parent endpoint should
-    bypass this entirely so they don't burn the meter.
+    Signed-in free users post-grace: up to _FREE_BRIEFINGS_PER_GW distinct
+    teams per GW. Re-opening a team already briefed this GW is free, so the
+    meter counts teams rather than page loads. Runs in a Firestore transaction
+    so parallel requests can't both slip under the limit.
     """
     if _has_unlimited_briefings(user):
         return (True, 0)
@@ -291,16 +294,25 @@ def _briefing_meter_check_and_increment(user: dict, gw_id: int) -> tuple[bool, i
         return (True, 0)
 
     try:
+        from firebase_admin import firestore
+
         doc_ref = db.collection("users").document(uid)
-        snapshot = doc_ref.get()
-        data = snapshot.to_dict() if snapshot.exists else {}
-        usage = (data.get("briefing_usage") or {})
-        used = int(usage.get(str(gw_id), 0))
-        if used >= _FREE_BRIEFINGS_PER_GW:
-            return (False, used)
-        usage[str(gw_id)] = used + 1
-        doc_ref.set({"briefing_usage": usage}, merge=True)
-        return (True, used + 1)
+
+        @firestore.transactional
+        def _txn(transaction) -> tuple[bool, int]:
+            snapshot = doc_ref.get(transaction=transaction)
+            data = snapshot.to_dict() if snapshot.exists else {}
+            teams_by_gw = data.get("briefing_teams") or {}
+            teams = [int(t) for t in teams_by_gw.get(str(gw_id), [])]
+            if team_id in teams:
+                return (True, len(teams))
+            if len(teams) >= _FREE_BRIEFINGS_PER_GW:
+                return (False, len(teams))
+            teams_by_gw[str(gw_id)] = teams + [team_id]
+            transaction.set(doc_ref, {"briefing_teams": teams_by_gw}, merge=True)
+            return (True, len(teams) + 1)
+
+        return _txn(db.transaction())
     except Exception as e:
         logger.warning(f"Briefing meter Firestore op failed: {e} — failing open")
         return (True, 0)
@@ -356,14 +368,11 @@ async def get_team_briefing(
         raise HTTPException(status_code=404, detail="Team not found")
 
     gw_id = team_data["gameweek"]
-    cache_key = f"briefing:{team_id}:{gw_id}"
-    cached = cache.get(cache_key)
-    if cached is not None:
-        # Cache hits are free — they don't consume the user's briefing meter.
-        return cached
 
-    # Meter check (post-grace only) — gate fresh fetches behind the free limit
-    allowed, used = _briefing_meter_check_and_increment(user, gw_id)
+    # Meter check (post-grace only) runs before the cache: the cache is shared
+    # across users, so a hit must not let a free user read someone else's
+    # briefing for nothing.
+    allowed, used = _briefing_meter_check_and_increment(user, gw_id, team_id)
     if not allowed:
         # Return a 200 with a paywall payload so the frontend renders an
         # upgrade card cleanly, not a generic error.
@@ -384,6 +393,11 @@ async def get_team_briefing(
             "upgrade_url": "/api/payments/initialize",
             "upgrade_plan_id": "pro",
         }
+
+    cache_key = f"briefing:{team_id}:{gw_id}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     picks = team_data["picks"]
 

@@ -20,7 +20,14 @@ class Settings:
     CACHE_TTL: int = int(os.getenv("CACHE_TTL", "300"))
     CACHE_MAX_SIZE: int = int(os.getenv("CACHE_MAX_SIZE", "1000"))
 
-    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "*").split(",")
+    # The web app calls /api on its own origin (Firebase Hosting rewrite), so
+    # CORS only matters for local dev and the Capacitor app.
+    CORS_ORIGINS: List[str] = os.getenv(
+        "CORS_ORIGINS",
+        "https://epl-prediction-app.web.app,https://epl-prediction-app.firebaseapp.com,"
+        "capacitor://localhost,https://localhost,http://localhost,"
+        "http://localhost:8001,http://localhost:3000",
+    ).split(",")
     API_PREFIX: str = os.getenv("API_PREFIX", "/api")
 
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
