@@ -5,16 +5,18 @@ Subscriptions auto-renew monthly via PayFast recurring billing.
 """
 
 import hashlib
+import hmac
 import logging
 import os
-from datetime import UTC, datetime
-from urllib.parse import quote_plus, urlencode
+from datetime import UTC, datetime, timedelta
+from urllib.parse import quote_plus, urlencode, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from ..auth.firebase_auth import get_current_user, get_db
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -24,6 +26,9 @@ PAYFAST_MERCHANT_ID  = os.getenv("PAYFAST_MERCHANT_ID",  "")
 PAYFAST_MERCHANT_KEY = os.getenv("PAYFAST_MERCHANT_KEY", "")
 PAYFAST_PASSPHRASE   = os.getenv("PAYFAST_PASSPHRASE",   "")
 PAYFAST_SANDBOX      = os.getenv("PAYFAST_SANDBOX", "false").lower() == "true"
+PAYFAST_NOTIFY_URL   = os.getenv("PAYFAST_NOTIFY_URL", f"{settings.PUBLIC_BASE_URL}/api/payments/webhook")
+# Server-to-server confirmation of each ITN with PayFast. Only disable in tests.
+PAYFAST_VALIDATE_ITN = os.getenv("PAYFAST_VALIDATE_ITN", "true").lower() == "true"
 
 PAYFAST_HOST = (
     "https://sandbox.payfast.co.za" if PAYFAST_SANDBOX
@@ -99,19 +104,51 @@ def _payfast_api_headers() -> dict[str, str]:
 
 
 def _verify_itn(data: dict[str, str]) -> bool:
-    """Verify a PayFast ITN payload signature."""
+    """Verify a PayFast ITN payload signature (fields in the order received)."""
     received_sig = data.get("signature", "")
     params = {k: v for k, v in data.items() if k != "signature"}
     expected = _payfast_signature(params, PAYFAST_PASSPHRASE)
-    return received_sig == expected
+    return hmac.compare_digest(received_sig, expected)
+
+
+async def _confirm_itn_with_payfast(data: dict[str, str]) -> bool:
+    """Ask PayFast to confirm the ITN really came from them (step 4 of their ITN checks)."""
+    param_string = urlencode([(k, v) for k, v in data.items() if k != "signature"])
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{PAYFAST_HOST}/eng/query/validate",
+                content=param_string,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+        return resp.status_code == 200 and resp.text.strip() == "VALID"
+    except httpx.HTTPError as e:
+        logger.error(f"PayFast ITN validation request failed: {e}")
+        return False
+
+
+def _amount_matches(data: dict[str, str], plan_id: str) -> bool:
+    try:
+        return abs(float(data.get("amount_gross", "0")) - float(PLANS[plan_id]["amount"])) < 0.01
+    except (KeyError, ValueError):
+        return False
+
+
+def _is_allowed_return_url(url: str) -> bool:
+    """Only redirect back to our own origins after checkout (no open redirect)."""
+    parsed = urlparse(url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    return parsed.scheme in ("http", "https", "capacitor") and (
+        origin == settings.PUBLIC_BASE_URL or origin in settings.CORS_ORIGINS
+    )
 
 
 # ── Models ─────────────────────────────────────────────────────────────────────
 
 class PaymentInitRequest(BaseModel):
     plan_id:    str
-    email:      str
     return_url: str
+    email:      str | None = None  # ignored — the signed-in user's email is used
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
@@ -123,15 +160,21 @@ async def get_plans():
 
 
 @router.post("/initialize")
-async def initialize_payment(request: PaymentInitRequest):
+async def initialize_payment(request: PaymentInitRequest, user: dict = Depends(get_current_user)):
     """
-    Build a PayFast recurring-subscription payment URL.
+    Build a PayFast recurring-subscription payment URL for the signed-in user.
     Returns { authorization_url, reference }.
     PayFast will auto-renew monthly and POST ITN on each renewal.
     """
+    if not user.get("uid"):
+        raise HTTPException(status_code=401, detail="Sign in before upgrading")
+
     plan = PLANS.get(request.plan_id)
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
+
+    if not _is_allowed_return_url(request.return_url):
+        raise HTTPException(status_code=400, detail="return_url must point back to this app")
 
     if not PAYFAST_MERCHANT_ID or not PAYFAST_MERCHANT_KEY:
         raise HTTPException(status_code=503, detail="Payment service not configured")
@@ -144,11 +187,8 @@ async def initialize_payment(request: PaymentInitRequest):
         "merchant_key":      PAYFAST_MERCHANT_KEY,
         "return_url":        request.return_url,
         "cancel_url":        request.return_url + ("&" if "?" in request.return_url else "?") + "cancelled=1",
-        "notify_url":        os.getenv(
-            "PAYFAST_NOTIFY_URL",
-            "https://epl-api-77913915885.us-central1.run.app/api/payments/webhook"
-        ),
-        "email_address":     request.email,
+        "notify_url":        PAYFAST_NOTIFY_URL,
+        "email_address":     user.get("email") or "",
         "amount":            plan["amount"],
         "item_name":         plan["name"],
         # Recurring subscription — monthly, indefinite
@@ -159,11 +199,11 @@ async def initialize_payment(request: PaymentInitRequest):
         "cycles":            "0",         # 0 = unlimited
         # Pass plan and email to webhook so it can upgrade the user
         "custom_str1":       request.plan_id,
-        "custom_str2":       request.email,
+        "custom_str2":       user.get("email") or "",
+        "custom_str3":       user["uid"],
     }
 
     sig = _payfast_signature(params, PAYFAST_PASSPHRASE)
-    logger.info(f"PayFast payment sig: {sig}")
 
     # Only include the signature in the redirect URL if PayFast's
     # "Enable require signature" is turned ON in merchant settings.
@@ -186,30 +226,50 @@ async def handle_itn(request: Request):
     """
     Handle PayFast ITN (Instant Transaction Notification).
     Fires on initial payment AND on each monthly renewal.
+
+    Follows PayFast's ITN security checks: signature (with passphrase),
+    merchant id, amount, and a server-side confirmation with PayFast.
     """
+    if not PAYFAST_PASSPHRASE or not PAYFAST_MERCHANT_ID:
+        # Without a passphrase anyone could forge an ITN and grant themselves Pro.
+        logger.error("PayFast ITN received but PAYFAST_PASSPHRASE / MERCHANT_ID not configured")
+        raise HTTPException(status_code=503, detail="Payment service not configured")
+
     try:
         form = await request.form()
-        data = dict(form)
+        data = {k: str(v) for k, v in form.items()}
 
         logger.info(
-            f"PayFast ITN: status={data.get('payment_status')} "
-            f"token={data.get('token','')} ref={data.get('pf_payment_id','')}"
+            f"PayFast ITN: status={data.get('payment_status')} ref={data.get('pf_payment_id','')}"
         )
 
-        if PAYFAST_PASSPHRASE and not _verify_itn(data):
-            logger.warning("PayFast ITN signature mismatch — ignoring")
+        if not _verify_itn(data):
+            logger.warning("PayFast ITN signature mismatch — rejecting")
             raise HTTPException(status_code=400, detail="Invalid ITN signature")
+
+        if data.get("merchant_id") != PAYFAST_MERCHANT_ID:
+            logger.warning("PayFast ITN merchant_id mismatch — rejecting")
+            raise HTTPException(status_code=400, detail="Invalid merchant")
 
         if data.get("payment_status") != "COMPLETE":
             return {"status": "ignored", "reason": data.get("payment_status")}
 
-        email   = data.get("custom_str2") or data.get("email_address", "")
         plan_id = data.get("custom_str1", "pro")
+        if plan_id not in PLANS or not _amount_matches(data, plan_id):
+            logger.warning(f"PayFast ITN amount/plan mismatch: plan={plan_id} amount={data.get('amount_gross')}")
+            raise HTTPException(status_code=400, detail="Amount mismatch")
+
+        if PAYFAST_VALIDATE_ITN and not await _confirm_itn_with_payfast(data):
+            logger.warning("PayFast did not confirm ITN — rejecting")
+            raise HTTPException(status_code=400, detail="ITN not confirmed by PayFast")
+
+        uid     = data.get("custom_str3", "")
+        email   = data.get("custom_str2") or data.get("email_address", "")
         ref     = data.get("pf_payment_id", "")
         token   = data.get("token", "")   # subscription token for future cancellation
 
-        if email:
-            await _upgrade_user_by_email(email, plan_id, ref, token)
+        if uid or email:
+            await _upgrade_user(uid=uid, email=email, plan=plan_id, reference=ref, token=token)
 
         return {"status": "ok"}
 
@@ -284,39 +344,36 @@ async def cancel_subscription(user: dict = Depends(get_current_user)):
 
 # ── Firestore upgrade helper ───────────────────────────────────────────────────
 
-async def _upgrade_user_by_email(email: str, plan: str, reference: str, token: str = ""):
-    """Look up Firebase user by email and set their plan + subscription token in Firestore."""
-    from datetime import timedelta
-
+async def _upgrade_user(uid: str, email: str, plan: str, reference: str, token: str = ""):
+    """Set the user's plan + subscription token in Firestore. Prefers uid; falls back to email lookup."""
     try:
         import firebase_admin
         from firebase_admin import auth as fb_auth
 
-        if not firebase_admin._apps:
-            logger.warning("Firebase not initialised — skipping upgrade")
-            return
+        db = get_db()  # also initialises firebase_admin
+        if db is None or not firebase_admin._apps:
+            raise RuntimeError("Firestore not available")
 
-        fb_user = fb_auth.get_user_by_email(email)
-        uid     = fb_user.uid
-        db      = get_db()
-        if db is None:
-            logger.warning("Firestore not available — skipping upgrade")
-            return
+        if not uid:
+            uid = fb_auth.get_user_by_email(email).uid
 
         expires = datetime.now(UTC) + timedelta(days=32)  # slight buffer over 30
         update  = {
-            "email":              email,
             "plan":               plan,
             "plan_expires_at":    expires.isoformat(),
             "payfast_reference":  reference,
             "subscription_cancelled": False,
             "updated_at":         datetime.now(UTC).isoformat(),
         }
+        if email:
+            update["email"] = email
         if token:
             update["payfast_token"] = token   # needed for cancellation
 
         db.collection("users").document(uid).set(update, merge=True)
-        logger.info(f"Upgraded {email} → plan={plan}, expires={expires.date()}, token={token or 'n/a'}")
+        logger.info(f"Upgraded uid={uid} → plan={plan}, expires={expires.date()}")
 
     except Exception as e:
-        logger.error(f"Failed to upgrade {email}: {e}")
+        # Re-raise so the ITN returns 5xx and PayFast retries the notification.
+        logger.error(f"Failed to upgrade uid={uid or '?'}: {e}")
+        raise

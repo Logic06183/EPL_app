@@ -1,38 +1,47 @@
+# Build + deploy the API to Cloud Run.
+#   gcloud builds submit --config cloudbuild.yaml
+#
+# Secrets live in Secret Manager — never inline them here. One-time setup:
+#   ./scripts/setup-secrets.sh
+substitutions:
+  _SERVICE: epl-backend
+  _REGION: us-central1
+  _REPO: epl
+  _PUBLIC_BASE_URL: https://epl-prediction-app.web.app
+
 steps:
-  # Build the container image
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-f', 'Dockerfile.production', '-t', 'gcr.io/epl-prediction-app/epl-api', '.']
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$BUILD_ID
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
+      - .
 
-  # Push the container image to Container Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/epl-prediction-app/epl-api']
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}"]
 
-  # Deploy container image to Cloud Run
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
-      - 'run'
-      - 'deploy'
-      - 'epl-api'
-      - '--image'
-      - 'gcr.io/epl-prediction-app/epl-api'
-      - '--region'
-      - 'us-central1'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated'
-      - '--memory'
-      - '2Gi'
-      - '--cpu'
-      - '2'
-      - '--timeout'
-      - '300'
-      - '--min-instances'
-      - '1'
-      - '--max-instances'
-      - '10'
-      - '--set-env-vars'
-      - 'ENVIRONMENT=production,PAYFAST_MERCHANT_ID=15828539,PAYFAST_MERCHANT_KEY=cf6uuimyjjcss,PAYFAST_PASSPHRASE=FplAiPro2026,PAYFAST_NOTIFY_URL=https://epl-api-77913915885.us-central1.run.app/api/payments/webhook,PAYFAST_SANDBOX=false'
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$BUILD_ID
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --memory=2Gi
+      - --cpu=2
+      - --timeout=300
+      - --min-instances=1
+      - --max-instances=10
+      - --set-env-vars=ENVIRONMENT=production,PUBLIC_BASE_URL=${_PUBLIC_BASE_URL},PAYFAST_SANDBOX=false
+      - --set-secrets=GOOGLE_API_KEY=google-api-key:latest,PAYFAST_MERCHANT_ID=payfast-merchant-id:latest,PAYFAST_MERCHANT_KEY=payfast-merchant-key:latest,PAYFAST_PASSPHRASE=payfast-passphrase:latest
 
 images:
-  - 'gcr.io/epl-prediction-app/epl-api'
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$BUILD_ID

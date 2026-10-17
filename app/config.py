@@ -19,13 +19,28 @@ class Settings:
     CACHE_TTL: int = int(os.getenv("CACHE_TTL", "300"))
     CACHE_MAX_SIZE: int = int(os.getenv("CACHE_MAX_SIZE", "1000"))
 
-    CORS_ORIGINS: list[str] = os.getenv("CORS_ORIGINS", "*").split(",")
+    # Public origin the SPA is served from. Firebase Hosting proxies /api/** to
+    # Cloud Run, so in production the browser calls the API same-origin.
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "https://epl-prediction-app.web.app").rstrip("/")
+
+    # Comma-separated. Only needed for cross-origin callers (local dev, native app).
+    CORS_ORIGINS: list[str] = [
+        o.strip()
+        for o in os.getenv(
+            "CORS_ORIGINS",
+            "https://epl-prediction-app.web.app,https://epl-prediction-app.firebaseapp.com,"
+            "http://localhost:3000,http://localhost:5000,http://localhost:8080,capacitor://localhost,https://localhost",
+        ).split(",")
+        if o.strip()
+    ]
     API_PREFIX: str = os.getenv("API_PREFIX", "/api")
 
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     NEWS_API_KEY: str = os.getenv("NEWS_API_KEY", "")
-    PAYSTACK_SECRET_KEY: str = os.getenv("PAYSTACK_SECRET_KEY", "")
-    PAYSTACK_PUBLIC_KEY: str = os.getenv("PAYSTACK_PUBLIC_KEY", "")
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.lower() == "production"
 
 
 settings = Settings()
