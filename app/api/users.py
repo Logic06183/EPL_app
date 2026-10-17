@@ -3,12 +3,16 @@ Users API — plan info, account management.
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth.firebase_auth import (
-    get_current_user, get_db, PLANS, _in_grace_period, _LAUNCH_FREE_UNTIL_RAW,
+    _LAUNCH_FREE_UNTIL_RAW,
+    PLANS,
+    _in_grace_period,
+    get_current_user,
+    get_db,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,12 +77,12 @@ async def manual_upgrade(
         raise HTTPException(status_code=503, detail="Database not available")
 
     plan = payload.get("plan", "pro")
-    expires = datetime.now(timezone.utc) + timedelta(days=30)
+    expires = datetime.now(UTC) + timedelta(days=30)
 
     db.collection("users").document(user["uid"]).update({
         "plan":             plan,
         "plan_expires_at":  expires.isoformat(),
-        "updated_at":       datetime.now(timezone.utc).isoformat(),
+        "updated_at":       datetime.now(UTC).isoformat(),
     })
 
     return {"success": True, "plan": plan, "expires": expires.isoformat()}

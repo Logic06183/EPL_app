@@ -1,0 +1,27 @@
+[project]
+name = "fpl-ai-pro"
+version = "3.0.0"
+description = "FPL AI Pro — Fantasy Premier League predictions API"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "--strict-markers"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = ["archive", "mobile", "frontend"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = [
+  "B008",  # FastAPI's Depends()/Query() in defaults is idiomatic
+  "B904",  # HTTPException re-raise inside except is intentional
+  "E501",  # long lines handled case by case
+  "E221", "E241",  # aligned assignments in config blocks
+]
+

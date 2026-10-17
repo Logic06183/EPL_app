@@ -199,3 +199,9 @@ models/
 *.temp
 .gstack/
 frontend/.firebase/
+
+# Generated test / deploy artefacts
+test-results/
+playwright-report/
+.firebase/
+.ruff_cache/

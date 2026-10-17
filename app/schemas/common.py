@@ -2,7 +2,7 @@
 Common Pydantic response schemas
 """
 
-from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -17,5 +17,5 @@ class HealthResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: str
-    detail: Optional[str] = None
+    detail: str | None = None
     timestamp: str

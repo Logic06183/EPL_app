@@ -4,13 +4,13 @@ Endpoints for team data, squad optimisation, and fixture difficulty ratings.
 """
 
 import logging
-from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
+from ..auth.firebase_auth import get_current_user, require_pro
 from ..services.data_service import FPLDataService, get_data_service
 from ..services.prediction_service import PredictionService, get_prediction_service
-from ..auth.firebase_auth import get_current_user, require_pro
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -59,7 +59,7 @@ async def get_fixture_difficulty(
         all_fixtures = await data_service.get_fixtures(filter_type="upcoming")
 
         teams_by_id   = {t["id"]: t for t in teams_list}
-        fdr: Dict[int, dict] = {}
+        fdr: dict[int, dict] = {}
         for t in teams_list:
             fdr[t["id"]] = {
                 "team_name":  t.get("name", ""),
@@ -112,14 +112,18 @@ async def get_fixture_difficulty(
         raise HTTPException(status_code=500, detail="Failed to fetch fixture difficulty")
 
 
+class OptimizeRequest(BaseModel):
+    budget: float = Field(100.0, ge=50.0, le=200.0, description="Squad budget in £m")
+
+
 @router.post("/optimize")
 async def optimize_squad(
-    request:           Dict[str, Any]     = {},
+    request:           OptimizeRequest | None = None,
     data_service:      FPLDataService     = Depends(get_data_service),
     prediction_service: PredictionService = Depends(get_prediction_service),
 ):
     """Optimise a 15-player FPL squad within budget constraints"""
-    budget = float(request.get("budget", 100.0))
+    budget = (request or OptimizeRequest()).budget
 
     try:
         bootstrap = await data_service.get_bootstrap_data()
@@ -133,7 +137,7 @@ async def optimize_squad(
             if p.get("now_cost", 0) > 0 and p.get("element_type") in [1, 2, 3, 4]
         ]
         preds = prediction_service.predict_batch(viable, model_type)
-        for player, pred in zip(viable, preds):
+        for player, pred in zip(viable, preds, strict=False):
             player["_predicted"] = max(pred, 0)
             price = player.get("now_cost", 50) / 10
             player["_value"] = player["_predicted"] / max(price, 0.1)

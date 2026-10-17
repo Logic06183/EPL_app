@@ -5,14 +5,12 @@ differentials, price movers, and value analysis.
 """
 
 import logging
-from typing import Optional
 
-import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from ..auth.firebase_auth import get_current_user, plan_limits, require_pro
 from ..services.data_service import FPLDataService, get_data_service
 from ..services.prediction_service import PredictionService, get_prediction_service
-from ..auth.firebase_auth import get_current_user, plan_limits, require_pro
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -54,7 +52,7 @@ def _enrich(player, teams, positions, prediction_service=None, model_type="rando
 
 async def _get_predictions_payload(
     top_n: int,
-    position: Optional[int],
+    position: int | None,
     model_type: str,
     data_service: FPLDataService,
     prediction_service: PredictionService,
@@ -77,7 +75,7 @@ async def _get_predictions_payload(
     preds = prediction_service.predict_batch(candidates, model_type)
 
     predictions = []
-    for player, pred in zip(candidates, preds):
+    for player, pred in zip(candidates, preds, strict=False):
         d = _enrich(player, teams, positions, prediction_service, model_type, pred=pred)
         d["ai_enhanced"] = ai_enhanced or model_type != "basic"
         d["model_used"] = model_type
@@ -101,7 +99,7 @@ async def _get_predictions_payload(
 @router.get("/predictions")
 async def get_player_predictions(
     top_n:       int            = Query(20, ge=1, le=100),
-    position:    Optional[int]  = Query(None),
+    position:    int | None  = Query(None),
     model_type:  str            = Query("basic"),
     data_service: FPLDataService   = Depends(get_data_service),
     prediction_service: PredictionService = Depends(get_prediction_service),
@@ -120,9 +118,9 @@ async def get_player_predictions(
 @router.get("/predictions/enhanced")
 async def get_enhanced_player_predictions(
     top_n:       int            = Query(20, ge=1, le=100),
-    position:    Optional[int]  = Query(None),
+    position:    int | None  = Query(None),
     model_type:  str            = Query("basic"),
-    model:       Optional[str]  = Query(None),
+    model:       str | None  = Query(None),
     use_ai:      bool           = Query(False),
     use_gemini:  bool           = Query(False),
     data_service: FPLDataService   = Depends(get_data_service),
@@ -153,7 +151,7 @@ async def get_enhanced_player_predictions(
 async def get_player_prediction(
     player_id:   int,
     model_type:  str = Query("basic"),
-    model:       Optional[str] = Query(None),
+    model:       str | None = Query(None),
     data_service: FPLDataService = Depends(get_data_service),
     prediction_service: PredictionService = Depends(get_prediction_service),
 ):
@@ -284,7 +282,7 @@ async def get_trending(
 @router.get("/three-gw")
 async def get_three_gw_picks(
     top_n: int = Query(20, le=50),
-    position: Optional[int] = Query(None),
+    position: int | None = Query(None),
     data_service: FPLDataService = Depends(get_data_service),
     prediction_service: PredictionService = Depends(get_prediction_service),
     user: dict = Depends(get_current_user),

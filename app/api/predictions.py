@@ -4,6 +4,7 @@ Endpoints for AI/ML predictions and prediction history
 """
 
 import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..services.prediction_service import PredictionService, get_prediction_service

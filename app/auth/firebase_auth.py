@@ -14,9 +14,7 @@ Setup required (one-time):
 import json
 import logging
 import os
-from datetime import datetime, timezone
-from functools import lru_cache
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import Header
 
@@ -107,13 +105,13 @@ PLANS = {
 _LAUNCH_FREE_UNTIL_RAW = os.getenv("LAUNCH_FREE_UNTIL", "2099-01-01")
 
 
-def _in_grace_period(now: Optional[datetime] = None) -> bool:
+def _in_grace_period(now: datetime | None = None) -> bool:
     try:
-        cutoff = datetime.fromisoformat(_LAUNCH_FREE_UNTIL_RAW).replace(tzinfo=timezone.utc)
+        cutoff = datetime.fromisoformat(_LAUNCH_FREE_UNTIL_RAW).replace(tzinfo=UTC)
     except ValueError:
         logger.warning(f"Invalid LAUNCH_FREE_UNTIL='{_LAUNCH_FREE_UNTIL_RAW}', defaulting to in-grace")
         return True
-    return (now or datetime.now(timezone.utc)) < cutoff
+    return (now or datetime.now(UTC)) < cutoff
 
 
 def get_effective_plan(user: dict) -> str:
@@ -135,7 +133,7 @@ def plan_limits(plan: str) -> dict:
 # ── Token verification ────────────────────────────────
 
 async def get_current_user(
-    authorization: Optional[str] = Header(None),
+    authorization: str | None = Header(None),
 ) -> dict:
     """
     FastAPI dependency. Returns user dict with uid, email, plan.
@@ -175,20 +173,20 @@ async def get_current_user(
             expires = data.get("plan_expires_at")
             if expires and plan != "founder":
                 exp_dt = expires if isinstance(expires, datetime) else datetime.fromisoformat(str(expires))
-                if exp_dt.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+                if exp_dt.replace(tzinfo=UTC) < datetime.now(UTC):
                     plan = "free"
                     doc_ref.update({"plan": "free"})
             # Founder upgrade: existing free user signs in during grace → reward
             if in_grace and plan == "free":
                 plan = "founder"
-                doc_ref.update({"plan": "founder", "founder_granted_at": datetime.now(timezone.utc).isoformat()})
+                doc_ref.update({"plan": "founder", "founder_granted_at": datetime.now(UTC).isoformat()})
         else:
             # Brand-new user. Founder during grace, free after.
             plan = "founder" if in_grace else "free"
             new_doc = {
                 "email":      email,
                 "plan":       plan,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
             }
             if plan == "founder":
                 new_doc["founder_granted_at"] = new_doc["created_at"]

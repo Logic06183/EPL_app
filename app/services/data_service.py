@@ -4,10 +4,11 @@ Handles fetching and caching data from the official FPL API
 """
 
 import logging
-from typing import List, Dict, Optional, Any
-import httpx
+from datetime import UTC, datetime
 from functools import lru_cache
-from datetime import datetime, timezone
+from typing import Any
+
+import httpx
 
 from ..config import settings
 from ..utils.cache import get_cache_manager
@@ -32,9 +33,9 @@ class FPLDataService:
     def __init__(self):
         self.base_url = settings.FPL_API_BASE
         self.cache = get_cache_manager()
-        self._bootstrap_data: Optional[Dict] = None
+        self._bootstrap_data: dict | None = None
         # Reusable client with proper headers and timeouts
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create a reusable httpx client with proper headers"""
@@ -46,7 +47,7 @@ class FPLDataService:
             )
         return self._client
 
-    async def get_bootstrap_data(self, force_refresh: bool = False) -> Dict[str, Any]:
+    async def get_bootstrap_data(self, force_refresh: bool = False) -> dict[str, Any]:
         """
         Get bootstrap-static data from FPL API
 
@@ -92,12 +93,12 @@ class FPLDataService:
             logger.error(f"Error fetching bootstrap data: {e}")
             raise
 
-    async def get_all_players(self) -> List[Dict[str, Any]]:
+    async def get_all_players(self) -> list[dict[str, Any]]:
         """Get all players from bootstrap data"""
         bootstrap = await self.get_bootstrap_data()
         return bootstrap.get("elements", [])
 
-    async def get_player_by_id(self, player_id: int) -> Optional[Dict[str, Any]]:
+    async def get_player_by_id(self, player_id: int) -> dict[str, Any] | None:
         """Get detailed player information"""
         players = await self.get_all_players()
 
@@ -130,7 +131,7 @@ class FPLDataService:
             logger.error(f"Error fetching player {player_id} details: {e}")
             return player
 
-    async def search_players(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+    async def search_players(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         """Search players by name"""
         players = await self.get_all_players()
         query_lower = query.lower()
@@ -145,7 +146,7 @@ class FPLDataService:
 
         return results[:limit]
 
-    async def get_player_history(self, player_id: int) -> Optional[Dict[str, Any]]:
+    async def get_player_history(self, player_id: int) -> dict[str, Any] | None:
         """Get player historical performance"""
         try:
             client = await self._get_client()
@@ -159,7 +160,7 @@ class FPLDataService:
             logger.error(f"Error fetching player {player_id} history: {e}")
             return None
 
-    async def get_teams(self) -> List[Dict[str, Any]]:
+    async def get_teams(self) -> list[dict[str, Any]]:
         """Get all teams"""
         bootstrap = await self.get_bootstrap_data()
         return bootstrap.get("teams", [])
@@ -167,8 +168,8 @@ class FPLDataService:
     async def get_fixtures(
         self,
         filter_type: str = "upcoming",
-        gameweek: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+        gameweek: int | None = None,
+    ) -> list[dict[str, Any]]:
         """Get fixtures from FPL API with filtering"""
         try:
             client = await self._get_client()
@@ -177,7 +178,7 @@ class FPLDataService:
             fixtures = response.json()
 
             filtered = []
-            today = datetime.now(timezone.utc).date()
+            today = datetime.now(UTC).date()
             for fixture in fixtures:
                 if gameweek is not None and fixture.get("event") != gameweek:
                     continue
@@ -203,7 +204,7 @@ class FPLDataService:
                 elif filter_type == "all":
                     filtered.append(fixture)
 
-            def kickoff_sort_value(fixture: Dict[str, Any]) -> str:
+            def kickoff_sort_value(fixture: dict[str, Any]) -> str:
                 return fixture.get("kickoff_time") or "9999-12-31T23:59:59Z"
 
             # For recent, return latest first; for upcoming, soonest scheduled first.
@@ -224,7 +225,7 @@ class FPLDataService:
             logger.error(f"Error fetching fixtures: {e}")
             return []
 
-    async def get_gameweek_info(self) -> Dict[str, Any]:
+    async def get_gameweek_info(self) -> dict[str, Any]:
         """Get current gameweek information"""
         bootstrap = await self.get_bootstrap_data()
         events = bootstrap.get("events", [])
@@ -241,7 +242,7 @@ class FPLDataService:
 
 
 # Dependency injection
-@lru_cache()
+@lru_cache
 def get_data_service() -> FPLDataService:
     """Get cached FPL data service instance"""
     return FPLDataService()

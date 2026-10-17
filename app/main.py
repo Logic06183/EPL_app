@@ -3,20 +3,19 @@ FPL AI Pro - Production FastAPI Application
 Consolidated API with multi-model predictions, xG/xA analytics, and Gemini AI
 """
 
-import logging
-from datetime import datetime, timezone
-from typing import Optional
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
-from fastapi import FastAPI, HTTPException, Query, Request, Depends
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .api import fpl_team, payments, players, predictions, teams, users
 from .config import settings
-from .utils.logging import setup_logging, get_logger
+from .services.data_service import get_data_service
+from .services.prediction_service import get_prediction_service
 from .utils.cache import get_cache_manager
-from .schemas.common import HealthResponse, ErrorResponse
-from .api import players, predictions, teams, payments, fpl_team, users
+from .utils.logging import get_logger, setup_logging
 
 # Setup logging
 setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
@@ -49,6 +48,7 @@ async def lifespan(app: FastAPI):
     app_state["models_loaded"] = False
     try:
         import asyncio
+
         from .services.data_service import get_data_service
         from .services.prediction_service import get_prediction_service
 
@@ -104,7 +104,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={
             "error": "Internal server error",
             "detail": str(exc) if settings.DEBUG else "An unexpected error occurred",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
     )
 
@@ -141,7 +141,7 @@ async def health_check():
         "status": "healthy",
         "ai_enabled": True,
         "version": settings.APP_VERSION,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "models_loaded": app_state.get("models_loaded", False),
         "cache_available": app_state.get("cache") is not None,
     }
@@ -151,7 +151,7 @@ async def health_check():
 @app.get("/ping")
 async def ping():
     """Lightweight ping endpoint"""
-    return {"status": "pong", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"status": "pong", "timestamp": datetime.now(UTC).isoformat()}
 
 
 # Include API routers
@@ -203,7 +203,6 @@ app.include_router(
 
 
 # Gameweek and Fixtures endpoints (directly under /api/)
-from .services.data_service import get_data_service
 
 
 @app.get(f"{settings.API_PREFIX}/gameweek/current", tags=["Gameweek"])
@@ -231,7 +230,7 @@ async def get_current_gameweek(
 @app.get(f"{settings.API_PREFIX}/fixtures", tags=["Fixtures"])
 async def get_fixtures(
     filter: str = Query("upcoming", description="Filter: live, today, recent, upcoming"),
-    gameweek: Optional[int] = Query(None, description="Specific gameweek"),
+    gameweek: int | None = Query(None, description="Specific gameweek"),
     data_service=Depends(get_data_service),
 ):
     """Get Premier League fixtures with various filters"""
@@ -255,7 +254,6 @@ async def get_fixtures(
 
 
 # Model info and performance endpoints (backward compat with old API)
-from .services.prediction_service import get_prediction_service
 
 
 @app.get(f"{settings.API_PREFIX}/models/info", tags=["Models"])

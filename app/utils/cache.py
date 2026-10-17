@@ -4,7 +4,7 @@ Cache manager using in-memory TTL cache
 
 import logging
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Any
 
 from cachetools import TTLCache
 
@@ -18,10 +18,10 @@ class CacheManager:
         self.memory_cache: TTLCache = TTLCache(maxsize=max_size, ttl=ttl)
         self._default_ttl = ttl
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         return self.memory_cache.get(key)
 
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+    def set(self, key: str, value: Any, ttl: int | None = None) -> None:
         # cachetools TTLCache uses a single TTL per cache instance;
         # store without per-key TTL override for simplicity
         self.memory_cache[key] = value
@@ -33,7 +33,7 @@ class CacheManager:
         self.memory_cache.clear()
 
 
-@lru_cache()
+@lru_cache
 def get_cache_manager(ttl: int = 300, max_size: int = 1000) -> CacheManager:
     """Return a shared CacheManager instance"""
     return CacheManager(ttl=ttl, max_size=max_size)

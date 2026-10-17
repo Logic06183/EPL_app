@@ -12,7 +12,7 @@ import json
 import logging
 import os
 from functools import lru_cache
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +29,12 @@ _THINKING_BUDGET = 0
 _TIMEOUT_S = 8.0
 
 
-def _api_key() -> Optional[str]:
+def _api_key() -> str | None:
     """Either GOOGLE_API_KEY (Cloud Run default) or GEMINI_API_KEY."""
     return os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or None
 
 
-@lru_cache()
+@lru_cache
 def _client():
     """Lazily build a single google-genai Client. Returns None if unavailable."""
     key = _api_key()
@@ -59,10 +59,10 @@ def is_available() -> bool:
 def generate_briefing_reasons(
     *,
     team_name: str,
-    alerts: List[Dict[str, Any]],
-    captain: Optional[Dict[str, Any]],
-    transfer: Optional[Dict[str, Any]],
-) -> Dict[str, Any]:
+    alerts: list[dict[str, Any]],
+    captain: dict[str, Any] | None,
+    transfer: dict[str, Any] | None,
+) -> dict[str, Any]:
     """
     Ask Gemini for short, plain-English reasons for the structured briefing data.
 
@@ -75,7 +75,7 @@ def generate_briefing_reasons(
         }
     Empty strings on failure — callers should treat those as 'omit row'.
     """
-    fallback: Dict[str, Any] = {
+    fallback: dict[str, Any] = {
         "summary": "",
         "captain_reason": "",
         "transfer_reason": "",
@@ -122,9 +122,9 @@ def generate_briefing_reasons(
 
 def _build_prompt(
     team_name: str,
-    alerts: List[Dict[str, Any]],
-    captain: Optional[Dict[str, Any]],
-    transfer: Optional[Dict[str, Any]],
+    alerts: list[dict[str, Any]],
+    captain: dict[str, Any] | None,
+    transfer: dict[str, Any] | None,
 ) -> str:
     """
     Compact JSON-in/JSON-out prompt. Keeps tokens low (~600 input / ~150 output)

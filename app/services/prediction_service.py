@@ -5,11 +5,11 @@ All three train on the full player pool and use 12 features from FPL bootstrap d
 """
 
 import logging
-import numpy as np
 from functools import lru_cache
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 
@@ -25,15 +25,15 @@ class PredictionService:
     """Multi-model ML prediction service for FPL player points."""
 
     def __init__(self):
-        self._rf:    Optional[RandomForestRegressor]   = None
-        self._gb:    Optional[GradientBoostingRegressor] = None
-        self._mlp:   Optional[MLPRegressor]            = None
+        self._rf:    RandomForestRegressor | None   = None
+        self._gb:    GradientBoostingRegressor | None = None
+        self._mlp:   MLPRegressor | None            = None
         self._scaler = StandardScaler()
         self._trained = False
 
     # ── Feature engineering ────────────────────────────────────────────────────
 
-    def _features(self, player: Dict[str, Any]) -> List[float]:
+    def _features(self, player: dict[str, Any]) -> list[float]:
         """12-feature vector from FPL bootstrap player element."""
         pos = int(player.get("element_type", 2))  # 1=GK 2=DEF 3=MID 4=FWD
         return [
@@ -53,7 +53,7 @@ class PredictionService:
 
     # ── Training ───────────────────────────────────────────────────────────────
 
-    def train(self, players: List[Dict[str, Any]]) -> None:
+    def train(self, players: list[dict[str, Any]]) -> None:
         """Train all three models on the full player dataset."""
         # Filter out players with zero minutes (never played — no signal)
         active = [p for p in players if float(p.get("minutes", 0)) > 0]
@@ -99,7 +99,7 @@ class PredictionService:
 
     # ── Prediction ─────────────────────────────────────────────────────────────
 
-    def _raw_predict(self, player: Dict[str, Any]) -> Dict[str, float]:
+    def _raw_predict(self, player: dict[str, Any]) -> dict[str, float]:
         """Return per-model raw predictions. Falls back to form if not trained."""
         form = float(player.get("form", 0))
 
@@ -118,8 +118,8 @@ class PredictionService:
             return {"rf": form, "gb": form, "mlp": form}
 
     def predict_batch(
-        self, players: List[Dict[str, Any]], model_type: str = "random_forest"
-    ) -> List[float]:
+        self, players: list[dict[str, Any]], model_type: str = "random_forest"
+    ) -> list[float]:
         """
         Vectorised inference for many players in one shot.
         ~50-100x faster than calling predict() per player because each sklearn
@@ -162,7 +162,7 @@ class PredictionService:
             return [max(0.0, float(v)) for v in blended]
         return [max(0.0, float(v)) for v in rf]
 
-    def predict(self, player: Dict[str, Any], model_type: str = "random_forest") -> float:
+    def predict(self, player: dict[str, Any], model_type: str = "random_forest") -> float:
         """
         Return a single predicted points value for the given model_type.
         model_type: "basic" | "random_forest" | "deep_learning" | "ensemble"
@@ -200,7 +200,7 @@ class PredictionService:
 
     # ── Metadata ───────────────────────────────────────────────────────────────
 
-    async def get_model_info(self) -> Dict[str, Any]:
+    async def get_model_info(self) -> dict[str, Any]:
         return {
             "models": {
                 "basic": {
@@ -238,7 +238,7 @@ class PredictionService:
         }
 
 
-@lru_cache()
+@lru_cache
 def get_prediction_service() -> PredictionService:
     """Singleton prediction service — shared across requests."""
     return PredictionService()

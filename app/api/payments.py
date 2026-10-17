@@ -5,12 +5,10 @@ Subscriptions auto-renew monthly via PayFast recurring billing.
 """
 
 import hashlib
-import hmac
 import logging
 import os
-from datetime import datetime, timezone
-from typing import Any, Dict
-from urllib.parse import urlencode, quote_plus
+from datetime import UTC, datetime
+from urllib.parse import quote_plus, urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -56,7 +54,7 @@ PLANS = {
 
 # ── Signature helpers ──────────────────────────────────────────────────────────
 
-def _payfast_signature(params: Dict[str, str], passphrase: str = "") -> str:
+def _payfast_signature(params: dict[str, str], passphrase: str = "") -> str:
     """
     MD5 signature matching PayFast PHP SDK exactly:
       foreach($data as $key => $val) {
@@ -74,12 +72,12 @@ def _payfast_signature(params: Dict[str, str], passphrase: str = "") -> str:
     return hashlib.md5(param_string.encode("utf-8")).hexdigest()
 
 
-def _payfast_api_headers() -> Dict[str, str]:
+def _payfast_api_headers() -> dict[str, str]:
     """
     Build headers for PayFast API calls (subscriptions management).
     Signature = MD5 of sorted headers + passphrase.
     """
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
     headers_to_sign = {
         "merchant-id": PAYFAST_MERCHANT_ID,
         "passphrase":  PAYFAST_PASSPHRASE,
@@ -100,7 +98,7 @@ def _payfast_api_headers() -> Dict[str, str]:
     }
 
 
-def _verify_itn(data: Dict[str, str]) -> bool:
+def _verify_itn(data: dict[str, str]) -> bool:
     """Verify a PayFast ITN payload signature."""
     received_sig = data.get("signature", "")
     params = {k: v for k, v in data.items() if k != "signature"}
@@ -138,10 +136,10 @@ async def initialize_payment(request: PaymentInitRequest):
     if not PAYFAST_MERCHANT_ID or not PAYFAST_MERCHANT_KEY:
         raise HTTPException(status_code=503, detail="Payment service not configured")
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
 
     # Parameter order must match PayFast's expected order exactly
-    params: Dict[str, str] = {
+    params: dict[str, str] = {
         "merchant_id":       PAYFAST_MERCHANT_ID,
         "merchant_key":      PAYFAST_MERCHANT_KEY,
         "return_url":        request.return_url,
@@ -272,8 +270,8 @@ async def cancel_subscription(user: dict = Depends(get_current_user)):
     # Mark as cancelled in Firestore — keep plan active until expiry
     db.collection("users").document(user["uid"]).update({
         "subscription_cancelled": True,
-        "subscription_cancelled_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "subscription_cancelled_at": datetime.now(UTC).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
     })
 
     expires = data.get("plan_expires_at", "")
@@ -305,14 +303,14 @@ async def _upgrade_user_by_email(email: str, plan: str, reference: str, token: s
             logger.warning("Firestore not available — skipping upgrade")
             return
 
-        expires = datetime.now(timezone.utc) + timedelta(days=32)  # slight buffer over 30
+        expires = datetime.now(UTC) + timedelta(days=32)  # slight buffer over 30
         update  = {
             "email":              email,
             "plan":               plan,
             "plan_expires_at":    expires.isoformat(),
             "payfast_reference":  reference,
             "subscription_cancelled": False,
-            "updated_at":         datetime.now(timezone.utc).isoformat(),
+            "updated_at":         datetime.now(UTC).isoformat(),
         }
         if token:
             update["payfast_token"] = token   # needed for cancellation

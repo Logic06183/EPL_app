@@ -94,6 +94,7 @@ def test_frontend_compatibility_endpoints_are_registered(monkeypatch):
     # Force post-grace behavior so the Pro gates assert correctly. The grace
     # period default (year 2099) would unlock captain/price-movers/value.
     import importlib
+
     from app.auth import firebase_auth
     monkeypatch.setenv("LAUNCH_FREE_UNTIL", "2000-01-01")
     importlib.reload(firebase_auth)
@@ -128,8 +129,9 @@ def test_frontend_compatibility_endpoints_are_registered(monkeypatch):
 
 def test_grace_period_grants_pro_to_anonymous():
     """During grace, anonymous users behave as Pro for gating decisions."""
-    import os
     import importlib
+    import os
+
     from app.auth import firebase_auth
 
     # Force a future cutoff
@@ -143,8 +145,9 @@ def test_grace_period_grants_pro_to_anonymous():
 
 
 def test_post_grace_blocks_free_plan():
-    import os
     import importlib
+    import os
+
     from app.auth import firebase_auth
 
     os.environ["LAUNCH_FREE_UNTIL"] = "2000-01-01"  # already past
@@ -166,7 +169,7 @@ def test_post_grace_blocks_free_plan():
 
 def test_briefing_squad_alerts_classify_correctly():
     """Pure-logic test of _squad_alerts — no FPL or Gemini dependency."""
-    from app.api.fpl_team import _squad_alerts, _FLAG_INJURED, _FLAG_DOUBT
+    from app.api.fpl_team import _FLAG_DOUBT, _FLAG_INJURED, _squad_alerts
 
     picks = [
         # Healthy starter — no alert

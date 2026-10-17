@@ -4,7 +4,6 @@ Loaded from environment variables with sensible defaults
 """
 
 import os
-from typing import List
 
 
 class Settings:
@@ -20,7 +19,7 @@ class Settings:
     CACHE_TTL: int = int(os.getenv("CACHE_TTL", "300"))
     CACHE_MAX_SIZE: int = int(os.getenv("CACHE_MAX_SIZE", "1000"))
 
-    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "*").split(",")
+    CORS_ORIGINS: list[str] = os.getenv("CORS_ORIGINS", "*").split(",")
     API_PREFIX: str = os.getenv("API_PREFIX", "/api")
 
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")

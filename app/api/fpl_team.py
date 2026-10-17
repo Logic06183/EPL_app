@@ -6,16 +6,19 @@ build a personalised briefing card for the user's squad.
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from ..auth.firebase_auth import (
+    get_current_user,
+    get_db,
+    get_effective_plan,
+)
+from ..services import gemini_service
 from ..services.data_service import FPLDataService, get_data_service
 from ..services.prediction_service import PredictionService, get_prediction_service
-from ..services import gemini_service
 from ..utils.cache import get_cache_manager
-from ..auth.firebase_auth import (
-    get_current_user, require_pro, get_effective_plan, _in_grace_period, get_db,
-)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -139,7 +142,7 @@ async def suggest_transfers(
 
         # Build prediction map for all players (single vectorised pass)
         _preds = prediction_service.predict_batch(elements, "random_forest")
-        pred_map = {p["id"]: max(0.0, v) for p, v in zip(elements, _preds)}
+        pred_map = {p["id"]: max(0.0, v) for p, v in zip(elements, _preds, strict=False)}
 
         squad_ids = {p["id"] for p in picks}
         bank = team_data.get("bank", 0.0)
@@ -395,7 +398,7 @@ async def get_team_briefing(
 
     starting_elements = [elements_by_id[p["id"]] for p in picks if p.get("is_starting") and p["id"] in elements_by_id]
     starting_preds    = prediction_service.predict_batch(starting_elements, "ensemble")
-    pred_map = {p["id"]: float(v) for p, v in zip(starting_elements, starting_preds)}
+    pred_map = {p["id"]: float(v) for p, v in zip(starting_elements, starting_preds, strict=False)}
 
     # Alerts + price-drop overlay (price-drop pulled from the raw FPL element)
     alerts = _squad_alerts(picks)
@@ -524,7 +527,7 @@ async def get_team_briefing(
         "captain":          captain,
         "top_transfer":     top_transfer,
         "ai_reasons":       gemini_service.is_available(),
-        "data_fetched_at":  datetime.now(timezone.utc).isoformat(),
+        "data_fetched_at":  datetime.now(UTC).isoformat(),
     }
 
     cache.set(cache_key, payload)
