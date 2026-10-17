@@ -31,7 +31,8 @@ personal weekly briefing for *your* team.
 - [x] Briefing uses the new model (via PredictionService)
 - [x] Chip advice in `/plan`: TC on captain doubles, BB on 3+ squad doubles, FH on 4+ blank starters, WC when a rebuild adds 15+ xP; only chips left this half-season
 - [x] Analytics: anonymous daily event counts for the funnel; `/api/admin/funnel` (needs `ADMIN_EMAILS`)
-- [ ] Retention: email capture + deadline reminder carrying the briefing — needs an email provider account (Resend/Postmark) from Craig
+- [x] Retention (no provider needed): subscribable deadline calendar with 24h/2h reminders linking to `?team=ID`; last team remembered on device
+- [ ] Retention: email reminders carrying the briefing — needs an email provider account (Resend/Postmark) from Craig
 - [x] Pricing review → `docs/pricing.md` (recommendation only; Craig decides)
 - [ ] International checkout (GBP/USD) via a merchant-of-record provider — needs Craig's account
 
@@ -52,3 +53,4 @@ personal weekly briefing for *your* team.
 - 2026-10-17 — live track record (snapshot before deadline, score after) + Track record page; frontend plan-gating fix (`49800af`)
 - 2026-10-17 — optimiser + transfer planner; XSS escaping
 - 2026-10-17 — chip advice (`/plan` + Transfer plan card)
+- 2026-10-17 — deadline calendar feed + `?team=` deep link

@@ -1340,6 +1340,7 @@ async function loadTeam(){
       apiFetch(`/fpl-team/${id}/briefing`).catch(()=>null),
     ]);
     renderTeam(team,id,briefing);
+    try{ localStorage.setItem('fpl_team_id', id); }catch{}
     track('team_import');
     if(briefing) track(briefing.paywall?'paywall_view':'briefing_view');
   }catch(e){
@@ -1516,7 +1517,19 @@ function renderTeam(d,id,briefing){
   <div class="sbr"><div class="slist">${starting.map(pickRow).join('')}</div></div>
   <div class="sh" style="margin-top:12px"><h2 class="st">BENCH</h2></div>
   <div class="sbr"><div class="slist">${bench.map(pickRow).join('')}</div></div>
+  ${calendarLinks(id)}
   <div id="transfers-content"></div>`;
+}
+
+// ── Deadline reminders: subscribable calendar (app/api/calendar.py) ──
+function calendarLinks(id){
+  const host = _isNative ? 'epl-prediction-app.web.app' : location.host;
+  const path = `/api/calendar/deadlines.ics${id?`?team=${encodeURIComponent(id)}`:''}`;
+  const webcal = `webcal://${host}${path}`;
+  const google = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
+  return `<div class="tr-link" style="cursor:default;margin-top:12px">📅 Never miss a deadline: reminders 24h and 2h before, linking to this briefing
+    <b><a href="${google}" target="_blank" rel="noopener" onclick="track('calendar_subscribe')" style="color:inherit">Google</a> ·
+    <a href="${webcal}" onclick="track('calendar_subscribe')" style="color:inherit">Apple/Outlook</a></b></div>`;
 }
 
 async function loadTransfers(id){
@@ -2148,6 +2161,15 @@ function shareCaptain(){
 // ── Init ──────────────────────────────────────────────
 track('visit');
 if(new URLSearchParams(location.search).get('upgraded')==='1') track('checkout_return');
+// Deep link (?team=123, used by calendar reminders) or the last team loaded on this device
+(function(){
+  const q=new URLSearchParams(location.search).get('team');
+  let saved=null; try{ saved=localStorage.getItem('fpl_team_id'); }catch{}
+  const id=(q&&/^\d+$/.test(q))?q:saved;
+  if(!id) return;
+  document.getElementById('tid-input').value=id;
+  if(q){ showTab('squad'); loadTeam(); }
+})();
 checkStatus();
 loadPred();
 // Captain only auto-loads once we know the user's plan (see onAuthStateChanged)

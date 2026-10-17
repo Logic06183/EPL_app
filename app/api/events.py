@@ -34,7 +34,7 @@ FUNNEL = [
     "checkout_start",
     "checkout_return",
 ]
-OTHER = {"plan_view", "optimise", "track_record_view", "share"}
+OTHER = {"plan_view", "optimise", "track_record_view", "share", "calendar_subscribe"}
 ALLOWED = set(FUNNEL) | OTHER
 
 # Per-instance rate limit so a script can't inflate counts cheaply
