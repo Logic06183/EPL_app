@@ -25,6 +25,13 @@ inline.forEach((m, i) => {
 });
 console.log(`✓ ${inline.length} inline script(s) parsed`);
 
+// User/LLM-controlled text must go through esc() before reaching innerHTML.
+const risky = /\$\{(?!esc\()[\w.]*\.(name|full_name|team_name|manager_name|news|reason|summary|message)(\|\|'[^']*')?\}/;
+html.split("\n").forEach((line, i) => {
+  if (/textContent|const text=|toast\(/.test(line)) return;
+  if (risky.test(line)) fail(`index.html:${i + 1} interpolates text without esc(): ${line.trim().slice(0, 120)}`);
+});
+
 for (const f of ["sw.js"]) {
   try { execFileSync(process.execPath, ["--check", join(root, f)], { stdio: "pipe" }); }
   catch (e) { fail(`${f} does not parse:\n${e.stderr}`); }

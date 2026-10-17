@@ -3,7 +3,7 @@ PY ?= python3
 VENV ?= .venv
 BIN := $(VENV)/bin
 
-.PHONY: help install dev frontend test lint check deploy-backend deploy-frontend
+.PHONY: help install dev frontend test lint e2e check deploy-backend deploy-frontend
 
 help:  ## Show this help
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -28,7 +28,10 @@ lint:  ## Lint backend + static-check frontend
 	$(BIN)/ruff check .
 	node scripts/check-frontend.mjs
 
-check: lint test  ## Everything CI runs (except the docker smoke test)
+e2e:  ## Browser regression tests (needs playwright + chromium)
+	node scripts/e2e-xss.mjs
+
+check: lint test  ## Everything CI runs (except docker + e2e)
 
 deploy-backend:  ## Build + deploy the API with Cloud Build
 	gcloud builds submit --config cloudbuild.yaml

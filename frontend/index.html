@@ -876,6 +876,9 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 
 <script>
 'use strict';
+// Escape API/LLM/user-controlled text before it goes into innerHTML.
+const _ESC={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+const esc=v=>v==null?'':String(v).replace(/[&<>"']/g,c=>_ESC[c]);
 // Capacitor native app: window.Capacitor is defined — point at production API
 const _isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 const API = _isNative
@@ -1018,7 +1021,7 @@ async function showManageModal(){
       </p>`}
     `;
   }catch(e){
-    el.innerHTML = `<div class="err">⚠ ${e.message}</div>`;
+    el.innerHTML = `<div class="err">⚠ ${esc(e.message)}</div>`;
   }
 }
 
@@ -1190,7 +1193,7 @@ async function loadPred(){
     document.getElementById('pred-count').textContent=`${predData.length} players · ${model.replace(/_/g,' ')}`;
     renderPred();
   }catch(e){
-    document.getElementById('pred-grid').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('pred-grid').innerHTML=`<div class="err">⚠ ${esc(e.message)}</div>`;
     toast('Failed to load predictions','error');
   }
 }
@@ -1212,10 +1215,10 @@ function renderPred(){
     const diffTag=p.ownership<=5?`<span style="font-size:9px;padding:1px 5px;background:rgba(53,217,103,.08);border:1px solid rgba(53,217,103,.18);color:var(--green);border-radius:3px;margin-left:4px">DIFF</span>`:'';
     return`<div class="pcard" data-p="${p.position_name}" style="animation-delay:${delay}ms">
       <div class="ptop">
-        <div style="flex:1;min-width:0"><div class="pname">${p.name||'—'}${diffTag}</div><div class="pfull">${p.full_name||''}</div></div>
+        <div style="flex:1;min-width:0"><div class="pname">${esc(p.name||'—')}${diffTag}</div><div class="pfull">${esc(p.full_name||'')}</div></div>
         <div style="text-align:right;flex-shrink:0"><div class="ppts">${(p.predicted_points||0).toFixed(1)}</div><div class="pptsl">PRED PTS</div></div>
       </div>
-      <div class="pteam"><span class="pos pos-${p.position_name}">${p.position_name}</span>${p.team_name||''}</div>
+      <div class="pteam"><span class="pos pos-${p.position_name}">${p.position_name}</span>${esc(p.team_name||'')}</div>
       <div class="pstats">
         <div><div class="psl">PRICE</div><div class="psv" style="color:var(--green)">£${(p.price||0).toFixed(1)}m</div></div>
         <div><div class="psl">TOTAL PTS</div><div class="psv">${p.total_points||0}</div></div>
@@ -1264,8 +1267,8 @@ async function loadCaptain(){
       const home=p.fixture_is_home?'(H)':'(A)';
       return`<div class="cap-pick">
         <div class="cap-num">${i===0?'👑 CAPTAIN PICK':`#${i+1} OPTION`}</div>
-        <div class="cap-name">${p.name}</div>
-        <div class="cap-team">${p.team_name}</div>
+        <div class="cap-name">${esc(p.name)}</div>
+        <div class="cap-team">${esc(p.team_name)}</div>
         <div class="cap-pts">${(p.predicted_points||0).toFixed(1)}<span style="font-size:14px;color:var(--text3)"> pts</span></div>
         <div class="cap-fix">
           <span class="fdr-dot" style="background:${fdrCol(p.fixture_difficulty||3)}"></span>
@@ -1292,6 +1295,7 @@ function sharePreds(){
 async function loadTeam(){
   const id=document.getElementById('tid-input').value.trim();
   if(!id){toast('Enter your team ID','error');return;}
+  if(!/^\d{1,10}$/.test(id)){toast('Team ID is the number in your FPL URL','error');return;}
   document.getElementById('team-content').innerHTML='<div class="loading"><div class="spin"></div><span>Loading your team…</span></div>';
   try{
     // Fire team + briefing in parallel — briefing is cached server-side per (id,gw)
@@ -1302,7 +1306,7 @@ async function loadTeam(){
     ]);
     renderTeam(team,id,briefing);
   }catch(e){
-    document.getElementById('team-content').innerHTML=`<div class="err">⚠ ${e.message}. Check team ID is correct.</div>`;
+    document.getElementById('team-content').innerHTML=`<div class="err">⚠ ${esc(e.message)}. Check team ID is correct.</div>`;
     toast('Team not found','error');
   }
 }
@@ -1342,7 +1346,7 @@ function renderBriefing(b){
         <div class="brief-title" style="color:var(--gold)">Today — GW ${b.gameweek}</div>
         <span class="brief-deadline" style="color:var(--gold);border:1px solid rgba(201,168,76,.3)">⚡ Pro</span>
       </div>
-      <div class="brief-summary">${b.message}</div>
+      <div class="brief-summary">${esc(b.message)}</div>
       <div class="brief-section">
         <div class="brief-h">What you'd get</div>
         <div class="brief-row" style="border:none;padding:4px 0">→ Daily briefing refresh when team news drops</div>
@@ -1365,16 +1369,16 @@ function renderBriefing(b){
     <div class="brief-row">
       <span class="brief-tag ${flagClass(a.flag)}">${flagLabel(a.flag)}</span>
       <div style="flex:1;min-width:0">
-        <div class="brief-name">${a.name} <span style="color:var(--text3);font-weight:400">· ${a.team_name}</span></div>
-        ${a.news?`<div class="brief-meta">${a.news}</div>`:''}
-        ${a.reason?`<div class="brief-reason">${a.reason}</div>`:''}
+        <div class="brief-name">${esc(a.name)} <span style="color:var(--text3);font-weight:400">· ${esc(a.team_name)}</span></div>
+        ${a.news?`<div class="brief-meta">${esc(a.news)}</div>`:''}
+        ${a.reason?`<div class="brief-reason">${esc(a.reason)}</div>`:''}
       </div>
     </div>`).join('') : '<div class="brief-empty">No injury or price-drop concerns in your XI.</div>';
 
   let capBlock='';
   if(cap){
     const switchHint = !cap.currently_captained && cap.current_captain
-      ? ` <span style="color:var(--orange);font-size:11px">· consider switching from ${cap.current_captain.name} (${cap.current_captain.predicted_points})</span>`
+      ? ` <span style="color:var(--orange);font-size:11px">· consider switching from ${esc(cap.current_captain.name)} (${cap.current_captain.predicted_points})</span>`
       : '';
     capBlock=`
     <div class="brief-section">
@@ -1382,9 +1386,9 @@ function renderBriefing(b){
       <div class="brief-cap">
         <span style="font-size:18px">©</span>
         <div style="flex:1">
-          <span class="brief-cap-name">${cap.name}</span>
-          <span class="brief-meta"> · ${cap.team_name}</span>${switchHint}
-          ${cap.reason?`<div class="brief-reason">${cap.reason}</div>`:''}
+          <span class="brief-cap-name">${esc(cap.name)}</span>
+          <span class="brief-meta"> · ${esc(cap.team_name)}</span>${switchHint}
+          ${cap.reason?`<div class="brief-reason">${esc(cap.reason)}</div>`:''}
         </div>
         <span class="brief-cap-pred">${cap.predicted_points} pts</span>
       </div>
@@ -1398,23 +1402,23 @@ function renderBriefing(b){
       <div class="brief-h">Top transfer</div>
       <div class="brief-row" style="border-bottom:none">
         <div style="flex:1;min-width:0">
-          <div class="brief-name" style="color:var(--red)">↓ ${xfer.sell.name}</div>
+          <div class="brief-name" style="color:var(--red)">↓ ${esc(xfer.sell.name)}</div>
           <div class="brief-meta">£${xfer.sell.price.toFixed(1)}m · ${xfer.sell.predicted_points} pred</div>
         </div>
         <div class="brief-cap-pred" style="color:var(--green);font-size:13px">+${xfer.improvement}</div>
         <div style="flex:1;min-width:0;text-align:right">
-          <div class="brief-name" style="color:var(--green)">↑ ${xfer.buy.name}</div>
+          <div class="brief-name" style="color:var(--green)">↑ ${esc(xfer.buy.name)}</div>
           <div class="brief-meta">£${xfer.buy.price.toFixed(1)}m · ${xfer.buy.predicted_points} pred</div>
         </div>
       </div>
-      ${xfer.reason?`<div class="brief-reason" style="margin-top:4px">${xfer.reason}</div>`:''}
+      ${xfer.reason?`<div class="brief-reason" style="margin-top:4px">${esc(xfer.reason)}</div>`:''}
     </div>`;
   }
 
   const summary = b.summary
-    ? `<div class="brief-summary">${b.summary}</div>`
+    ? `<div class="brief-summary">${esc(b.summary)}</div>`
     : (alerts.length===0 && cap && !xfer
-        ? `<div class="brief-summary">Your XI looks settled. Captain ${cap.name} for the highest predicted return.</div>`
+        ? `<div class="brief-summary">Your XI looks settled. Captain ${esc(cap.name)} for the highest predicted return.</div>`
         : '');
 
   return `
@@ -1445,12 +1449,12 @@ function renderTeam(d,id,briefing){
 
   const pickRow=p=>`<div class="sli">
     <span class="pos pos-${p.position_name}">${p.position_name}</span>
-    <span class="slin">${p.name} ${p.is_captain?'<span class="ctag">C</span>':p.is_vice_captain?'<span class="ctag" style="opacity:.7">V</span>':''}</span>
-    <span class="slit">${p.team_name}</span>
+    <span class="slin">${esc(p.name)} ${p.is_captain?'<span class="ctag">C</span>':p.is_vice_captain?'<span class="ctag" style="opacity:.7">V</span>':''}</span>
+    <span class="slit">${esc(p.team_name)}</span>
     ${p.is_starting?'<span class="xtag">XI</span>':'<span></span>'}
     <span class="slip">${p.total_points}</span>
     <span class="sliv">£${p.price.toFixed(1)}</span>
-    ${p.news?`<span title="${p.news}" style="color:var(--orange);font-size:12px">⚠</span>`:''}
+    ${p.news?`<span title="${esc(p.news)}" style="color:var(--orange);font-size:12px">⚠</span>`:''}
   </div>`;
 
   const rankFmt=r=>r?r.toLocaleString():'—';
@@ -1459,10 +1463,10 @@ function renderTeam(d,id,briefing){
   ${renderBriefing(briefing)}
   <div class="team-card">
     <div class="tc-top">
-      <div class="tc-name">${d.team_name}</div>
+      <div class="tc-name">${esc(d.team_name)}</div>
       <button class="ghost" onclick="loadTransfers(${id})" style="font-size:11px">🔄 Suggest Transfers</button>
     </div>
-    <div class="tc-mgr">${d.manager_name||''}</div>
+    <div class="tc-mgr">${esc(d.manager_name||'')}</div>
     <div class="tc-stats">
       <div class="tc-stat"><div class="tc-sl">GW POINTS</div><div class="tc-sv">${d.gameweek_points||0}</div></div>
       <div class="tc-stat"><div class="tc-sl">TOTAL POINTS</div><div class="tc-sv">${d.overall_points||0}</div></div>
@@ -1483,7 +1487,7 @@ async function loadTransfers(id){
     const d=await apiFetch(`/fpl-team/${id}/transfers`);
     renderTransfers(d);
   }catch(e){
-    document.getElementById('transfers-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('transfers-content').innerHTML=`<div class="err">⚠ ${esc(e.message)}</div>`;
   }
 }
 
@@ -1498,14 +1502,14 @@ function renderTransfers(d){
       <div class="tcard-label">PREDICTED PTS GAIN</div>
       <div class="tarrow">
         <div class="tplayer">
-          <div class="tpn" style="color:var(--red)">↓ ${s.sell.name}</div>
-          <div class="tpt">${s.sell.team_name}</div>
+          <div class="tpn" style="color:var(--red)">↓ ${esc(s.sell.name)}</div>
+          <div class="tpt">${esc(s.sell.team_name)}</div>
           <div class="tpp" style="color:var(--text3)">£${s.sell.price.toFixed(1)}m · ${s.sell.predicted_points} pred</div>
         </div>
         <div class="tarr-icon">→</div>
         <div class="tplayer">
-          <div class="tpn" style="color:var(--green)">↑ ${s.buy.name}</div>
-          <div class="tpt">${s.buy.team_name}</div>
+          <div class="tpn" style="color:var(--green)">↑ ${esc(s.buy.name)}</div>
+          <div class="tpt">${esc(s.buy.team_name)}</div>
           <div class="tpp" style="color:var(--text3)">£${s.buy.price.toFixed(1)}m · ${s.buy.predicted_points} pred</div>
         </div>
       </div>
@@ -1526,7 +1530,7 @@ async function optimizeSquad(){
     const d=await apiFetch('/teams/optimize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({budget})});
     renderSquad(d);toast('Squad optimized!','success');
   }catch(e){
-    document.getElementById('squad-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('squad-content').innerHTML=`<div class="err">⚠ ${esc(e.message)}</div>`;
     toast('Optimization failed','error');
   }finally{btn.disabled=false;btn.innerHTML='⚡ Optimize Squad';}
 }
@@ -1539,13 +1543,13 @@ function renderSquad(d){
   starting.forEach(p=>{if(byPos[p.position])byPos[p.position].push(p);});
   const tok=players=>players.map(p=>`<div class="pp">
     <div class="pt pt-${p.position}">${p.position}</div>
-    <div class="pn">${p.name}${p.is_captain?' <span title="Captain">(C)</span>':''}</div>
+    <div class="pn">${esc(p.name)}${p.is_captain?' <span title="Captain">(C)</span>':''}</div>
     <div class="pp2">£${p.price.toFixed(1)}m</div>
   </div>`).join('');
   const listHtml=squad.map(p=>`<div class="sli">
     <span class="pos pos-${p.position}">${p.position}</span>
-    <span class="slin">${p.name}${p.is_captain?' (C)':''}</span>
-    <span class="slit">${p.team}</span>
+    <span class="slin">${esc(p.name)}${p.is_captain?' (C)':''}</span>
+    <span class="slit">${esc(p.team)}</span>
     ${p.is_starting?'<span class="xtag">XI</span>':'<span></span>'}
     <span class="slip">${(p.predicted_points||0).toFixed(1)}</span>
     <span class="sliv">£${p.price.toFixed(1)}</span>
@@ -1602,7 +1606,7 @@ async function loadFix(){
     document.getElementById('fix-rl').textContent=`↻ ${now} · 60s`;
     fixTimer=setTimeout(loadFix,60000);
   }catch(e){
-    document.getElementById('fix-grid').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('fix-grid').innerHTML=`<div class="err">⚠ ${esc(e.message)}</div>`;
     toast('Failed to load fixtures','error');
   }
 }
@@ -1625,9 +1629,9 @@ async function loadFDR(){
         if(!fix)return`<td><div class="fdr-cell" style="color:var(--text3)">—</div></td>`;
         const cls=fdrClass(fix.difficulty);
         const hm=fix.is_home?'H':'A';
-        return`<td><div class="fdr-cell ${cls}">${fix.opponent}(${hm})</div></td>`;
+        return`<td><div class="fdr-cell ${cls}">${esc(fix.opponent)}(${hm})</div></td>`;
       }).join('');
-      return`<tr><td class="fdr-team">${t.team_name}</td>${cells}<td><span class="fdr-avg">${t.avg_difficulty}</span></td></tr>`;
+      return`<tr><td class="fdr-team">${esc(t.team_name)}</td>${cells}<td><span class="fdr-avg">${t.avg_difficulty}</span></td></tr>`;
     }).join('');
     document.getElementById('fdr-content').innerHTML=`
       <div style="margin-bottom:10px;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace">
@@ -1636,7 +1640,7 @@ async function loadFDR(){
       <div class="fdr-wrap"><table class="fdrtbl"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
     fdrLoaded=true;
   }catch(e){
-    document.getElementById('fdr-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('fdr-content').innerHTML=`<div class="err">⚠ ${esc(e.message)}</div>`;
   }
 }
 
@@ -1667,9 +1671,9 @@ async function loadInjuries(){
       return`<div class="inj-card" style="animation-delay:${Math.min(i*20,300)}ms">
         <div class="inj-status ${p.status||'monitor'}"></div>
         <div class="inj-body">
-          <div class="inj-name">${p.name}</div>
-          <div class="inj-meta"><span class="pos pos-${p.position_name}">${p.position_name}</span> ${p.team_name}</div>
-          <div class="inj-news">${p.news||'Flagged — check latest news'}</div>
+          <div class="inj-name">${esc(p.name)}</div>
+          <div class="inj-meta"><span class="pos pos-${p.position_name}">${p.position_name}</span> ${esc(p.team_name)}</div>
+          <div class="inj-news">${esc(p.news||'Flagged — check latest news')}</div>
           <div style="margin-top:6px">
             <div style="display:flex;justify-content:space-between;margin-bottom:3px">
               <span style="font-size:10px;color:var(--text3)">Playing chance</span>
@@ -1683,7 +1687,7 @@ async function loadInjuries(){
     }).join('')}</div>`;
     injLoaded=true;
   }catch(e){
-    document.getElementById('inj-grid').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('inj-grid').innerHTML=`<div class="err">⚠ ${esc(e.message)}</div>`;
   }
 }
 
@@ -1699,8 +1703,8 @@ async function loadPriceMovers(){
     const moverCard=(p,i,dir)=>`<div class="mover-card" style="animation-delay:${Math.min(i*25,300)}ms">
       <div class="mv-arrow">${dir>0?'📈':'📉'}</div>
       <div class="mv-body">
-        <div class="mv-name">${p.name}</div>
-        <div class="mv-meta"><span class="pos pos-${p.position_name}">${p.position_name}</span> ${p.team_name} · ${(p.ownership||0).toFixed(1)}% owned</div>
+        <div class="mv-name">${esc(p.name)}</div>
+        <div class="mv-meta"><span class="pos pos-${p.position_name}">${p.position_name}</span> ${esc(p.team_name)} · ${(p.ownership||0).toFixed(1)}% owned</div>
         <div style="font-size:10px;color:var(--text3);margin-top:3px;font-family:'DM Mono',monospace">
           ${dir>0?`↑ ${fmtNum(p.transfers_in)} transfers in`:`↓ ${fmtNum(p.transfers_out)} transfers out`}
         </div>
@@ -1718,7 +1722,7 @@ async function loadPriceMovers(){
       <div class="sh"><h2 class="st" style="color:var(--red)">↓ FALLING</h2><span class="ss">${falling.length} players</span></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">${falling.map((p,i)=>moverCard(p,i,-1)).join('')}</div>`:''}`;
   }catch(e){
-    document.getElementById('price-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('price-content').innerHTML=`<div class="err">⚠ ${esc(e.message)}</div>`;
   }
 }
 
@@ -1735,13 +1739,13 @@ async function loadValue(){
       const delay=Math.min(i*25,300);
       return`<div class="pcard" data-p="${p.position_name}" style="animation-delay:${delay}ms">
         <div class="ptop">
-          <div style="flex:1;min-width:0"><div class="pname">${p.name}</div><div class="pfull">${p.full_name||''}</div></div>
+          <div style="flex:1;min-width:0"><div class="pname">${esc(p.name)}</div><div class="pfull">${esc(p.full_name||'')}</div></div>
           <div style="text-align:right;flex-shrink:0">
             <div class="ppts" style="font-size:28px">${(p.value_score||0).toFixed(2)}</div>
             <div class="pptsl">PTS/£M</div>
           </div>
         </div>
-        <div class="pteam"><span class="pos pos-${p.position_name}">${p.position_name}</span>${p.team_name}</div>
+        <div class="pteam"><span class="pos pos-${p.position_name}">${p.position_name}</span>${esc(p.team_name)}</div>
         <div class="pstats">
           <div><div class="psl">PRICE</div><div class="psv" style="color:var(--green)">£${(p.price||0).toFixed(1)}m</div></div>
           <div><div class="psl">PRED PTS</div><div class="psv" style="color:var(--gold)">${(p.predicted_points||0).toFixed(1)}</div></div>
@@ -1753,7 +1757,7 @@ async function loadValue(){
       </div>`;
     }).join('');
   }catch(e){
-    document.getElementById('value-grid').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('value-grid').innerHTML=`<div class="err">⚠ ${esc(e.message)}</div>`;
   }
 }
 
@@ -1773,13 +1777,13 @@ async function doSearch(q){
     if(!pl.length){document.getElementById('sres').innerHTML='<div class="empty"><div class="eico">🔍</div><div class="etxt">No players found</div></div>';return;}
     document.getElementById('sres').innerHTML=pl.map((p,i)=>{
       const f=parseFloat(p.form)||0,fp=Math.min(100,(f/10)*100);
-      const newsTag=p.news?`<span title="${p.news}" style="color:var(--orange)">⚠</span>`:'';
+      const newsTag=p.news?`<span title="${esc(p.news)}" style="color:var(--orange)">⚠</span>`:'';
       return`<div class="pcard" data-p="${p.position_name}" style="animation-delay:${Math.min(i*25,300)}ms">
         <div class="ptop">
-          <div style="flex:1;min-width:0"><div class="pname">${p.name} ${newsTag}</div><div class="pfull">${p.full_name||''}</div></div>
+          <div style="flex:1;min-width:0"><div class="pname">${esc(p.name)} ${newsTag}</div><div class="pfull">${esc(p.full_name||'')}</div></div>
           <div style="text-align:right;flex-shrink:0"><div class="ppts">${p.total_points||0}</div><div class="pptsl">TOTAL PTS</div></div>
         </div>
-        <div class="pteam"><span class="pos pos-${p.position_name}">${p.position_name}</span>${p.team_name}</div>
+        <div class="pteam"><span class="pos pos-${p.position_name}">${p.position_name}</span>${esc(p.team_name)}</div>
         <div class="pstats">
           <div><div class="psl">PRICE</div><div class="psv" style="color:var(--green)">£${(p.price||0).toFixed(1)}m</div></div>
           <div><div class="psl">OWNED</div><div class="psv">${(p.ownership||0).toFixed(1)}%</div></div>
@@ -1802,7 +1806,7 @@ async function loadGW(){
     if(cur){const b=document.getElementById('gwbadge');b.textContent=cur.name;b.style.display='';}
     const curH=cur?`<div class="gwcard">
       <div class="gw-ey">CURRENT GAMEWEEK</div>
-      <div class="gw-t">${cur.name}</div>
+      <div class="gw-t">${esc(cur.name)}</div>
       <div class="gw-d">Deadline: ${fmtDate(cur.deadline_time)}</div>
       <span class="gwtag ${cur.finished?'dn':'act'}">${cur.finished?'✓ Finished':cur.is_current?'● Active':'Upcoming'}</span>
       ${cur.average_entry_score?`<div class="gw-scores">
@@ -1814,7 +1818,7 @@ async function loadGW(){
       startCD(new Date(nxt.deadline_time));
       return`<div class="gwcard">
         <div class="gw-ey">NEXT GAMEWEEK</div>
-        <div class="gw-t" style="color:var(--text2)">${nxt.name}</div>
+        <div class="gw-t" style="color:var(--text2)">${esc(nxt.name)}</div>
         <div class="gw-d">Deadline: ${fmtDate(nxt.deadline_time)}</div>
         <div class="cdl" style="margin-top:16px">TIME UNTIL DEADLINE</div>
         <div class="cd">
@@ -1832,7 +1836,7 @@ async function loadGW(){
       <div class="sh" style="margin-bottom:14px"><h2 class="st">GAMEWEEK INFO</h2></div>
       <div class="gw-grid">${curH}${nxtH}</div>`;
   }catch(e){
-    document.getElementById('gw-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('gw-content').innerHTML=`<div class="err">⚠ ${esc(e.message)}</div>`;
     toast('Failed to load gameweek','error');
   }
 }
@@ -1904,10 +1908,10 @@ async function loadTrending(){
     const card=(p,i,dir)=>`<div class="trend-card" style="animation-delay:${Math.min(i*30,300)}ms">
       <div class="trend-rank">${i+1}</div>
       <div class="trend-body">
-        <div class="trend-name">${p.name}${p.news?` <span style="color:var(--orange);font-size:10px">⚠</span>`:''}</div>
+        <div class="trend-name">${esc(p.name)}${p.news?` <span style="color:var(--orange);font-size:10px">⚠</span>`:''}</div>
         <div class="trend-meta">
           <span class="pos pos-${p.position_name}">${p.position_name}</span>
-          ${p.team_name} · £${p.price.toFixed(1)}m
+          ${esc(p.team_name)} · £${p.price.toFixed(1)}m
         </div>
       </div>
       <div class="trend-right">
@@ -1930,7 +1934,7 @@ async function loadTrending(){
       </div>`;
     trendLoaded=true;
   }catch(e){
-    document.getElementById('trend-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('trend-content').innerHTML=`<div class="err">⚠ ${esc(e.message)}</div>`;
   }
 }
 
@@ -1958,14 +1962,14 @@ async function loadThreeGW(){
           const fxHtml=(p.fixtures||[]).map(fx=>`
             <div class="tgw-fx d${fx.difficulty}">
               <div class="gw">GW${fx.gw}</div>
-              <div class="opp">${fx.opponent}${fx.is_home?'(H)':'(A)'}</div>
+              <div class="opp">${esc(fx.opponent)}${fx.is_home?'(H)':'(A)'}</div>
               <div class="pts">${fx.predicted}pts</div>
             </div>`).join('');
           return`<div class="tgw-card" style="animation-delay:${Math.min(i*30,400)}ms">
             <div class="tgw-head">
               <div>
-                <div class="tgw-name">${p.name}</div>
-                <div class="tgw-team"><span class="pos pos-${p.position_name}">${p.position_name}</span> ${p.team_name} · £${(p.price||0).toFixed(1)}m</div>
+                <div class="tgw-name">${esc(p.name)}</div>
+                <div class="tgw-team"><span class="pos pos-${p.position_name}">${p.position_name}</span> ${esc(p.team_name)} · £${(p.price||0).toFixed(1)}m</div>
               </div>
               <div style="text-align:right">
                 <div class="tgw-total">${p.three_gw_total}</div>
@@ -1983,7 +1987,7 @@ async function loadThreeGW(){
       </div>`;
     tgwLoaded=true;
   }catch(e){
-    document.getElementById('tgw-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('tgw-content').innerHTML=`<div class="err">⚠ ${esc(e.message)}</div>`;
   }
 }
 
