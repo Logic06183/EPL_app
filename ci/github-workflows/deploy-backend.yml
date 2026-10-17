@@ -1,0 +1,42 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "requirements_production.txt"
+      - "Dockerfile"
+      - "cloudbuild.yaml"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Cloud Build → Cloud Run
+    needs: ci
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build and deploy
+        run: gcloud builds submit --config cloudbuild.yaml --project "${{ vars.GCP_PROJECT_ID || 'epl-prediction-app' }}"
+      - name: Post-deploy health check
+        run: |
+          URL=$(gcloud run services describe epl-backend --region us-central1 \
+            --project "${{ vars.GCP_PROJECT_ID || 'epl-prediction-app' }}" --format='value(status.url)')
+          curl -fsS --retry 5 --retry-delay 5 "$URL/health"

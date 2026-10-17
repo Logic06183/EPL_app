@@ -16,6 +16,9 @@ class Settings:
 
     FPL_API_BASE: str = os.getenv("FPL_API_BASE", "https://fantasy.premierleague.com/api")
 
+    # Skip the startup FPL fetch + model training (CI smoke tests, offline dev).
+    SKIP_PREWARM: bool = os.getenv("SKIP_PREWARM", "false").lower() == "true"
+
     CACHE_TTL: int = int(os.getenv("CACHE_TTL", "300"))
     CACHE_MAX_SIZE: int = int(os.getenv("CACHE_MAX_SIZE", "1000"))
 

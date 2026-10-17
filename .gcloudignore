@@ -51,3 +51,8 @@ web/
 # OS
 .DS_Store
 Thumbs.db
+# Not needed for the API image
+archive/
+screenshots/
+scripts/
+.github/

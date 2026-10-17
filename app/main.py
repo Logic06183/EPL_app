@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 
 from .api import fpl_team, payments, players, predictions, teams, users
 from .config import settings
+from .services import gemini_service
 from .services.data_service import get_data_service
 from .services.prediction_service import get_prediction_service
 from .utils.cache import get_cache_manager
@@ -46,6 +47,20 @@ async def lifespan(app: FastAPI):
     # Pre-warm FPL bootstrap cache and train ML models so first user request is fast.
     # Without this, the first dashboard hit pays a ~25s RF training cost.
     app_state["models_loaded"] = False
+    if settings.SKIP_PREWARM:
+        logger.info("SKIP_PREWARM set — models will train on first request")
+    else:
+        await _prewarm()
+
+    logger.info("Application startup complete")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down application")
+
+
+async def _prewarm():
     try:
         import asyncio
 
@@ -65,14 +80,6 @@ async def lifespan(app: FastAPI):
         logger.info(f"Models pre-trained: {app_state['models_loaded']}")
     except Exception as e:
         logger.warning(f"Startup pre-warm failed (non-fatal, will train lazily): {e}")
-
-    logger.info("Application startup complete")
-
-    yield
-
-    # Shutdown
-    logger.info("Shutting down application")
-    # Cleanup resources if needed
 
 
 # Initialize FastAPI app
@@ -140,7 +147,8 @@ async def health_check():
     """Health check endpoint for monitoring"""
     return {
         "status": "healthy",
-        "ai_enabled": True,
+        "ai_enabled": gemini_service._api_key() is not None,
+        "environment": settings.ENVIRONMENT,
         "version": settings.APP_VERSION,
         "timestamp": datetime.now(UTC).isoformat(),
         "models_loaded": app_state.get("models_loaded", False),

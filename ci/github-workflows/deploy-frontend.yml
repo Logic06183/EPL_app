@@ -1,0 +1,41 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Firebase Hosting
+    needs: ci
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Deploy
+        working-directory: frontend
+        run: npx --yes firebase-tools@13 deploy --only hosting --project "${{ vars.GCP_PROJECT_ID || 'epl-prediction-app' }}" --non-interactive
+      - name: Post-deploy check
+        run: |
+          curl -fsS -o /dev/null "https://${{ vars.GCP_PROJECT_ID || 'epl-prediction-app' }}.web.app/"
+          curl -fsS "https://${{ vars.GCP_PROJECT_ID || 'epl-prediction-app' }}.web.app/health"
