@@ -179,3 +179,45 @@ def test_wildcard_needs_a_big_gain():
     small = chip_advice(plan, plan, 160.0, [10, 11, 12], team_of, counts, xp_of, ["wildcard"])[0]
     big = chip_advice(plan, plan, 170.0, [10, 11, 12], team_of, counts, xp_of, ["wildcard"])[0]
     assert not small["play_now"] and big["play_now"]
+
+
+def test_departed_player_stays_sellable():
+    from app.services.optimizer import candidates_from_elements
+
+    cands = _pool(6)
+    start = optimise(cands, budget=100.0)
+    gone = start.squad[0]
+    elements = [{"id": c.id, "element_type": c.position, "team": c.team, "now_cost": int(round(c.price * 10)),
+                 "status": "u" if c.id == gone else "a"} for c in cands]
+
+    class PS:
+        def horizon(self, pid):
+            return list(next(c for c in cands if c.id == pid).xp)
+
+    assert gone not in {c.id for c in candidates_from_elements(elements, PS())}
+    kept = candidates_from_elements(elements, PS(), keep=set(start.squad))
+    assert next(c for c in kept if c.id == gone).xp == [0.0, 0.0, 0.0]
+    plan = optimise(kept, budget=start.cost, current=start.squad, free_transfers=1)
+    assert gone in plan.transfers_out
+
+
+def test_optimize_rejects_impossible_budget():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.services.data_service import get_data_service
+
+    elements = [{"id": c.id, "web_name": "x", "element_type": c.position, "team": c.team,
+                 "now_cost": int(round(c.price * 10)), "status": "a"} for c in _pool(7)]
+
+    class FakeData:
+        async def get_bootstrap_data(self):
+            return {"elements": elements, "teams": []}
+
+    app.dependency_overrides[get_data_service] = lambda: FakeData()
+    try:
+        c = TestClient(app)
+        assert c.post("/api/teams/optimize", json={"budget": 20}).status_code == 422
+        assert c.post("/api/teams/optimize", json={"budget": "lots"}).status_code == 422
+    finally:
+        app.dependency_overrides.clear()

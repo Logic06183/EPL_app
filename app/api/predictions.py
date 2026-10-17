@@ -3,7 +3,6 @@ Predictions API Router
 Prediction history (the live track record) and the scheduled refresh hook.
 """
 
-import asyncio
 import hmac
 import logging
 import os
@@ -23,13 +22,11 @@ router = APIRouter()
 @router.get("/history")
 async def get_prediction_history(data_service: FPLDataService = Depends(get_data_service)):
     """This season's gameweeks: predictions saved before each deadline, scored after."""
-    bootstrap = await data_service.get_bootstrap_data()
-    season = track_record.season_label(bootstrap.get("events", []))
     db = get_db()
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
-    results = await asyncio.to_thread(track_record.load_results, db, season)
-    return {"season": season, "history": results, "summary": track_record.summarise(results)}
+    live = await track_record.live_record(data_service, db)
+    return {"season": live["season"], "history": live["gameweeks"], "summary": live["summary"]}
 
 
 @router.post("/refresh")

@@ -138,3 +138,19 @@ def test_prediction_service_uses_model_when_ready():
     assert svc.predict({"id": 1}, "ensemble") == 4.2   # legacy alias
     assert svc.predict({"id": 2}, "xp") == 0.0          # unknown player / no fixture
     assert svc.horizon(1) == [4.2, 3.1]
+
+
+def test_refresh_after_season_end_marks_fresh():
+    import asyncio
+
+    class Fake:
+        calls = 0
+
+        async def get_bootstrap_data(self):
+            Fake.calls += 1
+            return {"events": [{"id": 38, "finished": True, "is_next": False}], "elements": []}
+
+    svc = XPService()
+    asyncio.run(svc.ensure_fresh(Fake()))
+    asyncio.run(svc.ensure_fresh(Fake()))
+    assert Fake.calls == 1 and svc.updated_at is not None

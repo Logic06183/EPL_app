@@ -43,3 +43,15 @@ def test_summarise_funnel_conversion():
     assert steps["team_import"]["from_previous"] == 0.2
     assert steps["briefing_view"]["count"] == 0
     assert steps["sign_in"]["from_previous"] is None   # previous step had zero
+
+
+def test_global_cap_bounds_spoofed_forwarded_for(monkeypatch):
+    monkeypatch.setattr(events, "_increment", lambda *a: None)
+    monkeypatch.setattr(events, "_GLOBAL_MAX", 50)
+    events._recent.clear()
+    events._global.clear()
+    c = TestClient(app)
+    oks = [c.post("/api/events", json={"name": "visit"}, headers={"x-forwarded-for": f"10.0.0.{i}"}).json()["ok"]
+           for i in range(80)]
+    assert oks.count(True) == 50
+    events._global.clear()

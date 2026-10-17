@@ -9,7 +9,8 @@ GET /api/admin/funnel is limited to emails listed in ADMIN_EMAILS.
 import logging
 import os
 import time
-from collections import defaultdict, deque
+import asyncio
+from collections import OrderedDict, deque
 from datetime import datetime, timedelta, timezone
 from typing import Deque, Dict
 
@@ -34,25 +35,39 @@ FUNNEL = [
     "checkout_start",
     "checkout_return",
 ]
-OTHER = {"plan_view", "optimise", "track_record_view", "share", "calendar_subscribe"}
+OTHER = {"plan_view", "optimise", "track_record_view", "share", "calendar_subscribe", "checkout_cancel"}
 ALLOWED = set(FUNNEL) | OTHER
 
-# Per-instance rate limit so a script can't inflate counts cheaply
+# Per-instance rate limits so a script can't inflate counts cheaply. The
+# per-client key comes from X-Forwarded-For, which a client can spoof, so a
+# global cap per instance bounds the damage either way.
 _RATE_WINDOW_S = 60
 _RATE_MAX = 60
-_recent: Dict[str, Deque[float]] = defaultdict(deque)
+_GLOBAL_MAX = 1200
+_MAX_KEYS = 10_000
+_recent: "OrderedDict[str, Deque[float]]" = OrderedDict()
+_global: Deque[float] = deque()
+
+
+def _trim(q: Deque[float], now: float) -> None:
+    while q and now - q[0] > _RATE_WINDOW_S:
+        q.popleft()
 
 
 def _allow(ip: str) -> bool:
     now = time.monotonic()
-    q = _recent[ip]
-    while q and now - q[0] > _RATE_WINDOW_S:
-        q.popleft()
+    _trim(_global, now)
+    if len(_global) >= _GLOBAL_MAX:
+        return False
+    q = _recent.pop(ip, None) or deque()
+    _trim(q, now)
+    _recent[ip] = q                 # most recently used goes last
+    if len(_recent) > _MAX_KEYS:    # evict the least recently used client
+        _recent.popitem(last=False)
     if len(q) >= _RATE_MAX:
         return False
     q.append(now)
-    if len(_recent) > 10_000:   # keep memory bounded
-        _recent.clear()
+    _global.append(now)
     return True
 
 
@@ -114,9 +129,12 @@ async def get_funnel(days: int = Query(30, ge=1, le=365), user: dict = Depends(g
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
     start = datetime.now(timezone.utc).date() - timedelta(days=days - 1)
-    by_day = {}
-    for i in range(days):
-        day = (start + timedelta(days=i)).isoformat()
-        snap = db.collection(COLLECTION).document(day).get()
-        by_day[day] = (snap.to_dict() or {}).get("counts", {}) if snap.exists else {}
+    day_ids = [(start + timedelta(days=i)).isoformat() for i in range(days)]
+
+    def read_all() -> Dict[str, Dict[str, int]]:
+        refs = [db.collection(COLLECTION).document(d) for d in day_ids]
+        found = {snap.id: (snap.to_dict() or {}).get("counts", {}) for snap in db.get_all(refs) if snap.exists}
+        return {d: found.get(d, {}) for d in day_ids}
+
+    by_day = await asyncio.to_thread(read_all)
     return {"days": by_day, **summarise_funnel(by_day)}

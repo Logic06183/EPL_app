@@ -307,7 +307,6 @@ async def get_track_record():
     How good are the predictions? The walk-forward backtest on past seasons,
     plus this season's gameweeks scored against actual points.
     """
-    import asyncio
     from .auth.firebase_auth import get_db
     from .services import track_record
     from .services.data_service import get_data_service
@@ -321,12 +320,9 @@ async def get_track_record():
     xp = get_xp_service()
     live = {"season": None, "gameweeks": [], "summary": None}
     try:
-        bootstrap = await get_data_service().get_bootstrap_data()
-        season = track_record.season_label(bootstrap.get("events", []))
         db = get_db()
         if db is not None:
-            results = await asyncio.to_thread(track_record.load_results, db, season)
-            live = {"season": season, "gameweeks": results, "summary": track_record.summarise(results)}
+            live = await track_record.live_record(get_data_service(), db)
     except Exception as e:
         logger.warning(f"Track record load failed: {e}")
 

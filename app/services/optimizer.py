@@ -73,16 +73,28 @@ def estimate_free_transfers(history: dict) -> int:
     return max(1, ft) if history.get("current") else 1
 
 
-def candidates_from_elements(elements: List[dict], prediction_service) -> List[Candidate]:
-    """Build optimiser candidates from FPL bootstrap elements and the xP model."""
+def candidates_from_elements(
+    elements: List[dict], prediction_service, keep: Optional[set] = None,
+) -> List[Candidate]:
+    """
+    Build optimiser candidates from FPL bootstrap elements and the xP model.
+    Players who've left the league (status 'u') are excluded unless in `keep`
+    (the manager's current squad), where they stay as sellable with 0 xP.
+    """
+    keep = keep or set()
     out = []
     for e in elements:
-        if e.get("element_type") not in SQUAD_SHAPE or e.get("status") == "u" or not e.get("now_cost"):
+        if e.get("element_type") not in SQUAD_SHAPE or not e.get("now_cost"):
+            continue
+        gone = e.get("status") == "u"
+        if gone and e["id"] not in keep:
             continue
         xp = prediction_service.horizon(e["id"])
         if not xp:
             # Model not ready: flat form-based estimate for each gameweek
             xp = [prediction_service.predict(e, "basic")] * 3
+        if gone:
+            xp = [0.0] * len(xp)
         out.append(Candidate(e["id"], e["element_type"], e["team"], e["now_cost"] / 10, xp))
     return out
 

@@ -193,15 +193,22 @@ class XPService:
             events = bootstrap.get("events", [])
             nxt = next((e for e in events if e.get("is_next")), None)
             if nxt is None:
+                # Season over: nothing to predict. Mark fresh so requests
+                # don't re-run this every time.
                 logger.info("xP: no upcoming gameweek (season over?)")
+                self.updated_at = datetime.now(timezone.utc)
                 return
             next_gw = int(nxt["id"])
             fixtures = fixtures_frame(await data_service.get_all_fixtures())
 
-            live_by_gw: Dict[int, Dict[str, Any]] = {}
-            for e in events:
-                if e["id"] < next_gw and e.get("finished"):
-                    live_by_gw[e["id"]] = await data_service.get_event_live(e["id"], finished=True)
+            finished = [e["id"] for e in events if e["id"] < next_gw and e.get("finished")]
+            sem = asyncio.Semaphore(8)
+
+            async def fetch(gw: int):
+                async with sem:
+                    return gw, await data_service.get_event_live(gw, finished=True)
+
+            live_by_gw: Dict[int, Dict[str, Any]] = dict(await asyncio.gather(*(fetch(gw) for gw in finished)))
 
             elements = bootstrap.get("elements", [])
             player_gw = player_gw_frame(elements, live_by_gw, fixtures)

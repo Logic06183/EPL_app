@@ -22,7 +22,7 @@ def _ics_time(iso: str) -> str:
 
 
 def _escape(text: str) -> str:
-    return text.replace("\\", "\\\\").replace(";", "\;").replace(",", "\\,").replace("\n", "\\n")
+    return text.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
 
 def build_ics(events: list, team: Optional[int] = None, now: Optional[datetime] = None) -> str:

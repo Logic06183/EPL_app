@@ -35,3 +35,9 @@ def test_calendar_endpoint():
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/calendar")
     assert "Gameweek 9 deadline" in r.text
+
+
+def test_ics_text_escaping():
+    from app.api.calendar import _escape
+
+    assert _escape("a;b,c\\d\ne") == "a\;b\\,c\\\\d\\ne"

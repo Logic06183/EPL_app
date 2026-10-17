@@ -124,7 +124,10 @@ async def optimize_squad(
     Best 15-player squad for a budget over the next 3 gameweeks: integer
     programme over the xP model with FPL's squad, club and formation rules.
     """
-    budget = float(request.get("budget", 100.0))
+    try:
+        budget = float(request.get("budget", 100.0))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="budget must be a number")
 
     try:
         bootstrap = await data_service.get_bootstrap_data()
@@ -134,7 +137,10 @@ async def optimize_squad(
         await prediction_service.ensure_ready(data_service)
 
         cands = candidates_from_elements(elements, prediction_service)
-        plan = await asyncio.to_thread(optimise, cands, budget)
+        try:
+            plan = await asyncio.to_thread(optimise, cands, budget)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"No valid 15-man squad fits a £{budget:.1f}m budget")
 
         pos_map = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
         xp_next = {c.id: c.xp[0] for c in cands}
@@ -174,6 +180,8 @@ async def optimize_squad(
                                 "(captain doubled, bench weighted 0.1).",
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Squad optimisation error: {e}")
         raise HTTPException(status_code=500, detail="Squad optimisation failed")

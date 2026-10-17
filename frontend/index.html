@@ -920,6 +920,10 @@ if(FB_READY) firebase.initializeApp(FIREBASE_CONFIG);
 // ── Auth state ────────────────────────────────────────
 let currentUser = null;  // Firebase User object
 let currentPlan = 'free';
+// Resolves once the signed-in state is known (Firebase restores sessions
+// asynchronously), so deep links don't fire requests without the ID token.
+let _authResolve;
+const authReady = new Promise(r => { _authResolve = r; });
 // Whether Pro features are unlocked: paid Pro, Founder, or everyone during the
 // launch free period. Comes from /users/me so it matches the server's gating.
 let hasPro = false;
@@ -942,6 +946,7 @@ if(FB_READY){
     currentUser = user;
     await refreshPlan();
     updateAuthUI(user, currentPlan);
+    _authResolve();
     // Now we know the plan — load plan-aware components
     applyPlanUI();
     loadCaptain();
@@ -949,7 +954,7 @@ if(FB_READY){
 } else {
   // No Firebase (SDK blocked or not configured): anonymous access only.
   // Deferred so the rest of the script has finished initialising.
-  setTimeout(async ()=>{ await refreshPlan(); applyPlanUI(); loadCaptain(); }, 0);
+  setTimeout(async ()=>{ await refreshPlan(); _authResolve(); applyPlanUI(); loadCaptain(); }, 0);
 }
 
 function updateAuthUI(user, plan){
@@ -2170,7 +2175,11 @@ function shareCaptain(){
 
 // ── Init ──────────────────────────────────────────────
 track('visit');
-if(new URLSearchParams(location.search).get('upgraded')==='1') track('checkout_return');
+{
+  // PayFast's cancel_url is the return_url plus &cancelled=1
+  const q=new URLSearchParams(location.search);
+  if(q.get('upgraded')==='1') track(q.get('cancelled')==='1'?'checkout_cancel':'checkout_return');
+}
 // Deep link (?team=123, used by calendar reminders) or the last team loaded on this device
 (function(){
   const q=new URLSearchParams(location.search).get('team');
@@ -2178,7 +2187,7 @@ if(new URLSearchParams(location.search).get('upgraded')==='1') track('checkout_r
   const id=(q&&/^\d+$/.test(q))?q:saved;
   if(!id) return;
   document.getElementById('tid-input').value=id;
-  if(q){ showTab('squad'); loadTeam(); }
+  if(q){ showTab('squad'); authReady.then(loadTeam); }
 })();
 checkStatus();
 loadPred();

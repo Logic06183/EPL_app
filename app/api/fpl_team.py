@@ -261,7 +261,7 @@ async def plan_transfers(
         current = [p["id"] for p in team_data["picks"]]
         # Current players valued at today's price (selling prices aren't public)
         budget = sum(by_id[i]["now_cost"] for i in current if i in by_id) / 10 + team_data.get("bank", 0.0)
-        cands = candidates_from_elements(elements, prediction_service)
+        cands = candidates_from_elements(elements, prediction_service, keep=set(current))
         owned = {c.id for c in cands}
         missing = [i for i in current if i not in owned]
         if missing:

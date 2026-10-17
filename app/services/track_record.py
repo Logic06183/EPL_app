@@ -127,3 +127,13 @@ def summarise(results: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
             for k in ("mae", "spearman", "captain_pts", "top11_pts")
         }
     return out
+
+
+async def live_record(data_service, db) -> Dict[str, Any]:
+    """This season's scored gameweeks and their summary (shared by the API routes)."""
+    import asyncio
+
+    bootstrap = await data_service.get_bootstrap_data()
+    season = season_label(bootstrap.get("events", []))
+    results = await asyncio.to_thread(load_results, db, season)
+    return {"season": season, "gameweeks": results, "summary": summarise(results)}
