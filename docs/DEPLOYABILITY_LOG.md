@@ -3,6 +3,40 @@
 Running record of the push to make EPL_app a cleanly deployable product.
 Newest first. Each entry: what changed, why, how it was checked.
 
+## 2026-10-17 — Iteration 7: full-stack run against a mock FPL API
+
+Built `scripts/mock_fpl.py` (deterministic 20-club league, 8 GWs played,
+team id 1) and `scripts/demo.sh` / `make demo`, then drove every tab of the
+real SPA against the real API in Chromium (`scripts/e2e_fullstack.mjs`).
+
+**Found**
+- **`/api/players/three-gw` took 42 s and `/value` 22 s**, synchronously,
+  freezing the whole instance: captain, 3-GW, value and differentials called
+  sklearn once per player (three-gw twice). Every other panel hung behind them.
+- **Injuries tab never loaded** — `loadInjuries()` was never called; the
+  Intel badge never updated.
+- **Header gameweek bar never populated** — `loadGWBar()` was never called;
+  it would also have counted down to the *current* (passed) deadline.
+- **Briefing targeted the wrong gameweek** ("GW 8 · deadline passed") — it
+  used the current GW, not the next deadline.
+- Team import ignored `FPL_API_BASE` (hard-coded host), so it couldn't be
+  pointed at a mock or proxy.
+- On mock data (8 rounds) the next-GW model's backtest *didn't* beat
+  PPG-to-date (MAE 1.63 vs 1.58) and the auto gate correctly kept the
+  snapshot models.
+
+**Changed**
+- `_predict_map()` — one `predict_batch` per list endpoint: 42 s → 0.07 s.
+- Injuries load with the Intel tab and sub-tab; GW bar loads at start and
+  shows the next deadline; briefing label/deadline/meter/cache use next GW.
+- Team import uses `settings.FPL_API_BASE`.
+- `make demo` / `make demo-down` / `make e2e-full`; full-stack smoke added
+  to the proposed CI.
+
+**Checked**: ruff clean; pytest 59 passed (+5 batching tests — old code fails
+4); `scripts/e2e.mjs` 6/6; `scripts/e2e_fullstack.mjs` 16/16 panels with no
+console errors or failed API calls.
+
 ## 2026-10-17 — Iteration 6: launch-grace UI, error states, rate limiting
 
 **Found**
@@ -206,3 +240,4 @@ unconfigured. Docker build not run locally (no daemon) — CI covers it.
 - [ ] Enforce CSP after report-only period; move inline onclick handlers out so `unsafe-inline` can go.
 - [x] Account deletion (iteration 4).
 - [ ] Staging environment.
+- [ ] 3-GW planner multiplies predictions by difficulty; when the next-GW model is active that double-counts fixture difficulty for the first GW.

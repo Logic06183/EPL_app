@@ -18,6 +18,11 @@ router = APIRouter()
 POS_MAP = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 
 
+def _predict_map(prediction_service, players, model_type="random_forest") -> dict[int, float]:
+    """One vectorised predict for many players (per-player sklearn calls cost ~50ms each)."""
+    return {p["id"]: v for p, v in zip(players, prediction_service.predict_batch(players, model_type), strict=True)}
+
+
 def _enrich(player, teams, positions, prediction_service=None, model_type="random_forest", pred=None):
     """Build a standardised player dict from raw FPL element.
 
@@ -204,16 +209,16 @@ async def get_captain_picks(
             fix_map[f["team_h"]] = {"opponent": teams.get(f["team_a"], {}).get("short_name", ""), "is_home": True,  "difficulty": f.get("team_h_difficulty", 3)}
             fix_map[f["team_a"]] = {"opponent": teams.get(f["team_h"], {}).get("short_name", ""), "is_home": False, "difficulty": f.get("team_a_difficulty", 3)}
 
-        picks = []
-        for player in elements:
-            # Only outfield + playing players
-            if player.get("element_type", 0) == 1:
-                continue
-            chance = player.get("chance_of_playing_next_round")
-            if chance is not None and chance < 50:
-                continue
+        eligible = [
+            p for p in elements
+            if p.get("element_type", 0) != 1
+            and (p.get("chance_of_playing_next_round") is None or p.get("chance_of_playing_next_round") >= 50)
+        ]
+        pred_map = _predict_map(prediction_service, eligible)
 
-            d = _enrich(player, teams, positions, prediction_service)
+        picks = []
+        for player in eligible:
+            d = _enrich(player, teams, positions, pred=pred_map[player["id"]])
             team_fix = fix_map.get(player.get("team", 0), {})
             d["fixture_opponent"] = team_fix.get("opponent", "")
             d["fixture_is_home"]  = team_fix.get("is_home", True)
@@ -324,17 +329,17 @@ async def get_three_gw_picks(
         # Difficulty multiplier: easy fixture boosts predicted points
         diff_mult = {1: 1.30, 2: 1.15, 3: 1.00, 4: 0.85, 5: 0.70}
 
-        picks = []
-        for player in elements:
-            if position and player.get("element_type") != position:
-                continue
-            chance = player.get("chance_of_playing_next_round")
-            if chance is not None and chance < 50:
-                continue
-            if float(player.get("minutes", 0)) == 0:
-                continue
+        eligible = [
+            p for p in elements
+            if (not position or p.get("element_type") == position)
+            and (p.get("chance_of_playing_next_round") is None or p.get("chance_of_playing_next_round") >= 50)
+            and float(p.get("minutes", 0)) > 0
+        ]
+        pred_map = _predict_map(prediction_service, eligible, "ensemble")
 
-            base_pred   = prediction_service.predict(player, "ensemble")
+        picks = []
+        for player in eligible:
+            base_pred   = pred_map[player["id"]]
             team_id     = player.get("team", 0)
             fixtures    = fix_map.get(team_id, [])
             fixtures    = sorted(fixtures, key=lambda x: x["gw"])[:3]
@@ -355,7 +360,7 @@ async def get_three_gw_picks(
             if not gw_scores:
                 continue
 
-            d = _enrich(player, teams, positions, prediction_service, "ensemble")
+            d = _enrich(player, teams, positions, pred=base_pred)
             d["three_gw_total"] = round(three_gw_total, 1)
             d["three_gw_avg"]   = round(three_gw_total / len(gw_scores), 1)
             d["fixtures"]       = gw_scores
@@ -438,16 +443,13 @@ async def get_differentials(
 
         await prediction_service.ensure_trained(elements)
 
-        diffs = []
-        for player in elements:
-            ownership = float(player.get("selected_by_percent", 0))
-            if ownership > max_ownership:
-                continue
-            chance = player.get("chance_of_playing_next_round")
-            if chance is not None and chance < 50:
-                continue
-            d = _enrich(player, teams, positions, prediction_service)
-            diffs.append(d)
+        eligible = [
+            p for p in elements
+            if float(p.get("selected_by_percent", 0)) <= max_ownership
+            and (p.get("chance_of_playing_next_round") is None or p.get("chance_of_playing_next_round") >= 50)
+        ]
+        pred_map = _predict_map(prediction_service, eligible)
+        diffs = [_enrich(p, teams, positions, pred=pred_map[p["id"]]) for p in eligible]
 
         diffs.sort(key=lambda x: x["predicted_points"] or 0, reverse=True)
         return {
@@ -533,15 +535,16 @@ async def get_value_picks(
 
         await prediction_service.ensure_trained(elements)
 
+        eligible = [
+            p for p in elements
+            if float(p.get("now_cost", 0)) / 10 >= 4.0
+            and (p.get("chance_of_playing_next_round") is None or p.get("chance_of_playing_next_round") >= 50)
+        ]
+        pred_map = _predict_map(prediction_service, eligible)
         values = []
-        for player in elements:
+        for player in eligible:
             price = float(player.get("now_cost", 0)) / 10
-            if price < 4.0:
-                continue
-            chance = player.get("chance_of_playing_next_round")
-            if chance is not None and chance < 50:
-                continue
-            d = _enrich(player, teams, positions, prediction_service)
+            d = _enrich(player, teams, positions, pred=pred_map[player["id"]])
             d["value_score"] = round((d["predicted_points"] or 0) / max(price, 0.1), 2)
             values.append(d)
 

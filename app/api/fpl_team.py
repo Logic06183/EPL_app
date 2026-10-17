@@ -16,6 +16,7 @@ from ..auth.firebase_auth import (
     get_db,
     get_effective_plan,
 )
+from ..config import settings
 from ..services import gemini_service
 from ..services.data_service import FPLDataService, get_data_service
 from ..services.prediction_service import PredictionService, get_prediction_service
@@ -46,7 +47,7 @@ async def get_fpl_team(
 
         # Team profile
         team_resp = await client.get(
-            f"https://fantasy.premierleague.com/api/entry/{team_id}/"
+            f"{settings.FPL_API_BASE}/entry/{team_id}/"
         )
         if team_resp.status_code == 404:
             raise HTTPException(status_code=404, detail="FPL team not found. Check the team ID.")
@@ -55,7 +56,7 @@ async def get_fpl_team(
 
         # GW picks
         picks_resp = await client.get(
-            f"https://fantasy.premierleague.com/api/entry/{team_id}/event/{gw_id}/picks/"
+            f"{settings.FPL_API_BASE}/entry/{team_id}/event/{gw_id}/picks/"
         )
         picks_resp.raise_for_status()
         picks_data = picks_resp.json()
@@ -366,7 +367,11 @@ async def get_team_briefing(
         logger.error(f"Briefing: team fetch failed for {team_id}: {e}")
         raise HTTPException(status_code=404, detail="Team not found")
 
-    gw_id = team_data["gameweek"]
+    # Advice is for the next deadline (picks come from the latest submitted GW).
+    gw_info  = await data_service.get_gameweek_info()
+    target   = gw_info.get("next") or gw_info.get("current") or {}
+    gw_id    = target.get("id", team_data["gameweek"])
+    deadline = target.get("deadline_time")
     cache_key = f"briefing:{team_id}:{gw_id}"
     cached = cache.get(cache_key)
     if cached is not None:
@@ -444,11 +449,6 @@ async def get_team_briefing(
         logger.info(f"Briefing transfer fetch skipped (status {e.status_code})")
     except Exception as e:
         logger.warning(f"Briefing transfer fetch failed: {e}")
-
-    # Gameweek deadline
-    gw_info = await data_service.get_gameweek_info()
-    cur     = gw_info.get("current") or gw_info.get("next") or {}
-    deadline = cur.get("deadline_time")
 
     # Gemini reasons (cheap call, never fatal). Pass enough comparative data
     # (form, current captain, ownership) for the model to write *insight*

@@ -3,7 +3,7 @@ PY ?= python3
 VENV ?= .venv
 BIN := $(VENV)/bin
 
-.PHONY: help install dev frontend test lint e2e check deploy-backend deploy-frontend
+.PHONY: help install dev frontend demo demo-down test lint e2e e2e-full check deploy-backend deploy-frontend
 
 help:  ## Show this help
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -21,6 +21,12 @@ dev:  ## Run the API on :8001 with reload (the SPA expects this port on localhos
 frontend:  ## Serve the SPA on :3000
 	$(PY) -m http.server 3000 --directory frontend
 
+demo:  ## Whole app offline: mock FPL :8090 + API :8001 + SPA :3000 (team id 1)
+	PYTHON=$(BIN)/python scripts/demo.sh up
+
+demo-down:  ## Stop the demo
+	scripts/demo.sh down
+
 test:  ## Run backend tests
 	$(BIN)/pytest -q
 
@@ -30,6 +36,9 @@ lint:  ## Lint backend + static-check frontend
 
 e2e:  ## Browser regression tests (needs playwright + chromium)
 	node scripts/e2e.mjs
+
+e2e-full: demo  ## Full-stack browser smoke against the mock FPL API
+	node scripts/e2e_fullstack.mjs; status=$$?; scripts/demo.sh down; exit $$status
 
 check: lint test  ## Everything CI runs (except docker + e2e)
 

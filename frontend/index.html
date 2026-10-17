@@ -1177,6 +1177,7 @@ function showSubtab(tab,sub){
       document.getElementById('intel-'+s).style.display=s===sub?'':'none';
     });
     if(sub==='trend')  loadTrending();
+    if(sub==='inj')    loadInjuries();
     if(sub==='price')  loadPriceMovers();
     if(sub==='value')  loadValue();
   }
@@ -1691,6 +1692,7 @@ async function loadFDR(){
 let injLoaded=false;
 async function loadIntel(){
   loadTrending();
+  loadInjuries();  // also feeds the Intel tab badge
 }
 
 async function loadInjuries(){
@@ -1909,7 +1911,8 @@ async function loadGWBar(){
       apiFetch('/players/trending?top_n=1'),
     ]);
     if(gw.status==='fulfilled'){
-      const cur=gw.value.current||gw.value.next||{};
+      // Planning is always for the next deadline; fall back to current at season end.
+      const cur=gw.value.next||gw.value.current||{};
       document.getElementById('gwb-gw').textContent = cur.name||'—';
       if(cur.deadline_time){
         const diff=new Date(cur.deadline_time)-new Date();
@@ -2048,6 +2051,7 @@ function shareCaptain(){
 // ── Init ──────────────────────────────────────────────
 checkStatus();
 loadPred();
+loadGWBar();
 // Captain only auto-loads once we know the user's plan (see onAuthStateChanged)
 setInterval(checkStatus,30000);
 </script>

@@ -205,3 +205,4 @@ test-results/
 playwright-report/
 .firebase/
 .ruff_cache/
+.demo/
