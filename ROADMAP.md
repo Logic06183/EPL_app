@@ -36,6 +36,9 @@ personal weekly briefing for *your* team.
 - [x] Pricing review → `docs/pricing.md` (recommendation only; Craig decides)
 - [ ] International checkout (GBP/USD) via a merchant-of-record provider — needs Craig's account
 
+- [x] Mini-league view: league effective ownership, threats / under-covered / differentials by next-GW swing
+- [x] Shareable GW plan card
+
 ## Needs Craig
 
 - Rotate PayFast credentials (were committed in the old `cloudbuild.yaml`) and set them on `epl-backend`; set the same passphrase in the PayFast dashboard
@@ -58,3 +61,4 @@ personal weekly briefing for *your* team.
 - 2026-10-17 — code review of the branch: 10 findings fixed (departed players in /plan, deep-link auth race, analytics cap, season-end refresh loop, parallel live fetches, calendar escape, cancelled checkout, funnel reads, 422 on impossible budget, shared track-record loader)
 - 2026-10-17 — link previews (Open Graph/Twitter image + tags), better title/description, robots.txt
 - 2026-10-18 — shareable GW plan card (canvas PNG via share sheet / download) + ?ref=share attribution
+- 2026-10-18 — mini-league view (`/api/fpl-team/{id}/league/{league_id}`)

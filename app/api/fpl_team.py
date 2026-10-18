@@ -15,6 +15,7 @@ from ..services.data_service import FPLDataService, get_data_service
 from ..services.optimizer import (
     candidates_from_elements, chip_advice, chips_available, estimate_free_transfers, optimise,
 )
+from ..services.league import league_view
 from ..services.prediction_service import PredictionService, get_prediction_service
 from ..services import gemini_service
 from ..utils.cache import get_cache_manager
@@ -93,6 +94,12 @@ async def get_fpl_team(
 
         return {
             "team_name":        team_meta.get("name", f"Team {team_id}"),
+            # Private classic leagues (league_type "x"), for the mini-league view
+            "leagues": [
+                {"id": lg["id"], "name": lg.get("name", ""), "rank": lg.get("entry_rank")}
+                for lg in team_meta.get("leagues", {}).get("classic", [])
+                if lg.get("league_type") == "x"
+            ],
             "manager_name":     f"{team_meta.get('player_first_name','')} {team_meta.get('player_last_name','')}".strip(),
             "overall_points":   team_meta.get("summary_overall_points", 0),
             "overall_rank":     team_meta.get("summary_overall_rank", 0),
@@ -335,6 +342,86 @@ async def plan_transfers(
     except Exception as e:
         logger.error(f"Transfer plan error for team {team_id}: {e}")
         raise HTTPException(status_code=500, detail="Transfer planning failed")
+
+
+@router.get("/{team_id}/league/{league_id}")
+async def mini_league(
+    team_id:   int,
+    league_id: int,
+    rivals:    int = Query(20, ge=1, le=50, description="How many top rivals to compare against"),
+    data_service:  FPLDataService     = Depends(get_data_service),
+    prediction_service: PredictionService = Depends(get_prediction_service),
+    user:      dict = Depends(get_current_user),
+):
+    """
+    Your team vs your mini-league: effective ownership among the top rivals
+    (their latest locked picks), and the players that swing the race next GW.
+    """
+    gw_info = await data_service.get_gameweek_info()
+    cur = gw_info.get("current")
+    if not cur:
+        raise HTTPException(status_code=400, detail="Rivals' teams are visible after the first deadline")
+    gw = cur["id"]
+    client = await data_service._get_client()
+    base = "https://fantasy.premierleague.com/api"
+
+    resp = await client.get(f"{base}/leagues-classic/{league_id}/standings/")
+    if resp.status_code == 404:
+        raise HTTPException(status_code=404, detail="League not found")
+    resp.raise_for_status()
+    standings = resp.json()
+    results = standings.get("standings", {}).get("results", [])
+    me = next((r for r in results if r["entry"] == team_id), None)
+    others = [r for r in results if r["entry"] != team_id][:rivals]
+
+    cache = get_cache_manager()
+    sem = asyncio.Semaphore(8)
+
+    async def picks_for(entry: int) -> list:
+        key = f"picks:{entry}:{gw}"
+        hit = cache.get(key)
+        if hit is not None:
+            return hit
+        async with sem:
+            r = await client.get(f"{base}/entry/{entry}/event/{gw}/picks/")
+        if r.status_code != 200:
+            return []
+        picks = r.json().get("picks", [])
+        cache.set(key, picks)
+        return picks
+
+    mine, *rival_picks = await asyncio.gather(picks_for(team_id), *(picks_for(r["entry"]) for r in others))
+    rival_picks = [p for p in rival_picks if p]
+    if not mine:
+        raise HTTPException(status_code=404, detail="Could not load your picks")
+
+    await prediction_service.ensure_ready(data_service)
+    bootstrap = await data_service.get_bootstrap_data()
+    by_id = {e["id"]: e for e in bootstrap.get("elements", [])}
+    teams_map = {t["id"]: t for t in bootstrap.get("teams", [])}
+    xp_next = {el: prediction_service.xp.next_xp(el) or 0.0 for el in by_id}
+
+    view = league_view(mine, rival_picks, xp_next)
+    for section in ("threats", "undercovered", "differentials"):
+        for row in view[section]:
+            el = by_id.get(row["id"], {})
+            row["name"] = el.get("web_name", "")
+            row["team_name"] = teams_map.get(el.get("team"), {}).get("short_name", "")
+
+    return {
+        "league": {"id": league_id, "name": standings.get("league", {}).get("name", "")},
+        "gameweek_picks": gw,
+        "you": {"rank": me.get("rank") if me else None, "total": me.get("total") if me else None},
+        "rivals": [
+            {"entry": r["entry"], "name": r.get("entry_name", ""), "manager": r.get("player_name", ""),
+             "rank": r.get("rank"), "total": r.get("total"),
+             "gap": (r.get("total", 0) - me.get("total", 0)) if me else None}
+            for r in others
+        ],
+        **view,
+        "method": "Effective ownership = average pick multiplier among these rivals (captain counts 2). "
+                  "Swing = next-GW xP x (your multiplier - league EO).",
+    }
 
 
 # ── Briefing ──────────────────────────────────────────────────────────────────
