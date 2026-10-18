@@ -310,6 +310,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   #hero .import-title{font-size:32px;}
   #hero .import-sub{font-size:14px;}
   #hero .irow{flex-direction:column;}
+  #hero .tid-input{flex:none;width:100%;}
   #hero .btn{width:100%;justify-content:center;}
 }
 .tc-top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;}
@@ -719,7 +720,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
     <div class="import-sub" style="margin-bottom:16px">Captain, the transfers worth making, chip timing,
       and what your mini-league rivals own that you don't.</div>
     <div class="irow" style="margin:0;max-width:520px">
-      <input type="text" inputmode="numeric" class="tid-input" id="hero-tid" aria-label="FPL team ID or link" placeholder="Paste your FPL link or team ID" autocomplete="off"
+      <input type="text" inputmode="numeric" class="tid-input" id="hero-tid" aria-label="FPL team ID or link" placeholder="Team ID or FPL link" autocomplete="off"
         onkeydown="if(event.key==='Enter')heroImport()">
       <button class="btn" onclick="heroImport()">Get my plan</button>
     </div>
@@ -792,7 +793,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
       <div class="import-sub">Enter your FPL team ID to get transfer suggestions and squad analysis.<br>
         Find it at: <a href="https://fantasy.premierleague.com/" target="_blank" rel="noopener noreferrer" class="ext-link">fantasy.premierleague.com</a>/entry/<strong>YOUR-ID</strong>/history</div>
       <div class="irow">
-        <input type="text" inputmode="numeric" class="tid-input" id="tid-input" aria-label="FPL team ID or link" placeholder="Team ID or your FPL link" autocomplete="off">
+        <input type="text" inputmode="numeric" class="tid-input" id="tid-input" aria-label="FPL team ID or link" placeholder="Team ID or FPL link" autocomplete="off">
         <button class="btn" onclick="loadTeam()">Load Team</button>
       </div>
     </div>
