@@ -27,10 +27,10 @@ gameweeks (the decision-relevant set). Per gameweek, then averaged.
 
 | Metric | Why it matters to a paying user | Today (2024-25 / 2025-26 backtest) | Target |
 |---|---|---|---|
-| Spearman rank correlation, predicted vs actual points | Is the ranking of players right? | 0.40 / 0.36 (season-average baseline 0.31 / 0.25) | **≥ 0.45 on both seasons**, and ≥ the pre-deadline FPL `ep_next` on the live record over any rolling 8 GWs |
-| Captain pick: actual points of the model's #1 | The headline feature. | 7.5 / 7.3; **not** significantly better than the season-average pick (CI spans zero; −1.6 in 2024-25) | **Beats season-average captain, CI above zero, both seasons**; live: beats the most-owned captain in ≥ 55 % of GWs |
-| Top-11 points: mean actual of the model's top 11 | Is the XI it recommends good? | 5.6 / 4.7 (baseline 5.0 / 4.5), significant in one season only | **+0.5 over baseline, significant, both seasons** |
-| MAE | Calibration for the optimiser and the −4 hit decision | 2.03 / ≈2.0 | ≤ 1.85 |
+| Spearman rank correlation, predicted vs actual points | Is the ranking of players right? | **0.451 / 0.451** (was 0.40 / 0.36 on 2026-10-18 morning; season-average baseline 0.31 / 0.25) | **≥ 0.45 on both seasons** (met 2026-10-18), and ≥ the pre-deadline FPL `ep_next` on the live record over any rolling 8 GWs |
+| Captain pick: actual points of the model's #1 | The headline feature. | 7.9 / 6.0; **not** better than the season-average pick (−1.2 / −0.2, CI ±1.3 to ±2.4). One pick per GW over 37 GWs is too noisy for a tight interval; top-3 is the measurable proxy (+0.1 / +0.8) | **Beats season-average captain, CI above zero, both seasons**; live: beats the most-owned captain in ≥ 55 % of GWs. Measure top-3 alongside |
+| Top-11 points: mean actual of the model's top 11 | Is the XI it recommends good? | 5.63 / 4.87 (baseline 4.96 / 4.50): +0.67 significant / +0.37 not | **+0.5 over baseline, significant, both seasons** |
+| MAE | Calibration for the optimiser and the −4 hit decision | 1.87 / 1.94 (was 2.03 / 2.12) | ≤ 1.85 |
 | Transfer plan realised gain | Does following the plan gain points vs holding? | not measured | measured live every GW; ≥ 0 on average over the season |
 
 The FPL column `xP` in the historical data scores 0.65, but it was scraped
@@ -59,20 +59,22 @@ metrics getting worse.
 
 ## M0 — Measure fairly  (Claude)
 
-- [ ] Store FPL's pre-deadline `ep_next` (and `chance_of_playing_next_round`) in every `xp_snapshots` document, and score it alongside the model so the Track record page shows model vs FPL vs season-average per gameweek.
+- [x] Store FPL's pre-deadline `ep_next` in every `xp_snapshots` document, and score it alongside the model so the Track record page shows model vs FPL vs season-average per gameweek (2026-10-18; first comparable snapshot is GW8).
 - [ ] Add the transfer-plan realised gain to scoring: the snapshot keeps the recommended transfers for a sample of imported teams (or at least the global top swaps); after the GW, realised points in minus out.
-- [ ] `ml/train.py`: add MAE/Spearman/captain/top-11 for FPL `xP` only where it can be shown pre-deadline (or drop it and rely on the live `ep_next`); print a one-screen scorecard against the Targets above and exit non-zero if any Target regresses.
-- [ ] Keep `data/` out of git; document the two commands in README.
+- [x] `ml/train.py` prints a one-screen GOAL.md scorecard after every run (2026-10-18). The historical FPL `xP` column stays reported but is not a target; the live `ep_next` is.
+- [x] `data/` is git-ignored; `python -m ml.train --data data --download` fetches and trains in about a minute on the Mac.
 
 ## M1 — Make the model good  (Claude, iterate until the bar is met)
 
 Ideas in rough order of expected gain; each is one experiment, one commit if it wins:
 
-- [ ] **Minutes model × points-per-90.** Predict P(start), P(60+ min) from recent starts, `chance_of_playing_next_round`, news text, rotation patterns; multiply by a per-90 points model. This is where captaincy and the −4 decision go wrong today.
-- [ ] **Use FPL's `ep_next` as a feature** (it is free, pre-deadline information). The product's value is the plan built on top, not the raw number.
+- [x] **Minutes model.** A P(60+ minutes) classifier scales the prediction by sqrt(P60): MAE 1.99 → 1.87, Spearman +0.02 to +0.03 (2026-10-18). Full product and bucketed decompositions were no better.
+- [ ] **Use FPL's `ep_next` as a feature** (it is free, pre-deadline information). Cannot be backtested (the historical column is post-deadline); test it live once 8 GWs of snapshots exist.
 - [ ] **Team strength from results and xG** with time decay (Dixon-Coles or Elo), home/away split, giving per-fixture expected goals for and against; from that, clean-sheet and goal-involvement probabilities.
-- [ ] **Bookmaker odds** for match result and total goals (football-data.co.uk historic for training; a free live odds source each GW). Odds are the strongest public signal for clean sheets.
-- [ ] Per-position models or position interactions; set-piece and penalty takers; double/blank gameweek handling checked.
+- [ ] **Bookmaker odds**: tried 2026-10-18 with football-data.co.uk history; +0.005 Spearman on one season, nothing on the other, and it needs a live key (the-odds-api, free tier) plus a fallback. Parked.
+- [ ] Set-piece and penalty takers; double/blank gameweek handling checked. (Per-position models tried 2026-10-18: worse.)
+- [x] **Crowd features** (ownership and transfer ranks, price change) and **last-match features**: the biggest gain of the day, Spearman +0.05 to +0.09 (2026-10-18).
+- [ ] **Captain picker**: shrink the ranking toward long-run quality (0.7·xP + 0.3·season rate) lifted the top-1 and top-3 picks in the backtest; confirm with the production bundle, then apply to the captain endpoint and `/plan`.
 - [ ] Multi-GW horizon trained directly instead of repeating next-GW; calibrated uncertainty so the optimiser can be risk-aware.
 - [ ] Retrain schedule: monthly in-season refit on the current season plus each summer with the finished season added.
 
