@@ -277,12 +277,13 @@ async def plan_transfers(
             if "wildcard" in chips else asyncio.sleep(0, result=None),
         )
         horizon = len(best.lineups)
+        xp_of = {c.id: list(c.xp) for c in cands}
         chip_tips = chip_advice(
             best, hold, wildcard.expected_points if wildcard else None,
             [next_gw + i for i in range(horizon)] if next_gw else list(range(1, horizon + 1)),
             {e["id"]: e["team"] for e in elements},
             prediction_service.xp.fixture_counts,
-            {c.id: list(c.xp) for c in cands},
+            xp_of,
             chips,
         )
 
@@ -319,8 +320,10 @@ async def plan_transfers(
             "transfers_in":   [player(p) for p in best.transfers_in],
             "expected_points": {"with_transfers": best.expected_points, "hold": hold.expected_points},
             "per_gameweek":   [
-                {"lineup": lineup, "captain": cap, "points": pts}
-                for lineup, cap, pts in zip(best.lineups, best.captains, best.per_gw_points)
+                {"lineup": lineup, "captain": cap, "points": pts,
+                 "captain_name": by_id[cap].get("web_name", ""),
+                 "captain_xp": round(xp_of[cap][g], 2)}
+                for g, (lineup, cap, pts) in enumerate(zip(best.lineups, best.captains, best.per_gw_points))
             ],
             "assumptions": (
                 f"{free_transfers} free transfer(s); current players valued at today's price "

@@ -57,3 +57,4 @@ personal weekly briefing for *your* team.
 - 2026-10-17 — bootstrap CIs on pick metrics: captaincy gap vs season average is noise in both seasons; top-11 +0.65 significant in 2024-25
 - 2026-10-17 — code review of the branch: 10 findings fixed (departed players in /plan, deep-link auth race, analytics cap, season-end refresh loop, parallel live fetches, calendar escape, cancelled checkout, funnel reads, 422 on impossible budget, shared track-record loader)
 - 2026-10-17 — link previews (Open Graph/Twitter image + tags), better title/description, robots.txt
+- 2026-10-18 — shareable GW plan card (canvas PNG via share sheet / download) + ?ref=share attribution

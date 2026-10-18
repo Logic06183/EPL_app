@@ -1515,6 +1515,7 @@ function renderTeam(d,id,briefing){
   const rankFmt=r=>r?r.toLocaleString():'—';
 
   _teamNames=Object.fromEntries((d.picks||[]).map(p=>[p.id,p.name]));
+  _lastTeamName=d.team_name||'';
   document.getElementById('team-content').innerHTML=`
   ${renderBriefing(briefing)}
   <div class="team-card">
@@ -1570,6 +1571,7 @@ async function loadPlan(id){
   el.innerHTML='<div class="loading" style="padding:24px"><div class="spin"></div><span>Solving your best transfers for the next 3 gameweeks…</span></div>';
   try{
     const d=await apiFetch(`/fpl-team/${id}/plan${ftq}`);
+    _lastPlan=d;
     track('plan_view');
     const ft=String(d.free_transfers);
     const names={};
@@ -1600,10 +1602,66 @@ async function loadPlan(id){
           <span style="color:var(--text2)">${escHtml(c.reason)}</span></div>`).join('')}
       </div>`:''}
       <div style="font-size:10px;color:var(--text3);margin-top:6px">${escHtml(d.assumptions)}</div>
+      <button class="ghost" style="margin-top:10px;font-size:12px" onclick="sharePlanCard()">📤 Share my GW plan</button>
     </div>`;
   }catch(e){
     el.innerHTML=`<div class="err">⚠ Transfer plan unavailable: ${escHtml(e.message)}</div>`;
   }
+}
+
+// ── Shareable plan card (drawn client-side; no server image rendering) ──
+let _lastPlan=null, _lastTeamName='';
+function drawPlanCard(d, teamName){
+  const W=1080,H=1080,c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d');
+  const g=x.createRadialGradient(900,150,50,900,150,700);g.addColorStop(0,'#103a22');g.addColorStop(1,'#050a0c');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  const font=(w,sz)=>`${w} ${sz}px "Helvetica Neue",Arial,sans-serif`;
+  const fit=(t,max,sz,w='700')=>{x.font=font(w,sz);while(x.measureText(t).width>max&&sz>20){sz-=2;x.font=font(w,sz);}return sz;};
+  x.fillStyle='#c9a84c';x.font=font('800',44);x.fillText('FPL AI',80,120);
+  x.fillStyle='#2a5040';x.font=font('700',22);x.fillText('PRO',250,120);
+  const gw=d.gameweek||'';
+  x.fillStyle='#e6f5ee';fit(`${teamName||'My team'}`,920,64);x.fillText(`${teamName||'My team'}`,80,230);
+  x.fillStyle='#5f9880';x.font=font('400',34);x.fillText(`Gameweek ${gw} plan`,80,285);
+  const g0=(d.per_gameweek||[])[0]||{};
+  const box=(y,h)=>{x.fillStyle='#0b161c';x.strokeStyle='#1e3a50';x.lineWidth=2;x.beginPath();x.roundRect(80,y,920,h,22);x.fill();x.stroke();};
+  box(340,170);
+  x.fillStyle='#5f9880';x.font=font('700',24);x.fillText('CAPTAIN',115,390);
+  x.fillStyle='#efc84a';fit(g0.captain_name||'—',640,64,'800');x.fillText(g0.captain_name||'—',115,470);
+  x.fillStyle='#35d967';x.font=font('800',44);x.textAlign='right';x.fillText(`${(g0.captain_xp||0).toFixed(1)} xP`,965,470);x.textAlign='left';
+  const outs=d.transfers_out||[],ins=d.transfers_in||[];
+  const rows=Math.max(1,Math.min(3,ins.length)), gainY=650+rows*58+20, boxEnd=gainY+30;
+  box(540,boxEnd-540);
+  x.fillStyle='#5f9880';x.font=font('700',24);x.fillText('TRANSFERS',115,590);
+  if(!ins.length){x.fillStyle='#cce8de';x.font=font('700',44);x.fillText('Hold, rolling the transfer',115,660);}
+  else{
+    ins.slice(0,3).forEach((p,i)=>{const y=650+i*58;
+      x.fillStyle='#e05555';fit(`↓ ${outs[i]?.name||''}`,400,40);x.fillText(`↓ ${outs[i]?.name||''}`,115,y);
+      x.fillStyle='#35d967';fit(`↑ ${p.name}`,400,40);x.fillText(`↑ ${p.name}`,560,y);});
+  }
+  x.fillStyle='#5f9880';x.font=font('400',28);
+  x.fillText(`${d.gain>=0?'+':''}${(d.gain||0).toFixed(1)} expected points over 3 GWs${d.hits?` (after -${4*d.hits})`:''}`,115,gainY);
+  const now=(d.chips||[]).filter(ch=>ch.play_now).map(ch=>ch.label);
+  x.fillStyle='#efc84a';x.font=font('800',36);
+  x.fillText(now.length?`Chip: play ${now.join(' + ')}`:'No chip this week',80,boxEnd+80);
+  x.fillStyle='#5f9880';x.font=font('400',28);x.fillText('epl-prediction-app.web.app · every prediction scored in public',80,1035);
+  return c;
+}
+async function sharePlanCard(){
+  if(!_lastPlan) return;
+  const c=drawPlanCard(_lastPlan,_lastTeamName);
+  const blob=await new Promise(r=>c.toBlob(r,'image/png'));
+  const url='https://epl-prediction-app.web.app/?ref=share';
+  const text=`My GW${_lastPlan.gameweek} FPL plan, via FPL AI Pro`;
+  track('share');
+  const file=new File([blob],`fpl-gw${_lastPlan.gameweek}-plan.png`,{type:'image/png'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file],text:`${text} ${url}`}); }catch{}
+    return;
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=file.name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  toast('Plan card downloaded — share it anywhere','success');
 }
 
 // Name lookup for captain ids that aren't in the transfer lists (squad players)
@@ -2191,6 +2249,7 @@ track('visit');
   // PayFast's cancel_url is the return_url plus &cancelled=1
   const q=new URLSearchParams(location.search);
   if(q.get('upgraded')==='1') track(q.get('cancelled')==='1'?'checkout_cancel':'checkout_return');
+  if(q.get('ref')==='share') track('share_visit');
 }
 // Deep link (?team=123, used by calendar reminders) or the last team loaded on this device
 (function(){
