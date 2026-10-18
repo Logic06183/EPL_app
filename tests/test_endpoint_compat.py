@@ -230,3 +230,30 @@ def test_gameweek_and_fixture_shapes_match_frontend():
     assert fixture["event"] == 34
 
     app.dependency_overrides.clear()
+
+
+def test_predictions_limit_uses_effective_plan_during_grace():
+    """Anonymous users get the Pro predictions limit while LAUNCH_FREE_UNTIL is in the future.
+
+    Regression: the live smoke test asked for 20 rows and got 10 because the
+    endpoint gated on the stored plan ('free') instead of the effective plan.
+    """
+    import os
+    import importlib
+    from app.auth import firebase_auth
+    from app.api import players
+
+    os.environ["LAUNCH_FREE_UNTIL"] = "2099-12-31"
+    importlib.reload(firebase_auth)
+    importlib.reload(players)
+
+    app.dependency_overrides[get_data_service] = lambda: FakeDataService()
+    client = TestClient(app)
+    try:
+        r = client.get("/api/players/predictions?top_n=20&model_type=basic")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["locked_count"] == 0
+        assert len(body["predictions"]) == body["total_players"] == 2
+    finally:
+        app.dependency_overrides.clear()
