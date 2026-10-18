@@ -24,7 +24,8 @@ import pandas as pd
 from . import track_record
 from ..auth.firebase_auth import get_db
 from ..ml.features import (
-    POSITIONS, add_position_code, attach_fixture_features, fixture_rows, form_as_of, team_form,
+    CORE_STATS, EXTRA_STATS, POSITIONS, add_position_code, attach_fixture_features, fixture_rows,
+    form_as_of, ownership_features, team_form,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,8 +35,8 @@ HORIZON = 3
 REFRESH_SECONDS = 3600
 RETRY_SECONDS = 300
 
-_STATS = ["minutes", "starts", "total_points", "goals_scored", "assists",
-          "expected_goals", "expected_assists", "bps"]
+# Per-gameweek stats read from /event/{gw}/live; must match what training aggregates
+_STATS = CORE_STATS + list(EXTRA_STATS)
 
 
 def fixtures_frame(fixtures: List[Dict[str, Any]]) -> pd.DataFrame:
@@ -112,6 +113,15 @@ def predict_gameweeks(
 
     frame = els.merge(fx, on="team", how="inner").merge(form, on="element", how="left")
     frame["gw"] = next_gw  # team form as of the start of next_gw
+    # Crowd features for the upcoming gameweek come from the bootstrap (pre-deadline)
+    crowd = ownership_features(pd.DataFrame({
+        "element": [e["id"] for e in elements],
+        "gw": next_gw,
+        "selected": [float(e.get("selected_by_percent") or 0) for e in elements],
+        "transfers_balance": [int(e.get("transfers_in_event") or 0) - int(e.get("transfers_out_event") or 0)
+                              for e in elements],
+    })).drop(columns=["gw"])
+    frame = frame.merge(crowd, on="element", how="left")
     frame = attach_fixture_features(frame, tform_now.assign(gw=next_gw))
     if prior is not None:
         frame = frame.merge(prior, on="code", how="left")

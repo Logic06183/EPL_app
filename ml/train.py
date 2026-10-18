@@ -26,8 +26,8 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
 
 from app.ml.features import (
-    FEATURES, POSITIONS, add_position_code, attach_fixture_features, player_form, prior_season,
-    team_form,
+    CORE_STATS, EXTRA_STATS, FEATURES, POSITIONS, add_position_code, attach_fixture_features,
+    ownership_features, player_form, prior_season, team_form,
 )
 
 SEASONS = ["2022-23", "2023-24", "2024-25", "2025-26"]
@@ -57,14 +57,21 @@ def load_season(data_dir: Path, season: str) -> tuple[pd.DataFrame, pd.DataFrame
     if "starts" not in raw:
         raw["starts"] = (raw["minutes"] >= 60).astype(int)
 
-    stats = ["minutes", "starts", "total_points", "goals_scored", "assists",
-             "expected_goals", "expected_assists", "bps"]
+    present_extra = [c for c in EXTRA_STATS if c in raw.columns]
+    stats = CORE_STATS + present_extra
     raw[stats] = raw[stats].fillna(0)
+    for c in ("selected", "transfers_balance"):
+        if c not in raw:
+            raw[c] = np.nan
 
     player_gw = (raw.groupby(["element", "gw"])
                  .agg(team=("team", "last"), position=("position", "last"), value=("value", "last"),
+                      selected=("selected", "last"), transfers_balance=("transfers_balance", "last"),
                       n_fixtures=("fixture", "nunique"), **{c: (c, "sum") for c in stats})
                  .reset_index())
+    for c in EXTRA_STATS:
+        if c not in present_extra:
+            player_gw[c] = np.nan   # stat not recorded that season (not zero)
 
     fx = raw.drop_duplicates("fixture")
     fixtures = pd.DataFrame({
@@ -79,6 +86,7 @@ def load_season(data_dir: Path, season: str) -> tuple[pd.DataFrame, pd.DataFrame
     rows = raw[["element", "gw", "fixture", "team", "opponent", "was_home", "position",
                 "value", "total_points", "minutes", "xP"]].copy()
     rows = rows.merge(player_form(player_gw), on=["element", "gw"], how="left")
+    rows = rows.merge(ownership_features(player_gw), on=["element", "gw"], how="left")
     rows = attach_fixture_features(rows, team_form(fixtures, player_gw))
     codes = pd.read_csv(data_dir / f"players_raw_{season}.csv")[["id", "code"]]
     prior = prior_season(pd.read_csv(data_dir / f"players_raw_{PRIOR[season]}.csv"))
@@ -204,6 +212,32 @@ def main() -> None:
         OUT_DIR / "prior_season.csv", index=False)
     (OUT_DIR / "backtest.json").write_text(json.dumps(report, indent=2) + "\n")
     print("wrote", OUT_DIR / "model.joblib", OUT_DIR / "backtest.json")
+    print(scorecard(report))
+
+
+# The bar from GOAL.md ("Is it good at predictions?"), checked on every test season.
+TARGETS = {
+    "spearman": ("≥", 0.45),
+    "mae": ("≤", 1.85),
+}
+
+
+def scorecard(report: dict) -> str:
+    """One-screen pass/fail against GOAL.md for each held-out season."""
+    lines = ["", "GOAL.md scorecard"]
+    for season, body in report["seasons"].items():
+        m, base, sig = body["metrics"]["model"], body["metrics"]["season_avg"], body["metrics"]["model_vs_season_avg"]
+        checks = [
+            ("spearman ≥ 0.45", m["spearman"] >= TARGETS["spearman"][1], f"{m['spearman']:.3f}"),
+            ("mae ≤ 1.85", m["mae"] <= TARGETS["mae"][1], f"{m['mae']:.3f}"),
+            ("captain beats season avg (CI > 0)", sig["captain_pts"]["significant"] and sig["captain_pts"]["diff"] > 0,
+             f"{sig['captain_pts']['diff']:+.2f} CI {sig['captain_pts']['ci95']}"),
+            ("top-11 +0.5 over season avg, significant", sig["top11_pts"]["significant"] and sig["top11_pts"]["diff"] >= 0.5,
+             f"{m['top11_pts']:.2f} vs {base['top11_pts']:.2f} ({sig['top11_pts']['diff']:+.2f})"),
+        ]
+        lines.append(f"  {season}")
+        lines += [f"    {'PASS' if ok else 'FAIL'}  {name}  — {detail}" for name, ok, detail in checks]
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

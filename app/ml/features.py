@@ -49,9 +49,35 @@ FEATURES = [
     "prev_pts90",
     "prev_mins_pg",
     "prev_xgi90",
+    # Rolling per-fixture rates of the stats that drive points but aren't xG
+    "bonus_l6",
+    "threat_l6",
+    "creativity_l6",
+    "influence_l6",
+    "defcon_l6",
+    "saves_l6",
+    "xgc_l6",
+    # The crowd: ownership and net transfers this gameweek, as within-gameweek
+    # percentile ranks so the scale is the same in every season
+    "own_rank",
+    "net_tr_rank",
 ]
 
 PRIOR_FEATURES = ["prev_pts90", "prev_mins_pg", "prev_xgi90"]
+
+# Extra per-gameweek stats beyond the core ones; `defensive_contribution` only
+# exists from 2025-26 (new scoring rule), earlier seasons carry NaN.
+EXTRA_STATS = {
+    "bonus": "bonus",
+    "threat": "threat",
+    "creativity": "creativity",
+    "influence": "influence",
+    "defensive_contribution": "defcon",
+    "saves": "saves",
+    "expected_goals_conceded": "xgc",
+}
+CORE_STATS = ["minutes", "starts", "total_points", "goals_scored", "assists",
+              "expected_goals", "expected_assists", "bps"]
 
 
 def _shifted_rolling(g: pd.core.groupby.SeriesGroupBy, window: int | None) -> pd.Series:
@@ -91,6 +117,12 @@ def player_form(player_gw: pd.DataFrame) -> pd.DataFrame:
     out["starts_l6"] = _shifted_rolling(g["_starts"], 6)
     out["bps_l6"] = _shifted_rolling(g["_bps"], 6)
     out["games_season"] = g["n_fixtures"].transform(lambda s: s.shift(1).fillna(0).cumsum())
+    for stat, short in EXTRA_STATS.items():
+        if stat in df:
+            df[f"_{short}"] = df[stat] / nf
+            out[f"{short}_l6"] = _shifted_rolling(df.groupby("element")[f"_{short}"], 6)
+        else:
+            out[f"{short}_l6"] = np.nan
 
     xgi6 = _shifted_sum(g["_xgi"], 6)
     min6 = _shifted_sum(g["minutes"], 6)
@@ -109,8 +141,7 @@ def form_as_of(player_gw: pd.DataFrame, gw: int) -> pd.DataFrame:
     # Append a placeholder row at `gw` per player so the shifted features land on it
     last = hist.sort_values("gw").groupby("element").tail(1).copy()
     placeholder = last.assign(gw=gw, n_fixtures=1)
-    for col in ("minutes", "starts", "total_points", "goals_scored", "assists",
-                "expected_goals", "expected_assists", "bps"):
+    for col in CORE_STATS + [c for c in EXTRA_STATS if c in placeholder]:
         placeholder[col] = 0
     form = player_form(pd.concat([hist, placeholder], ignore_index=True))
     return form[form["gw"] == gw].drop(columns=["gw"])
@@ -201,6 +232,20 @@ def prior_season(players_raw: pd.DataFrame) -> pd.DataFrame:
     xgi = players_raw.get("expected_goal_involvements")
     out["prev_xgi90"] = (np.where(played, 90 * xgi.astype(float) / mins.where(played, 1), np.nan)
                          if xgi is not None else np.nan)
+    return out
+
+
+def ownership_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """
+    Within-gameweek percentile ranks of ownership (`selected`) and net
+    transfers (`transfers_balance`). Both are known before the deadline.
+    frame needs element, gw, selected, transfers_balance. Ranks are scale-free,
+    so training on raw counts and serving on `selected_by_percent` agree.
+    """
+    out = frame[["element", "gw"]].copy()
+    g = frame.groupby("gw")
+    out["own_rank"] = g["selected"].rank(pct=True)
+    out["net_tr_rank"] = g["transfers_balance"].rank(pct=True)
     return out
 
 

@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.ml.features import FEATURES, prior_season
+from app.ml.features import CORE_STATS, EXTRA_STATS, FEATURES, prior_season
 from app.services.prediction_service import PredictionService
 from app.services.xp_service import (
     ML_DIR, XPService, availability, fixtures_frame, player_gw_frame, predict_gameweeks,
@@ -60,6 +60,12 @@ def season(tmp_path_factory):
                 "goals_scored": 0, "assists": 0, "bps": int(rng.integers(0, 30)),
                 "expected_goals": round(float(rng.random()) / 2, 2),
                 "expected_assists": round(float(rng.random()) / 3, 2),
+                "bonus": int(rng.integers(0, 4)), "threat": float(rng.integers(0, 60)),
+                "creativity": float(rng.integers(0, 60)), "influence": float(rng.integers(0, 60)),
+                "defensive_contribution": int(rng.integers(0, 3)), "saves": int(rng.integers(0, 5)),
+                "expected_goals_conceded": round(float(rng.random()) * 2, 2),
+                # Ownership and net transfers for this gameweek (pre-deadline numbers)
+                "selected": 1000 * (p["id"] % 9 + 1) + f["event"], "transfers_balance": (p["id"] * 7 + f["event"]) % 500 - 250,
                 "team_h_score": f["team_h_score"], "team_a_score": f["team_a_score"],
             })
     pd.DataFrame(rows).to_csv(d / f"merged_{SEASON}.csv", index=False)
@@ -73,9 +79,8 @@ def season(tmp_path_factory):
 
 def _live(rows: pd.DataFrame, gw: int) -> dict:
     g = rows[rows["GW"] == gw].groupby("element").sum(numeric_only=True)
-    return {"elements": [{"id": int(el), "stats": {c: float(r[c]) for c in (
-        "minutes", "starts", "total_points", "goals_scored", "assists",
-        "expected_goals", "expected_assists", "bps")}} for el, r in g.iterrows()]}
+    return {"elements": [{"id": int(el), "stats": {c: float(r[c]) for c in CORE_STATS + list(EXTRA_STATS)}}
+                         for el, r in g.iterrows()]}
 
 
 def test_model_bundle_matches_feature_list(bundle):
@@ -96,8 +101,14 @@ def test_serving_matches_training(season, bundle):
                      "team_a_score": f["team_a_score"] if f["event"] < target else None}
                     for f in fixtures]
     fx = fixtures_frame(api_fixtures)
+    # The bootstrap carries ownership as a percentage and net transfers as two counts;
+    # the ranks the model sees must match the training rows for the target gameweek.
+    tgt = raw[raw["GW"] == target].drop_duplicates("element").set_index("element")
     elements = [{"id": p["id"], "code": p["code"], "team": p["team"],
-                 "element_type": POS.index(p["pos"]) + 1, "now_cost": 50 + p["id"] % 7}
+                 "element_type": POS.index(p["pos"]) + 1, "now_cost": 50 + p["id"] % 7,
+                 "selected_by_percent": str(tgt.loc[p["id"], "selected"] / 1000),
+                 "transfers_in_event": int(max(tgt.loc[p["id"], "transfers_balance"], 0)),
+                 "transfers_out_event": int(max(-tgt.loc[p["id"], "transfers_balance"], 0))}
                 for p in players]
     live = {gw: _live(raw, gw) for gw in range(1, target)}
     pgw = player_gw_frame(elements, live, fx)
