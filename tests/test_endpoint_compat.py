@@ -257,3 +257,20 @@ def test_predictions_limit_uses_effective_plan_during_grace():
         assert len(body["predictions"]) == body["total_players"] == 2
     finally:
         app.dependency_overrides.clear()
+
+
+def test_briefing_labels_next_gameweek_once_current_deadline_passed():
+    """Mid-gameweek the briefing advice is for the next deadline, so it is labelled with the next GW."""
+    from datetime import datetime, timezone
+    from app.api.fpl_team import _advice_gameweek
+
+    info = {
+        "current": {"id": 7, "deadline_time": "2026-10-17T10:00:00Z"},
+        "next": {"id": 8, "deadline_time": "2026-10-24T13:30:00Z"},
+    }
+    before = datetime(2026, 10, 16, 12, tzinfo=timezone.utc)
+    after = datetime(2026, 10, 18, 12, tzinfo=timezone.utc)
+    assert _advice_gameweek(info, now=before)["id"] == 7
+    assert _advice_gameweek(info, now=after)["id"] == 8
+    # Last gameweek of the season: nothing after it, keep the current one
+    assert _advice_gameweek({"current": info["current"], "next": None}, now=after)["id"] == 7

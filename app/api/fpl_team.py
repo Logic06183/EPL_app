@@ -546,6 +546,26 @@ def _captain_pick(picks: list[dict], pred_map: dict[int, float]) -> dict | None:
     }
 
 
+def _advice_gameweek(gw_info: dict, now: Optional[datetime] = None) -> dict:
+    """
+    Pick the gameweek a briefing should talk about. Mid-gameweek FPL still
+    reports the one in play as "current", but the captain and transfer advice
+    is for the next deadline, so once the current deadline has passed we label
+    the briefing with the next event.
+    """
+    cur = gw_info.get("current") or gw_info.get("next") or {}
+    nxt = gw_info.get("next")
+    dl = cur.get("deadline_time")
+    if nxt and dl:
+        try:
+            passed = datetime.fromisoformat(dl.replace("Z", "+00:00")) <= (now or datetime.now(timezone.utc))
+        except ValueError:
+            passed = False
+        if passed:
+            return nxt
+    return cur
+
+
 @router.get("/{team_id}/briefing")
 async def get_team_briefing(
     team_id:           int,
@@ -653,10 +673,12 @@ async def get_team_briefing(
     except Exception as e:
         logger.warning(f"Briefing transfer fetch failed: {e}")
 
-    # Gameweek deadline
+    # The gameweek this advice is for: the next deadline, not the one that just passed
     gw_info = await data_service.get_gameweek_info()
-    cur     = gw_info.get("current") or gw_info.get("next") or {}
-    deadline = cur.get("deadline_time")
+    advice_gw = _advice_gameweek(gw_info)
+    deadline = advice_gw.get("deadline_time")
+    if advice_gw.get("id"):
+        gw_id = advice_gw["id"]
 
     # Gemini reasons (cheap call, never fatal). Pass enough comparative data
     # (form, current captain, ownership) for the model to write *insight*
