@@ -6,7 +6,8 @@
 - `mobile/` — Capacitor wrapper around `frontend/`.
 - `tests/` — pytest suite for `app/`; `production-site-test.spec.js` is a Playwright smoke
   test against the live site.
-- `ROADMAP.md` — the improvement loop's backlog and log. Read it first.
+- `GOAL.md` — the end goal, definition of done and milestones (who does what). Read it first.
+- `ROADMAP.md` — backlog and log of what's been done.
 
 ## Health Stack
 
