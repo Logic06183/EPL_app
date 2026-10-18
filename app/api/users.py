@@ -3,7 +3,7 @@ Users API — plan info, account management.
 """
 
 import logging
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth.firebase_auth import (
     get_current_user, get_db, PLANS, _in_grace_period, _LAUNCH_FREE_UNTIL_RAW,
@@ -52,3 +52,25 @@ async def get_me(user: dict = Depends(get_current_user)):
         "subscription":  subscription,
         "grace":         grace_info,
     }
+
+
+@router.post("/desktop-token")
+async def desktop_token(user: dict = Depends(get_current_user)):
+    """
+    Mint a Firebase custom token for the signed-in user.
+
+    Google blocks OAuth inside embedded webviews, so the Mac app signs in via
+    the system browser, which calls this with the browser session's ID token
+    and hands the custom token back to the app through the fplai:// deep link.
+    The app then calls signInWithCustomToken. Custom tokens expire in an hour
+    and can only be redeemed by the Firebase project that issued them.
+    """
+    if not user["uid"]:
+        raise HTTPException(status_code=401, detail="Sign in first")
+    try:
+        from firebase_admin import auth
+        token = auth.create_custom_token(user["uid"])
+    except Exception as e:
+        logger.error(f"Custom token failed for {user['uid']}: {e}")
+        raise HTTPException(status_code=503, detail="Could not create a desktop sign-in token")
+    return {"custom_token": token.decode() if isinstance(token, bytes) else token}

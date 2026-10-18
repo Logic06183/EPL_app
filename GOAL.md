@@ -66,10 +66,10 @@ The Claude GitHub App couldn't push workflow files, so these steps are manual.
 
 Two stages. Stage A works today with zero code.
 
-- [ ] **Stage A, today:** in Safari on macOS 14+, open the site → File → **Add to Dock**.
+- [ ] **Stage A, today (Craig, 1 min):** in Safari on macOS 14+, open the site → File → **Add to Dock**.
       That gives a real app window with its own Dock icon, and Google sign-in works because it's Safari.
       Good enough for Craig, and worth telling users about.
-- [ ] **Stage B, a downloadable app:** Claude scaffolds `desktop/` with **Tauri v2**
+- [x] **Stage B, a downloadable app:** Claude scaffolds `desktop/` with **Tauri v2**
       (small, native WebKit, about a 10 MB download) loading `https://epl-prediction-app.web.app`.
       - **Sign-in gotcha:** Google blocks OAuth inside embedded webviews (`disallowed_useragent`),
         so `signInWithPopup` will fail in the app. Fix: open sign-in in the system browser and hand the
@@ -79,6 +79,14 @@ Two stages. Stage A works today with zero code.
       - Window remembers its size; menu bar has Reload; app icon made from `frontend/icon.svg`.
       - Acceptance: `npm run tauri build` produces a `.app` and `.dmg`; on a clean Mac the app opens,
         signs in, imports a team and shows the plan.
+      - **Built 2026-10-18** (`desktop/`, see `desktop/README.md`): 4.4 MB `.app`, 1.9 MB `.dmg` at
+        `desktop/src-tauri/target/release/bundle/`. Sign-in goes through the system browser and comes back via
+        `fplai://auth` → `POST /api/users/desktop-token` → `signInWithCustomToken`. Verified on this Mac: the
+        bundle registers the scheme, a test `open "fplai://auth?ct=..."` reaches the page, malformed links are
+        rejected, the browser hand-off page opens the sign-in modal, backend endpoint has tests.
+      - [ ] **Craig:** open the built app, click Sign in → Continue with Google in the browser → confirm the app
+        shows you signed in. That is the one step that needs a real Google login. If it fails, Cloud Run logs
+        for `Custom token failed` tell why (the service account was granted `roles/iam.serviceAccountTokenCreator`).
 - [ ] **Craig:** Apple Developer account (£79/yr) to sign and notarise, so the download opens without Gatekeeper warnings.
       Claude wires the signing settings into `tauri.conf.json` and a `scripts/release-mac.sh`.
 - [ ] **Later:** iOS/Android via the existing `mobile/` Capacitor wrapper. It has the same sign-in gotcha and needs

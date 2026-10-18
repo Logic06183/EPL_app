@@ -1,4 +1,4 @@
-const CACHE = 'fpl-ai-v3';
+const CACHE = 'fpl-ai-v4';
 const ASSETS = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', e => {
@@ -42,7 +42,22 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Cache-first for app shell
+  // Network-first for the page itself, so a deploy reaches returning users on
+  // their next visit; the cached copy is only the offline fallback.
+  if (e.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+    e.respondWith(
+      fetch(e.request).then(resp => {
+        if (resp.ok) {
+          const clone = resp.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return resp;
+      }).catch(() => caches.match(e.request).then(c => c || caches.match('/index.html')))
+    );
+    return;
+  }
+
+  // Cache-first for the rest of the app shell (manifest, icon, scripts)
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request).then(resp => {
       if (resp.ok && e.request.method === 'GET') {

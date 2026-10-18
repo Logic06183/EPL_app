@@ -923,6 +923,8 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 'use strict';
 // Capacitor native app: window.Capacitor is defined — point at production API
 const _isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+// Inside the Mac app (desktop/, Tauri). Set by the app before any page script runs.
+const _isDesktop = !!window.__FPL_DESKTOP__;
 const API = _isNative
   ? 'https://epl-prediction-app.web.app/api'
   : (window.location.hostname === 'localhost' ? 'http://localhost:8001/api' : '/api');
@@ -973,6 +975,10 @@ if(FB_READY){
     await refreshPlan();
     updateAuthUI(user, currentPlan);
     _authResolve();
+    if(_desktopAuthMode){
+      if(user) finishDesktopAuth();
+      else document.getElementById('signin-modal').classList.remove('hidden');
+    }
     // Now we know the plan — load plan-aware components
     applyPlanUI();
     loadCaptain();
@@ -1016,10 +1022,44 @@ function handleAuthClick(){
 
 function signInGoogle(){
   if(!FB_READY){ toast('Firebase not configured yet','error'); return; }
+  if(_isDesktop){
+    // Google blocks OAuth inside embedded webviews, so the Mac app signs in via
+    // the system browser. The app intercepts this navigation and opens it there;
+    // the browser page hands a custom token back through fplai://auth.
+    closeModal('signin-modal');
+    toast('Finish signing in in your browser, then come back here','info',8000);
+    window.location.href = window.location.origin + '/?desktop_auth=1';
+    return;
+  }
   const provider = new firebase.auth.GoogleAuthProvider();
   firebase.auth().signInWithPopup(provider)
+    .then(()=>{ closeModal('signin-modal'); toast('Signed in!','success'); track('sign_in'); if(_desktopAuthMode) finishDesktopAuth(); })
+    .catch(e=>{ toast('Sign-in failed: '+e.message,'error'); });
+}
+
+// ── Mac app sign-in hand-off ──────────────────────────
+// Browser side (/?desktop_auth=1): once signed in here, mint a custom token and
+// send it to the app. App side: fplDesktopAuth(token) is called by the app
+// when the fplai://auth link arrives and completes the sign-in in the webview.
+let _desktopAuthMode = false;
+async function finishDesktopAuth(){
+  try{
+    const d = await apiFetch('/users/desktop-token', {method:'POST'});
+    track('desktop_auth');
+    window.location.href = 'fplai://auth?ct=' + encodeURIComponent(d.custom_token);
+    toast('Signed in. You can go back to the FPL AI Pro app now.','success',10000);
+  }catch(e){ toast('Could not hand the sign-in to the app: '+e.message,'error',8000); }
+}
+window.fplDesktopAuth = function(ct){
+  if(!FB_READY||!ct) return;
+  firebase.auth().signInWithCustomToken(ct)
     .then(()=>{ closeModal('signin-modal'); toast('Signed in!','success'); track('sign_in'); })
     .catch(e=>{ toast('Sign-in failed: '+e.message,'error'); });
+};
+if(window.__fplPendingAuth){ const t=window.__fplPendingAuth; delete window.__fplPendingAuth; window.fplDesktopAuth(t); }
+if(_isDesktop){
+  // Checkout and sign-in happen in the browser; pick up the result when the app regains focus.
+  window.addEventListener('focus', ()=>{ refreshPlan().then(()=>{ updateAuthUI(currentUser,currentPlan); applyPlanUI(); }); });
 }
 
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
@@ -2317,6 +2357,8 @@ track('visit');
   const q=new URLSearchParams(location.search);
   if(q.get('upgraded')==='1') track(q.get('cancelled')==='1'?'checkout_cancel':'checkout_return');
   if(q.get('ref')==='share') track('share_visit');
+  // Opened by the Mac app to sign in through the browser (see finishDesktopAuth)
+  if(q.get('desktop_auth')==='1' && !_isDesktop) _desktopAuthMode = true;
 }
 // Deep link (?team=123, used by calendar reminders) or the last team loaded on this device
 (function(){

@@ -67,3 +67,4 @@ personal weekly briefing for *your* team.
 - 2026-10-18 — accessibility: axe-core WCAG 2 A/AA clean on all tabs (contrast token, control labels, live-region toasts)
 - 2026-10-18 — post-deploy smoke test (`scripts/smoke_test.py`), wired into the proposed deploy workflow
 - 2026-10-18 — M1 shipped from the Mac: workflows applied (`9ec7fe5`), PR #1 merged, backend + frontend deployed, smoke test all PASS on GW8 live data. Fixes: predictions limit used stored plan (`d12c874`); GW header bar never loaded, league gap `null` (`c40769a`). GitHub Actions is billing-locked; no repo secrets
+- 2026-10-18 — Mac app (M4 Stage B): Tauri v2 wrapper in `desktop/`, browser hand-off sign-in via `fplai://` deep link + `POST /api/users/desktop-token`; `scripts/release-mac.sh`. Service worker made network-first for the page (was cache-first: deploys never reached returning users until sw.js changed)
