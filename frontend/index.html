@@ -1592,7 +1592,7 @@ async function loadLeague(id){
         <span style="color:var(--text2);font-family:'DM Mono',monospace">${r.xp.toFixed(1)} xP</span>
         <span style="min-width:52px;text-align:right;font-family:'DM Mono',monospace;color:var(${cls})">${r.swing>0?'+':''}${r.swing.toFixed(1)}</span></div>`).join('')
       :`<div style="font-size:12px;color:var(--text3)">${empty}</div>`;
-    const near=d.rivals.slice(0,6).map(r=>`<span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);margin-right:12px">#${r.rank} ${escHtml(r.name)} ${r.gap>0?'+':''}${r.gap}</span>`).join('');
+    const near=d.rivals.slice(0,6).map(r=>`<span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);margin-right:12px">#${r.rank} ${escHtml(r.name)} ${r.gap==null?'':(r.gap>0?'+':'')+r.gap}</span>`).join('');
     el.innerHTML=`<div class="tcard">
       <div style="font-weight:700;margin-bottom:4px">${escHtml(d.league.name)}${d.you.rank?` · you're #${d.you.rank}`:''}</div>
       <div style="margin-bottom:10px">${near}</div>
@@ -2331,6 +2331,7 @@ track('visit');
 })();
 checkStatus();
 loadPred();
+loadGWBar();
 // Captain only auto-loads once we know the user's plan (see onAuthStateChanged)
 setInterval(checkStatus,30000);
 </script>
