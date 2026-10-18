@@ -2233,12 +2233,14 @@ async function loadGWBar(){
       apiFetch('/players/trending?top_n=1'),
     ]);
     if(gw.status==='fulfilled'){
-      const cur=gw.value.current||gw.value.next||{};
+      let cur=gw.value.current||gw.value.next||{};
+      // Mid-gameweek the useful deadline is the next one, not the one that just passed
+      if(cur.deadline_time && new Date(cur.deadline_time)<=new Date() && gw.value.next) cur=gw.value.next;
       document.getElementById('gwb-gw').textContent = cur.name||'—';
       if(cur.deadline_time){
         const diff=new Date(cur.deadline_time)-new Date();
         const d=Math.floor(diff/86400000), h=Math.floor((diff%86400000)/3600000);
-        document.getElementById('gwb-dl').textContent = diff>0 ? `${d}d ${h}h` : 'Passed';
+        document.getElementById('gwb-dl').textContent = diff>0 ? (d>0?`${d}d ${h}h`:`${h}h`) : 'Passed';
       }
     }
     if(injuries.status==='fulfilled'){
