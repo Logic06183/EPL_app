@@ -509,6 +509,10 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 .gwb-pill .hot{color:var(--green);}
 .gwb-pill .warn{color:var(--orange);}
 .gwb-pill .cd{color:var(--gold);}
+@media(max-width:768px){
+  #gw-bar{flex-wrap:nowrap;overflow-x:auto;gap:8px;padding-top:6px;padding-bottom:6px;scrollbar-width:none;}
+  #gw-bar::-webkit-scrollbar{display:none;}
+}
 
 /* ── TRENDING CARDS ── */
 .trend-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;}
