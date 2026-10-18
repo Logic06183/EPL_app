@@ -299,6 +299,12 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 #hero .tid-input{height:50px;font-size:16px;padding:0 14px;}
 #hero .btn{height:50px;font-size:15px;padding:0 24px;}
 #hero .trust{font-size:12px;color:var(--text2);margin-top:10px;}
+/* Once a team is loaded the import box becomes a one-line "switch team" strip */
+#squad-import.has-team .import-box{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:10px 14px;border-style:solid;text-align:left;}
+#squad-import.has-team .import-title{font-size:16px;letter-spacing:1.5px;margin:0;}
+#squad-import.has-team .import-sub{display:none;}
+#squad-import.has-team .irow{margin:0;flex:1;min-width:240px;max-width:420px;}
 @media(max-width:560px){
   #hero{padding:24px 18px 18px;}
   #hero .import-title{font-size:32px;}
@@ -1453,6 +1459,10 @@ async function loadTeam(){
       apiFetch(`/fpl-team/${id}/briefing`).catch(()=>null),
     ]);
     renderTeam(team,id,briefing);
+    const box=document.getElementById('squad-import');
+    box.classList.add('has-team');
+    box.querySelector('.import-title').textContent='Switch team';
+    box.querySelector('.irow .btn').textContent='Load';
     try{ localStorage.setItem('fpl_team_id', id); }catch{}
     document.getElementById('hero').style.display='none';
     track('team_import');
