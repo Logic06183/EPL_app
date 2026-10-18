@@ -64,3 +64,4 @@ personal weekly briefing for *your* team.
 - 2026-10-18 — mini-league view (`/api/fpl-team/{id}/league/{league_id}`)
 - 2026-10-18 — fix: 403 upgrade_required from require_pro now opens the upgrade modal (was 'Access denied'); gating switches documented in docs/pricing.md
 - 2026-10-18 — first-visit hero (team import from Predictions tab), team ID field accepts pasted FPL links
+- 2026-10-18 — accessibility: axe-core WCAG 2 A/AA clean on all tabs (contrast token, control labels, live-region toasts)

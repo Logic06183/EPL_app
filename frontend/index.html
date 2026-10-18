@@ -35,7 +35,7 @@
   --b1:#152535; --b2:#1e3a50; --b3:#2a5270;
   --gold:#c9a84c; --goldb:#efc84a; --goldd:#7a5f22;
   --green:#35d967; --greend:#1a6635;
-  --text:#cce8de; --text2:#5f9880; --text3:#2a5040;
+  --text:#cce8de; --text2:#5f9880; --text3:#5a9580; /* text3 ≥4.5:1 on all backgrounds (WCAG AA) */
   --gk:#f59e0b; --def:#3b82f6; --mid:#10b981; --fwd:#ef4444;
   --red:#e05555; --orange:#f97316;
   --r:12px; --sh:0 8px 40px rgba(0,0,0,.7);
@@ -604,7 +604,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 </style>
 </head>
 <body>
-<div id="toasts"></div>
+<div id="toasts" role="status" aria-live="polite"></div>
 
 <!-- STATUS BAR -->
 <div id="sbar">
@@ -693,7 +693,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
     <div class="import-sub" style="margin-bottom:12px">Captain, the transfers worth making (and whether a −4 hit pays), chip timing,
       and what your mini-league rivals own that you don't. Free this season.</div>
     <div class="irow" style="margin:0;max-width:520px">
-      <input type="text" inputmode="numeric" class="tid-input" id="hero-tid" placeholder="Paste your FPL link or team ID" autocomplete="off"
+      <input type="text" inputmode="numeric" class="tid-input" id="hero-tid" aria-label="FPL team ID or link" placeholder="Paste your FPL link or team ID" autocomplete="off"
         onkeydown="if(event.key==='Enter')heroImport()">
       <button class="btn" onclick="heroImport()">Get my plan</button>
     </div>
@@ -711,19 +711,19 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 
   <div class="ctrl">
     <div class="cg"><span class="cl">MODEL</span>
-      <div class="sw"><select id="pred-model" onchange="loadPred()">
+      <div class="sw"><select id="pred-model" aria-label="Prediction model" onchange="loadPred()">
         <option value="xp">Expected points (ML)</option>
         <option value="basic">Form only</option>
       </select></div>
     </div>
     <div class="cg"><span class="cl">POSITION</span>
-      <div class="sw"><select id="pred-pos" onchange="renderPred()">
+      <div class="sw"><select id="pred-pos" aria-label="Position" onchange="renderPred()">
         <option value="">All</option><option value="GK">GK</option>
         <option value="DEF">DEF</option><option value="MID">MID</option><option value="FWD">FWD</option>
       </select></div>
     </div>
     <div class="cg"><span class="cl">TOP <span id="topnv" class="rv">20</span></span>
-      <input type="range" id="pred-topn" min="5" max="50" value="20"
+      <input type="range" id="pred-topn" aria-label="Number of players" min="5" max="50" value="20"
         oninput="document.getElementById('topnv').textContent=this.value" onchange="loadPred()">
     </div>
     <div class="cg" style="margin-left:auto">
@@ -765,7 +765,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
       <div class="import-sub">Enter your FPL team ID to get transfer suggestions and squad analysis.<br>
         Find it at: <a href="https://fantasy.premierleague.com/" target="_blank" rel="noopener noreferrer" class="ext-link">fantasy.premierleague.com</a>/entry/<strong>YOUR-ID</strong>/history</div>
       <div class="irow">
-        <input type="text" inputmode="numeric" class="tid-input" id="tid-input" placeholder="Team ID or your FPL link" autocomplete="off">
+        <input type="text" inputmode="numeric" class="tid-input" id="tid-input" aria-label="FPL team ID or link" placeholder="Team ID or your FPL link" autocomplete="off">
         <button class="btn" onclick="loadTeam()">Load Team</button>
       </div>
     </div>
@@ -776,7 +776,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div id="squad-threegw" style="display:none">
     <div class="ctrl">
       <div class="cg"><span class="cl">POSITION</span>
-        <div class="sw"><select id="tgw-pos" onchange="loadThreeGW()">
+        <div class="sw"><select id="tgw-pos" aria-label="Position" onchange="loadThreeGW()">
           <option value="">All</option><option value="1">GK</option>
           <option value="2">DEF</option><option value="3">MID</option><option value="4">FWD</option>
         </select></div>
@@ -791,7 +791,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div id="squad-optimize" style="display:none">
     <div class="ctrl">
       <div class="cg"><span class="cl">BUDGET £<span id="budv" class="rv">100.0</span>m</span>
-        <input type="range" id="squad-budget" min="80" max="105" value="100" step="0.5" style="width:150px"
+        <input type="range" id="squad-budget" aria-label="Budget in millions" min="80" max="105" value="100" step="0.5" style="width:150px"
           oninput="document.getElementById('budv').textContent=parseFloat(this.value).toFixed(1)">
       </div>
       <button class="btn" id="opt-btn" onclick="optimizeSquad()">⚡ Optimize Squad</button>
@@ -813,7 +813,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div id="fix-list">
     <div class="ctrl">
       <div class="cg"><span class="cl">FILTER</span>
-        <div class="sw"><select id="fix-filter" onchange="loadFix()">
+        <div class="sw"><select id="fix-filter" aria-label="Fixture filter" onchange="loadFix()">
           <option value="upcoming">Upcoming</option>
           <option value="recent">Recent</option>
           <option value="live">Live</option>
@@ -1104,7 +1104,10 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catc
 function toast(msg,type='info',ms=3200){
   const el=document.createElement('div');
   el.className=`toast ${type==='error'?'err':type==='success'?'ok':''}`;
-  el.innerHTML=`<span>${{error:'⚠',success:'✓',info:'ℹ'}[type]||''}</span><span>${msg}</span>`;
+  // Message as text, not HTML: it can carry server error text
+  const icon=document.createElement('span'); icon.textContent={error:'⚠',success:'✓',info:'ℹ'}[type]||'';
+  const text=document.createElement('span'); text.textContent=msg;
+  el.append(icon,text);
   document.getElementById('toasts').appendChild(el);
   setTimeout(()=>{el.style.transition='opacity .3s';el.style.opacity='0';setTimeout(()=>el.remove(),320);},ms);
 }
@@ -1570,7 +1573,7 @@ function renderTeam(d,id,briefing){
   <div class="sbr"><div class="slist">${bench.map(pickRow).join('')}</div></div>
   ${calendarLinks(id)}
   ${(d.leagues||[]).length?`<div class="sh" style="margin-top:16px"><h2 class="st">MINI-LEAGUE</h2><span class="ss">what your rivals own that you don't</span></div>
-    <div class="ctrl"><div class="sw"><select id="league-sel">${d.leagues.map(l=>`<option value="${l.id}">${escHtml(l.name)}${l.rank?` (#${l.rank})`:''}</option>`).join('')}</select></div>
+    <div class="ctrl"><div class="sw"><select id="league-sel" aria-label="Mini-league">${d.leagues.map(l=>`<option value="${l.id}">${escHtml(l.name)}${l.rank?` (#${l.rank})`:''}</option>`).join('')}</select></div>
     <button class="btn" onclick="loadLeague(${id})">Compare</button></div>
     <div id="league-content"></div>`:''}
   <div id="transfers-content"></div>`;
