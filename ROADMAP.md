@@ -46,8 +46,6 @@ personal weekly briefing for *your* team.
 - Unlock GitHub Actions (account billing lock) and add repo secrets `GCP_SA_KEY`, `GOOGLE_API_KEY`, `FIREBASE_TOKEN`; until then deploy from the Mac (GOAL.md M1)
 - Delete the retired Cloud Run services `epl-api` and `epl-backend-sa` if they still exist
 - Archive the old `EPL_Fantasy_Optimizer` repo
-- Set `ADMIN_EMAILS` on `epl-backend` to read the funnel
-- Set `CRON_SECRET` and create the hourly Cloud Scheduler job (command in README)
 
 ## Log
 
@@ -71,3 +69,4 @@ personal weekly briefing for *your* team.
 - 2026-10-18 — Mac app sign-in verified end to end by Craig (browser hand-off → fplai:// → custom token)
 - 2026-10-18 — design review for conversion (11 fixes, one commit each): hero is the anchor, GW strip one row on mobile and counts to the next deadline, import box collapses after import, transfer plan auto-loads, emoji out of nav/sub-tabs, 44px touch targets, readable briefing text; briefing labelled with the GW the advice is for; root URL no-cache. Deferred: bottom-nav SVG icons, mobile filter toggle, type and spacing tokens
 - 2026-10-18 — goal reset to measurable prediction quality (GOAL.md). Model loop, 7 experiment rounds: crowd + last-match features and a P(60+ min) multiplier take Spearman 0.400/0.362 → 0.451/0.451, MAE 2.03/2.12 → 1.87/1.94. Live snapshots now store FPL's pre-deadline ep_next as the public benchmark. Odds, per-position, product minutes models, loss/hyperparameters: no gain
+- 2026-10-18 — M2: hourly Cloud Scheduler refresh live; first FPL-benchmarked snapshot saved for GW8; captain shrinkage deployed (revision 00038)

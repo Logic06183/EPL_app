@@ -80,8 +80,8 @@ Ideas in rough order of expected gain; each is one experiment, one commit if it 
 
 ## M2 — Runs itself  (Craig sets secrets, Claude wires and checks)
 
-- [ ] **Craig:** on Cloud Run `epl-backend`, set `CRON_SECRET` (any long random string) and `ADMIN_EMAILS` (your Google email). Create the hourly Cloud Scheduler job (command in README). Or say "do M2" and Claude does it with gcloud.
-- [ ] **Claude:** after the next deadline, confirm `xp_snapshots/<season>-gw<N>` exists; after the GW, `xp_results/...` exists and the Track record tab shows it.
+- [x] `CRON_SECRET` and `ADMIN_EMAILS` set on `epl-backend`; Cloud Scheduler enabled; hourly job `xp-refresh` at :07 UTC created (2026-10-18). A manual run refreshed GW8 and saved `xp_snapshots/2026-27-gw8` with the recommended captain and FPL's `ep_next` for 667 players. Unauthenticated refresh returns 403.
+- [ ] **Claude:** after GW8 finishes (deadline 2026-10-23), confirm `xp_results/2026-27-gw8` exists and the Track record tab shows model vs season average vs FPL.
 - [ ] **Claude:** failure alert: if the hourly refresh, a snapshot or scoring fails, Craig gets an email or push within the hour (Cloud Monitoring alert on the log line, or the refresh endpoint notifies).
 - [ ] **Craig:** unlock GitHub Actions (account billing) and add repo secrets `GCP_SA_KEY`, `GOOGLE_API_KEY`, `FIREBASE_TOKEN` so a push to `main` deploys itself. Until then deploy from the Mac:
       `gcloud run deploy epl-backend --source . --region us-central1 --project epl-prediction-app --update-env-vars ENVIRONMENT=production`
