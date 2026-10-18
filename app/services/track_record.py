@@ -37,10 +37,15 @@ def doc_id(season: str, gw: int) -> str:
 
 def build_snapshot(
     gw: int, xp: Dict[int, float], baseline: Dict[int, float], pool: List[int],
-    names: Dict[int, str], deadline: str,
+    names: Dict[int, str], deadline: str, fpl: Optional[Dict[int, float]] = None,
 ) -> Dict[str, Any]:
+    """
+    `fpl` is FPL's own pre-deadline expected points (`ep_next` from the
+    bootstrap), the free number every manager can see. Storing it before the
+    deadline gives the track record a fair public benchmark.
+    """
     top = sorted(pool, key=lambda el: xp.get(el, 0.0), reverse=True)[:11]
-    return {
+    snap = {
         "gw": gw,
         "deadline": deadline,
         "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -50,6 +55,9 @@ def build_snapshot(
         "pool": [int(el) for el in pool],
         "top11": [{"id": int(el), "name": names.get(el, ""), "xp": round(xp.get(el, 0.0), 2)} for el in top],
     }
+    if fpl:
+        snap["fpl"] = {str(el): round(v, 3) for el, v in fpl.items()}
+    return snap
 
 
 def score_snapshot(snapshot: Dict[str, Any], actual: Dict[int, float]) -> Optional[Dict[str, Any]]:
@@ -63,6 +71,9 @@ def score_snapshot(snapshot: Dict[str, Any], actual: Dict[int, float]) -> Option
         "baseline": [snapshot["baseline"].get(str(el), 0.0) for el in pool],
         "actual": [actual.get(el, 0.0) for el in pool],
     })
+    has_fpl = bool(snapshot.get("fpl"))
+    if has_fpl:
+        df["fpl"] = [snapshot["fpl"].get(str(el), 0.0) for el in pool]
 
     def metrics(col: str) -> Dict[str, float]:
         spearman = df[col].rank().corr(df["actual"].rank())
@@ -79,6 +90,7 @@ def score_snapshot(snapshot: Dict[str, Any], actual: Dict[int, float]) -> Option
         "players_scored": len(df),
         "model": metrics("model"),
         "season_avg": metrics("baseline"),
+        **({"fpl": metrics("fpl")} if has_fpl else {}),
         "captain": {**captain, "actual": actual.get(captain.get("id"), 0.0)} if captain else None,
         "top11": [{**p, "actual": actual.get(p["id"], 0.0)} for p in snapshot.get("top11", [])],
         "snapshot_saved_at": snapshot.get("saved_at"),
@@ -120,12 +132,17 @@ def summarise(results: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not results:
         return None
     out: Dict[str, Any] = {"gameweeks": len(results)}
-    for who in ("model", "season_avg"):
+    for who in ("model", "season_avg", "fpl"):
+        scored = [r for r in results if r.get(who)]
+        if not scored:
+            continue   # "fpl" only exists for snapshots taken after it was added
         out[who] = {
-            k: round(sum(r[who][k] for r in results if r[who].get(k) is not None) /
-                     max(1, sum(1 for r in results if r[who].get(k) is not None)), 3)
+            k: round(sum(r[who][k] for r in scored if r[who].get(k) is not None) /
+                     max(1, sum(1 for r in scored if r[who].get(k) is not None)), 3)
             for k in ("mae", "spearman", "captain_pts", "top11_pts")
         }
+        if who == "fpl":
+            out[who]["gameweeks"] = len(scored)
     return out
 
 

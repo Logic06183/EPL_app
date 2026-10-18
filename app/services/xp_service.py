@@ -250,9 +250,10 @@ class XPService:
             }
             pool = [int(el) for el, m in form["mins_l6"].items() if pd.notna(m) and m >= 30]
             names = {e["id"]: e.get("web_name", "") for e in elements}
+            fpl = {e["id"]: float(e.get("ep_next") or 0) for e in elements}
             snap = track_record.build_snapshot(
                 next_gw, {el: v.get(next_gw, 0.0) for el, v in self.xp.items()},
-                baseline, pool, names, nxt["deadline_time"],
+                baseline, pool, names, nxt["deadline_time"], fpl=fpl,
             )
             season = track_record.season_label(events)
             actual = {

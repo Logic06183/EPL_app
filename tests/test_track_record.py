@@ -54,7 +54,8 @@ def _snapshot(deadline):
     xp = {1: 6.0, 2: 4.0, 3: 2.0, 4: 1.0}
     baseline = {1: 1.0, 2: 2.0, 3: 3.0, 4: 4.0}
     names = {1: "Haaland", 2: "Saka", 3: "Gabriel", 4: "Pickford"}
-    return tr.build_snapshot(9, xp, baseline, [1, 2, 3, 4], names, deadline)
+    fpl = {1: 5.0, 2: 5.5, 3: 2.5, 4: 1.0}   # FPL's own ep_next, captured pre-deadline
+    return tr.build_snapshot(9, xp, baseline, [1, 2, 3, 4], names, deadline, fpl=fpl)
 
 
 def test_season_label():
@@ -106,3 +107,16 @@ def test_scheduled_refresh_requires_secret(monkeypatch):
     monkeypatch.setenv("CRON_SECRET", "s3cret")
     assert c.post("/api/predictions/refresh", headers={"X-Cron-Secret": "wrong"}).status_code == 403
     assert c.post("/api/predictions/refresh").status_code == 403
+
+
+def test_score_snapshot_scores_fpl_benchmark_when_present():
+    snap = _snapshot(_future(1))
+    actual = {1: 10.0, 2: 6.0, 3: 2.0, 4: 1.0}
+    res = tr.score_snapshot(snap, actual)
+    assert res["fpl"]["captain_pts"] == 6.0          # FPL ranked Saka first
+    assert res["model"]["captain_pts"] == 10.0       # the model ranked Haaland first
+    summary = tr.summarise([res, res])
+    assert summary["fpl"]["gameweeks"] == 2 and summary["fpl"]["captain_pts"] == 6.0
+    # Snapshots taken before the benchmark existed still summarise
+    old = {k: v for k, v in res.items() if k != "fpl"}
+    assert "fpl" not in tr.summarise([old])
