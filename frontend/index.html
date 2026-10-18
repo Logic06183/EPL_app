@@ -84,7 +84,7 @@ body::before{content:'';position:fixed;inset:0;
   letter-spacing:.4px;display:flex;align-items:center;gap:6px;}
 .ntab:hover{color:var(--text);}
 .ntab.active{color:var(--gold);border-bottom-color:var(--gold);}
-.ntab .ni{font-size:14px;}
+.ntab .ni{display:none;}
 .ntab .badge{background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;font-family:'DM Mono',monospace;margin-left:2px;}
 
 /* ── BOTTOM NAV (mobile) ── */
@@ -634,8 +634,8 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div style="display:flex;align-items:center;gap:8px">
     <span id="gwbadge"></span>
     <button id="plan-badge" type="button" class="plan-badge free" onclick="handleBadgeClick()">Free</button>
-    <button class="auth-btn" id="auth-btn" onclick="handleAuthClick()">🔑 Sign in</button>
-    <button class="auth-btn" onclick="showUpgrade()" style="border-color:var(--goldd);color:var(--gold)">⚡ Go Pro</button>
+    <button class="auth-btn" id="auth-btn" onclick="handleAuthClick()">Sign in</button>
+    <button class="auth-btn" onclick="showUpgrade()" style="border-color:var(--goldd);color:var(--gold)">Go Pro</button>
   </div>
 </div>
 
@@ -773,9 +773,9 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 <!-- ═══════════════ SQUAD / TEAM IMPORT ═══════════════ -->
 <section class="tab" id="tab-squad">
   <div class="subtabs">
-    <button class="subtab active" onclick="showSubtab('squad','import')">📥 My Team</button>
-    <button class="subtab" onclick="showSubtab('squad','optimize')">⚡ Optimize</button>
-    <button class="subtab" onclick="showSubtab('squad','threegw')">📆 3-GW Plan</button>
+    <button class="subtab active" onclick="showSubtab('squad','import')">My Team</button>
+    <button class="subtab" onclick="showSubtab('squad','optimize')">Optimize</button>
+    <button class="subtab" onclick="showSubtab('squad','threegw')">3-GW Plan</button>
   </div>
 
   <!-- IMPORT sub-tab -->
@@ -825,8 +825,8 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 <!-- ═══════════════ FIXTURES + FDR ═══════════════ -->
 <section class="tab" id="tab-fixtures">
   <div class="subtabs">
-    <button class="subtab active" onclick="showSubtab('fixtures','list')">📅 Fixtures</button>
-    <button class="subtab" onclick="showSubtab('fixtures','fdr');loadFDR()">🟩 FDR Heatmap</button>
+    <button class="subtab active" onclick="showSubtab('fixtures','list')">Fixtures</button>
+    <button class="subtab" onclick="showSubtab('fixtures','fdr');loadFDR()">FDR Heatmap</button>
   </div>
 
   <!-- Fixtures list -->
@@ -864,10 +864,10 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 <!-- ═══════════════ INTEL ═══════════════ -->
 <section class="tab" id="tab-intel">
   <div class="subtabs">
-    <button class="subtab active" onclick="showSubtab('intel','trend')">🔥 Trending</button>
-    <button class="subtab" onclick="showSubtab('intel','inj')">🏥 Injuries</button>
-    <button class="subtab" onclick="showSubtab('intel','price')">💰 Price Movers</button>
-    <button class="subtab" onclick="showSubtab('intel','value')">💎 Best Value</button>
+    <button class="subtab active" onclick="showSubtab('intel','trend')">Trending</button>
+    <button class="subtab" onclick="showSubtab('intel','inj')">Injuries</button>
+    <button class="subtab" onclick="showSubtab('intel','price')">Price Movers</button>
+    <button class="subtab" onclick="showSubtab('intel','value')">Best Value</button>
   </div>
 
   <!-- Trending (FREE) -->
@@ -1025,7 +1025,7 @@ function updateAuthUI(user, plan){
       badge.className   = 'plan-badge free';
     }
   } else {
-    btn.textContent   = '🔑 Sign in';
+    btn.textContent   = 'Sign in';
     badge.textContent = 'Free';
     badge.className   = 'plan-badge free';
   }
