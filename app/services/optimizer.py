@@ -37,6 +37,7 @@ class Candidate:
     team: int
     price: float        # £m
     xp: Sequence[float]  # expected points per gameweek in the horizon
+    cap: Optional[Sequence[float]] = None  # captain score per gameweek (defaults to xp)
 
 
 @dataclass
@@ -93,9 +94,15 @@ def candidates_from_elements(
         if not xp:
             # Model not ready: flat form-based estimate for each gameweek
             xp = [prediction_service.predict(e, "basic")] * 3
+        # Captain score per gameweek when the service provides it (tests may pass a stub)
+        cap_fn = getattr(prediction_service, "captain_horizon", None)
+        cap = (cap_fn(e["id"]) or None) if cap_fn else None
         if gone:
             xp = [0.0] * len(xp)
-        out.append(Candidate(e["id"], e["element_type"], e["team"], e["now_cost"] / 10, xp))
+            cap = None
+        if cap is not None and len(cap) != len(xp):
+            cap = None
+        out.append(Candidate(e["id"], e["element_type"], e["team"], e["now_cost"] / 10, xp, cap))
     return out
 
 
@@ -144,12 +151,15 @@ def optimise(
         return C + g * n + i
 
     xp = np.array([list(c.xp) for c in cands], dtype=float)
+    # The captain's extra points are valued by the captain score (xP shrunk
+    # toward season rate) so the plan's captain matches the briefing's.
+    cap = np.array([list(c.cap) if c.cap is not None else list(c.xp) for c in cands], dtype=float)
     obj = np.zeros(nvar)
     for g in range(horizon):
         for i in range(n):
             # starter gets xp, captain doubles it, bench gets a fraction
             obj[s_idx(i, g)] -= xp[i, g] * (1 - bench_weight)
-            obj[c_idx(i, g)] -= xp[i, g]
+            obj[c_idx(i, g)] -= cap[i, g]
             obj[X + i] -= xp[i, g] * bench_weight
     obj[H] = 0.0 if building else hit_cost
 

@@ -33,6 +33,11 @@ logger = logging.getLogger(__name__)
 ML_DIR = Path(__file__).resolve().parent.parent / "ml"
 HORIZON = 3
 REFRESH_SECONDS = 3600
+# Captain ranking = CAPTAIN_SHRINK * xP + (1 - CAPTAIN_SHRINK) * season points-per-fixture.
+# One pick per gameweek is noisy, and the model rotates between near-equal
+# candidates; shrinking toward long-run quality lifted the captain pick from
+# 7.9/6.0 to 9.8/7.0 points per GW in the walk-forward backtest (ml/train.py).
+CAPTAIN_SHRINK = 0.6
 RETRY_SECONDS = 300
 
 # Per-gameweek stats read from /event/{gw}/live; must match what training aggregates
@@ -161,6 +166,9 @@ class XPService:
         # (team, gw) -> number of fixtures, for double/blank gameweek detection
         self.fixture_counts: Dict[tuple, int] = {}
         self.next_gw: Optional[int] = None
+        # Season points per fixture so far and team per player, for captain_score
+        self.season_rate: Dict[int, float] = {}
+        self.team_of: Dict[int, int] = {}
         self.updated_at: Optional[datetime] = None
         self._failed_at: Optional[datetime] = None
         self._lock = asyncio.Lock()
@@ -236,6 +244,11 @@ class XPService:
             counts = pd.concat([fixtures[["team_h", "gw"]].rename(columns={"team_h": "team"}),
                                 fixtures[["team_a", "gw"]].rename(columns={"team_a": "team"})]).value_counts()
             self.fixture_counts = {(int(t), int(g)): int(n) for (t, g), n in counts.items()}
+            self.team_of = {e["id"]: e["team"] for e in elements}
+            if not player_gw.empty:
+                form = form_as_of(player_gw, next_gw)
+                self.season_rate = {int(el): float(v) for el, v in
+                                    zip(form["element"], form["pts_season"].fillna(0.0))}
             self.updated_at = datetime.now(timezone.utc)
             self._failed_at = None
             logger.info(f"xP refreshed for GW{next_gw}: {len(raw)} players, {len(live_by_gw)} GWs of history")
@@ -266,6 +279,7 @@ class XPService:
             snap = track_record.build_snapshot(
                 next_gw, {el: v.get(next_gw, 0.0) for el, v in self.xp.items()},
                 baseline, pool, names, nxt["deadline_time"], fpl=fpl,
+                captain_scores={el: self.captain_score(el, next_gw) for el in pool},
             )
             season = track_record.season_label(events)
             actual = {
@@ -284,6 +298,21 @@ class XPService:
         if by_gw is None or self.next_gw is None:
             return None
         return by_gw.get(self.next_gw, 0.0)
+
+    def captain_score(self, element_id: int, gw: Optional[int] = None) -> float:
+        """Ranking score for the captain pick in `gw` (default: next). See CAPTAIN_SHRINK."""
+        gw = gw if gw is not None else self.next_gw
+        if gw is None:
+            return 0.0
+        xp = self.xp.get(element_id, {}).get(gw, 0.0)
+        nfix = self.fixture_counts.get((self.team_of.get(element_id), gw), 1)
+        return CAPTAIN_SHRINK * xp + (1 - CAPTAIN_SHRINK) * self.season_rate.get(element_id, 0.0) * nfix
+
+    def captain_horizon(self, element_id: int) -> List[float]:
+        """captain_score for each gameweek in the horizon (empty if not ready)."""
+        if self.next_gw is None:
+            return []
+        return [self.captain_score(element_id, self.next_gw + k) for k in range(HORIZON)]
 
     def horizon_xp(self, element_id: int) -> List[float]:
         by_gw = self.xp.get(element_id, {})

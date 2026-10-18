@@ -168,3 +168,17 @@ def test_refresh_after_season_end_marks_fresh():
     asyncio.run(svc.ensure_fresh(Fake()))
     asyncio.run(svc.ensure_fresh(Fake()))
     assert Fake.calls == 1 and svc.updated_at is not None
+
+
+def test_captain_score_shrinks_toward_season_rate():
+    from app.services.xp_service import CAPTAIN_SHRINK
+    xp = XPService()
+    xp.xp, xp.next_gw = {1: {9: 8.0, 10: 7.0}, 2: {9: 7.5, 10: 7.0}}, 9
+    xp.team_of = {1: 10, 2: 11}
+    xp.fixture_counts = {(10, 9): 1, (11, 9): 1, (10, 10): 2, (11, 10): 1}
+    xp.season_rate = {1: 4.0, 2: 9.0}      # player 2 has been the better scorer all season
+    assert xp.captain_score(1) == pytest.approx(CAPTAIN_SHRINK * 8.0 + (1 - CAPTAIN_SHRINK) * 4.0)
+    assert xp.captain_score(2) > xp.captain_score(1)        # shrinkage flips the pick
+    assert xp.captain_horizon(1)[1] == pytest.approx(CAPTAIN_SHRINK * 7.0 + (1 - CAPTAIN_SHRINK) * 4.0 * 2)
+    svc = PredictionService(xp=xp)
+    assert svc.captain_score(2) == xp.captain_score(2)

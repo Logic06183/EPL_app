@@ -523,12 +523,18 @@ def _briefing_meter_check_and_increment(
         return (True, 0)
 
 
-def _captain_pick(picks: list[dict], pred_map: dict[int, float]) -> dict | None:
-    """Highest predicted-points starter. Returns None if XI is empty."""
+def _captain_pick(picks: list[dict], pred_map: dict[int, float],
+                  score_map: Optional[dict[int, float]] = None) -> dict | None:
+    """
+    Best captain among the starters: highest captain score (xP shrunk toward
+    season rate, see XPService.captain_score) or, without one, highest xP.
+    Returns None if XI is empty.
+    """
     starters = [p for p in picks if p.get("is_starting")]
     if not starters:
         return None
-    best = max(starters, key=lambda p: pred_map.get(p["id"], 0.0))
+    rank = score_map or pred_map
+    best = max(starters, key=lambda p: (rank.get(p["id"], 0.0), pred_map.get(p["id"], 0.0)))
     current = next((p for p in starters if p.get("is_captain")), None)
     return {
         "player_id":           best["id"],
@@ -653,7 +659,7 @@ async def get_team_briefing(
                 "news":          f"Price dropped {cost_change/10:+.1f}m this gameweek",
             })
 
-    captain = _captain_pick(picks, pred_map)
+    captain = _captain_pick(picks, pred_map, {p["id"]: prediction_service.captain_score(p["id"]) for p in picks})
 
     # One transfer suggestion — reuse the existing logic, take the top.
     top_transfer = None

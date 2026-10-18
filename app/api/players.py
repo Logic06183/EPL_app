@@ -194,6 +194,9 @@ async def get_captain_picks(
         # Get current / next GW id
         cur_gw = next((e for e in events if e.get("is_current") or e.get("is_next")), {})
         gw_id  = cur_gw.get("id", 1)
+        # Captaincy is decided for the next deadline, not the gameweek in play
+        if prediction_service.xp.next_gw:
+            gw_id = prediction_service.xp.next_gw
 
         # Fetch upcoming fixtures to add fixture context
         fixtures = await data_service.get_fixtures(filter_type="upcoming")
@@ -218,9 +221,11 @@ async def get_captain_picks(
             d["fixture_opponent"] = team_fix.get("opponent", "")
             d["fixture_is_home"]  = team_fix.get("is_home", True)
             d["fixture_difficulty"] = team_fix.get("difficulty", 3)
+            d["captain_score"] = round(prediction_service.captain_score(player["id"], gw_id), 2)
             picks.append(d)
 
-        picks.sort(key=lambda x: x["predicted_points"] or 0, reverse=True)
+        # Ranked by captain_score (xP shrunk toward season rate), shown with xP
+        picks.sort(key=lambda x: (x["captain_score"], x["predicted_points"] or 0), reverse=True)
         return {
             "captain_picks": picks[:top_n],
             "gameweek": gw_id,

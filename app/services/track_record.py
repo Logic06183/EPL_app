@@ -38,6 +38,7 @@ def doc_id(season: str, gw: int) -> str:
 def build_snapshot(
     gw: int, xp: Dict[int, float], baseline: Dict[int, float], pool: List[int],
     names: Dict[int, str], deadline: str, fpl: Optional[Dict[int, float]] = None,
+    captain_scores: Optional[Dict[int, float]] = None,
 ) -> Dict[str, Any]:
     """
     `fpl` is FPL's own pre-deadline expected points (`ep_next` from the
@@ -57,6 +58,11 @@ def build_snapshot(
     }
     if fpl:
         snap["fpl"] = {str(el): round(v, 3) for el, v in fpl.items()}
+    if captain_scores and pool:
+        # The captain the product actually recommends (XPService.captain_score)
+        cap = max(pool, key=lambda el: captain_scores.get(el, 0.0))
+        snap["captain"] = {"id": int(cap), "name": names.get(cap, ""), "xp": round(xp.get(cap, 0.0), 2),
+                           "score": round(captain_scores.get(cap, 0.0), 2)}
     return snap
 
 
@@ -84,11 +90,15 @@ def score_snapshot(snapshot: Dict[str, Any], actual: Dict[int, float]) -> Option
             "top11_pts": round(float(df.nlargest(11, col)["actual"].mean()), 2),
         }
 
-    captain = (snapshot.get("top11") or [{}])[0]
+    captain = snapshot.get("captain") or (snapshot.get("top11") or [{}])[0]
+    model_metrics = metrics("model")
+    if snapshot.get("captain"):
+        # Score the recommended captain, not just the top xP
+        model_metrics["captain_pts"] = float(actual.get(captain["id"], 0.0))
     return {
         "gw": snapshot["gw"],
         "players_scored": len(df),
-        "model": metrics("model"),
+        "model": model_metrics,
         "season_avg": metrics("baseline"),
         **({"fpl": metrics("fpl")} if has_fpl else {}),
         "captain": {**captain, "actual": actual.get(captain.get("id"), 0.0)} if captain else None,

@@ -120,3 +120,14 @@ def test_score_snapshot_scores_fpl_benchmark_when_present():
     # Snapshots taken before the benchmark existed still summarise
     old = {k: v for k, v in res.items() if k != "fpl"}
     assert "fpl" not in tr.summarise([old])
+
+
+def test_snapshot_records_and_scores_the_recommended_captain():
+    xp = {1: 6.0, 2: 5.9, 3: 2.0}
+    scores = {1: 5.0, 2: 6.5, 3: 1.0}      # shrinkage prefers the proven player 2
+    snap = tr.build_snapshot(9, xp, {1: 1.0, 2: 2.0, 3: 3.0}, [1, 2, 3], {1: "A", 2: "B", 3: "C"},
+                             _future(1), captain_scores=scores)
+    assert snap["captain"]["id"] == 2 and snap["top11"][0]["id"] == 1
+    res = tr.score_snapshot(snap, {1: 2.0, 2: 12.0, 3: 0.0})
+    assert res["captain"]["name"] == "B" and res["captain"]["actual"] == 12.0
+    assert res["model"]["captain_pts"] == 12.0

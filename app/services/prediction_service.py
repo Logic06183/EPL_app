@@ -57,6 +57,15 @@ class PredictionService:
         by_gw = self.xp.xp.get(player_id)
         return None if by_gw is None else by_gw.get(gw)
 
+    def captain_score(self, player_id: int, gw: Optional[int] = None) -> float:
+        """Ranking score for captaincy (xP shrunk toward season rate); falls back to xP."""
+        if self._trained:
+            return self.xp.captain_score(player_id, gw)
+        return (self.gw_xp(player_id, gw) or 0.0) if gw is not None else 0.0
+
+    def captain_horizon(self, player_id: int) -> List[float]:
+        return self.xp.captain_horizon(player_id) if self._trained else []
+
     def horizon(self, player_id: int) -> List[float]:
         """xP for each of the next few gameweeks (empty if the model isn't ready)."""
         return self.xp.horizon_xp(player_id)

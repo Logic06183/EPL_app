@@ -74,7 +74,7 @@ Ideas in rough order of expected gain; each is one experiment, one commit if it 
 - [ ] **Bookmaker odds**: tried 2026-10-18 with football-data.co.uk history; +0.005 Spearman on one season, nothing on the other, and it needs a live key (the-odds-api, free tier) plus a fallback. Parked.
 - [ ] Set-piece and penalty takers; double/blank gameweek handling checked. (Per-position models tried 2026-10-18: worse.)
 - [x] **Crowd features** (ownership and transfer ranks, price change) and **last-match features**: the biggest gain of the day, Spearman +0.05 to +0.09 (2026-10-18).
-- [ ] **Captain picker**: shrink the ranking toward long-run quality (0.7·xP + 0.3·season rate) lifted the top-1 and top-3 picks in the backtest; confirm with the production bundle, then apply to the captain endpoint and `/plan`.
+- [x] **Captain picker** (2026-10-18): the captain ranking is 0.6·xP + 0.4·season points-per-fixture. With the production bundle the captain pick went 7.9 → 9.8 and 6.0 → 7.0 pts per GW (+0.65, CI −0.11..1.60; +0.76, CI 0.03..1.62), top-3 +0.6 / +0.9. Applied to the captain endpoint, the briefing, the optimiser's captain term and the live snapshot, which now scores the recommended captain.
 - [ ] Multi-GW horizon trained directly instead of repeating next-GW; calibrated uncertainty so the optimiser can be risk-aware.
 - [ ] Retrain schedule: monthly in-season refit on the current season plus each summer with the finished season added.
 
