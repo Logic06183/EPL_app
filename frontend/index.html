@@ -688,6 +688,20 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 
 <!-- ═══════════════ PREDICTIONS ═══════════════ -->
 <section class="tab active" id="tab-predict">
+  <div class="import-box" id="hero" style="display:none;text-align:left">
+    <div class="import-title">YOUR GAMEWEEK PLAN IN 10 SECONDS</div>
+    <div class="import-sub" style="margin-bottom:12px">Captain, the transfers worth making (and whether a −4 hit pays), chip timing,
+      and what your mini-league rivals own that you don't. Free this season.</div>
+    <div class="irow" style="margin:0;max-width:520px">
+      <input type="text" inputmode="numeric" class="tid-input" id="hero-tid" placeholder="Paste your FPL link or team ID" autocomplete="off"
+        onkeydown="if(event.key==='Enter')heroImport()">
+      <button class="btn" onclick="heroImport()">Get my plan</button>
+    </div>
+    <details style="margin-top:10px;font-size:12px;color:var(--text2)"><summary style="cursor:pointer">Where's my team ID?</summary>
+      <div style="margin-top:6px;line-height:1.6">On the FPL site open <b>Points</b>: the address is
+        <span style="font-family:'DM Mono',monospace">fantasy.premierleague.com/entry/<b>1234567</b>/event/8</span>.
+        Paste the whole link or just the number. No login needed; we only read your public team.</div></details>
+  </div>
   <!-- Captain Hub -->
   <div class="captain-strip" id="cap-strip">
     <h2 class="cap-title">🏅 CAPTAIN PICKS <span style="font-size:11px;color:var(--text3);font-weight:400;letter-spacing:0">this gameweek</span></h2>
@@ -751,7 +765,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
       <div class="import-sub">Enter your FPL team ID to get transfer suggestions and squad analysis.<br>
         Find it at: <a href="https://fantasy.premierleague.com/" target="_blank" rel="noopener noreferrer" class="ext-link">fantasy.premierleague.com</a>/entry/<strong>YOUR-ID</strong>/history</div>
       <div class="irow">
-        <input type="number" class="tid-input" id="tid-input" placeholder="e.g. 1234567" min="1">
+        <input type="text" inputmode="numeric" class="tid-input" id="tid-input" placeholder="Team ID or your FPL link" autocomplete="off">
         <button class="btn" onclick="loadTeam()">Load Team</button>
       </div>
     </div>
@@ -1346,8 +1360,25 @@ function sharePreds(){
 }
 
 // ── Squad / FPL Team Import ───────────────────────────
+// Accept a bare ID or any FPL link containing /entry/<id>/
+function parseTeamId(v){
+  v=String(v||'').trim();
+  const m=v.match(/entry\/(\d+)/)||v.match(/^(\d+)$/);
+  return m?m[1]:'';
+}
+
+// First-visit hero: one box, straight to the personal plan
+function heroImport(){
+  const id=parseTeamId(document.getElementById('hero-tid').value);
+  if(!id){ toast('Paste your FPL link or team ID','error'); return; }
+  document.getElementById('tid-input').value=id;
+  track('hero_import');
+  showTab('squad'); loadTeam();
+}
+
 async function loadTeam(){
-  const id=document.getElementById('tid-input').value.trim();
+  const id=parseTeamId(document.getElementById('tid-input').value);
+  if(id) document.getElementById('tid-input').value=id;
   if(!id){toast('Enter your team ID','error');return;}
   document.getElementById('team-content').innerHTML='<div class="loading"><div class="spin"></div><span>Loading your team…</span></div>';
   try{
@@ -1359,6 +1390,7 @@ async function loadTeam(){
     ]);
     renderTeam(team,id,briefing);
     try{ localStorage.setItem('fpl_team_id', id); }catch{}
+    document.getElementById('hero').style.display='none';
     track('team_import');
     if(briefing) track(briefing.paywall?'paywall_view':'briefing_view');
   }catch(e){
@@ -2286,6 +2318,8 @@ track('visit');
 // Deep link (?team=123, used by calendar reminders) or the last team loaded on this device
 (function(){
   const q=new URLSearchParams(location.search).get('team');
+  let known=null; try{ known=localStorage.getItem('fpl_team_id'); }catch{}
+  if(!q&&!known) document.getElementById('hero').style.display='';
   let saved=null; try{ saved=localStorage.getItem('fpl_team_id'); }catch{}
   const id=(q&&/^\d+$/.test(q))?q:saved;
   if(!id) return;

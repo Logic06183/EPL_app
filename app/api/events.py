@@ -37,7 +37,7 @@ FUNNEL = [
 ]
 OTHER = {
     "plan_view", "optimise", "track_record_view", "share", "share_visit",
-    "calendar_subscribe", "checkout_cancel", "league_view",
+    "calendar_subscribe", "checkout_cancel", "league_view", "hero_import",
 }
 ALLOWED = set(FUNNEL) | OTHER
 
