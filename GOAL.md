@@ -84,9 +84,8 @@ Two stages. Stage A works today with zero code.
         `fplai://auth` → `POST /api/users/desktop-token` → `signInWithCustomToken`. Verified on this Mac: the
         bundle registers the scheme, a test `open "fplai://auth?ct=..."` reaches the page, malformed links are
         rejected, the browser hand-off page opens the sign-in modal, backend endpoint has tests.
-      - [ ] **Craig:** open the built app, click Sign in → Continue with Google in the browser → confirm the app
-        shows you signed in. That is the one step that needs a real Google login. If it fails, Cloud Run logs
-        for `Custom token failed` tell why (the service account was granted `roles/iam.serviceAccountTokenCreator`).
+      - [x] **Craig:** open the built app, click Sign in → Continue with Google in the browser → confirm the app
+        shows you signed in. Done 2026-10-18: signed in inside the app on Craig's Mac. Google sign-in works in the app.
 - [ ] **Craig:** Apple Developer account (£79/yr) to sign and notarise, so the download opens without Gatekeeper warnings.
       Claude wires the signing settings into `tauri.conf.json` and a `scripts/release-mac.sh`.
 - [ ] **Later:** iOS/Android via the existing `mobile/` Capacitor wrapper. It has the same sign-in gotcha and needs
