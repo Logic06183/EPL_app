@@ -62,3 +62,4 @@ personal weekly briefing for *your* team.
 - 2026-10-17 — link previews (Open Graph/Twitter image + tags), better title/description, robots.txt
 - 2026-10-18 — shareable GW plan card (canvas PNG via share sheet / download) + ?ref=share attribution
 - 2026-10-18 — mini-league view (`/api/fpl-team/{id}/league/{league_id}`)
+- 2026-10-18 — fix: 403 upgrade_required from require_pro now opens the upgrade modal (was 'Access denied'); gating switches documented in docs/pricing.md

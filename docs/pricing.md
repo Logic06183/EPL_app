@@ -34,3 +34,17 @@ they've dropped out of their mini-league race.
 6. **Decide with data:** `/api/admin/funnel` shows visit → team import →
    briefing → paywall → upgrade click → checkout. Run this season free,
    watch where people drop, then set the price.
+
+## Gating switches (for when the paywall goes on)
+
+During the launch grace period everything is open. To make a feature Pro,
+add `require_pro(user)` at the top of its endpoint (a no-op during grace):
+
+| Feature | Endpoint |
+|---|---|
+| Transfer plan + chips | `plan_transfers` in `app/api/fpl_team.py` |
+| Mini-league view | `mini_league` in `app/api/fpl_team.py` |
+| Squad optimiser | `optimize_squad` in `app/api/teams.py` |
+| Briefing (already metered) | `FREE_BRIEFINGS_PER_GW` env var |
+
+The frontend already shows the upgrade modal on any 403 `upgrade_required`.

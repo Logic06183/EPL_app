@@ -1113,7 +1113,8 @@ async function apiFetch(path, opts={}){
   if(r.status===403){
     let body={};
     try{ body=await r.json(); }catch{}
-    if(body.detail==='upgrade_required'||body.error==='upgrade_required'){
+    // require_pro() returns {detail: {error: 'upgrade_required', ...}}
+    if(body.detail==='upgrade_required'||body.error==='upgrade_required'||body.detail?.error==='upgrade_required'){
       showUpgrade();
       throw new Error('Pro feature — upgrade to unlock');
     }
