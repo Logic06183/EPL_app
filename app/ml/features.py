@@ -57,10 +57,20 @@ FEATURES = [
     "defcon_l6",
     "saves_l6",
     "xgc_l6",
-    # The crowd: ownership and net transfers this gameweek, as within-gameweek
+    # Last match: the strongest sign a player will start again
+    "mins_l1",
+    "pts_l1",
+    "starts_l1",
+    "mins_l1_of_l6",
+    "pts_std_l6",
+    # The crowd: ownership and transfers this gameweek, as within-gameweek
     # percentile ranks so the scale is the same in every season
     "own_rank",
     "net_tr_rank",
+    "tr_in_rank",
+    "tr_out_rank",
+    "own_pos_rank",
+    "value_delta",
 ]
 
 PRIOR_FEATURES = ["prev_pts90", "prev_mins_pg", "prev_xgi90"]
@@ -117,6 +127,11 @@ def player_form(player_gw: pd.DataFrame) -> pd.DataFrame:
     out["starts_l6"] = _shifted_rolling(g["_starts"], 6)
     out["bps_l6"] = _shifted_rolling(g["_bps"], 6)
     out["games_season"] = g["n_fixtures"].transform(lambda s: s.shift(1).fillna(0).cumsum())
+    out["mins_l1"] = g["_mins"].shift(1)
+    out["pts_l1"] = g["_pts"].shift(1)
+    out["starts_l1"] = g["_starts"].shift(1)
+    out["mins_l1_of_l6"] = out["mins_l1"] / out["mins_l6"].replace(0, np.nan)
+    out["pts_std_l6"] = g["_pts"].transform(lambda s: s.shift(1).rolling(6, min_periods=2).std())
     for stat, short in EXTRA_STATS.items():
         if stat in df:
             df[f"_{short}"] = df[stat] / nf
@@ -237,16 +252,38 @@ def prior_season(players_raw: pd.DataFrame) -> pd.DataFrame:
 
 def ownership_features(frame: pd.DataFrame) -> pd.DataFrame:
     """
-    Within-gameweek percentile ranks of ownership (`selected`) and net
-    transfers (`transfers_balance`). Both are known before the deadline.
-    frame needs element, gw, selected, transfers_balance. Ranks are scale-free,
-    so training on raw counts and serving on `selected_by_percent` agree.
+    The crowd's view of the upcoming gameweek, all known before the deadline:
+    within-gameweek percentile ranks of ownership (`selected`), net transfers
+    (`transfers_balance`), transfers in and out, ownership within the player's
+    position, and the price change since the last deadline (`value_delta`, in
+    FPL's tenths of a million). Ranks are scale-free, so training on raw
+    counts and serving on `selected_by_percent` agree.
+    frame needs element, gw, position, selected, transfers_in, transfers_out, value_delta.
     """
     out = frame[["element", "gw"]].copy()
     g = frame.groupby("gw")
+    balance = frame["transfers_in"] - frame["transfers_out"]
     out["own_rank"] = g["selected"].rank(pct=True)
-    out["net_tr_rank"] = g["transfers_balance"].rank(pct=True)
+    out["net_tr_rank"] = balance.groupby(frame["gw"]).rank(pct=True)
+    out["tr_in_rank"] = g["transfers_in"].rank(pct=True)
+    out["tr_out_rank"] = g["transfers_out"].rank(pct=True)
+    out["own_pos_rank"] = frame.groupby(["gw", "position"])["selected"].rank(pct=True)
+    out["value_delta"] = frame["value_delta"]
     return out
+
+
+def predict_points(bundle: dict, X: pd.DataFrame) -> np.ndarray:
+    """
+    Expected points from a model bundle. The bundle holds the points regressor
+    (`model`) and, when trained, a classifier for P(60+ minutes) (`p60`); the
+    prediction is scaled by sqrt(P60), which sharpened calibration (MAE) and
+    the top picks in the walk-forward backtest without hurting the ranking.
+    """
+    pred = np.asarray(bundle["model"].predict(X), dtype=float)
+    p60 = bundle.get("p60")
+    if p60 is not None:
+        pred = pred * np.sqrt(np.clip(p60.predict_proba(X)[:, 1], 0.0, 1.0))
+    return pred
 
 
 def add_position_code(frame: pd.DataFrame) -> pd.DataFrame:

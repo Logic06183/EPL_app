@@ -25,7 +25,7 @@ from . import track_record
 from ..auth.firebase_auth import get_db
 from ..ml.features import (
     CORE_STATS, EXTRA_STATS, POSITIONS, add_position_code, attach_fixture_features, fixture_rows,
-    form_as_of, ownership_features, team_form,
+    form_as_of, ownership_features, predict_points, team_form,
 )
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ def predict_gameweeks(
     All features are as of the start of next_gw; later gws only change the
     fixture (opponent, home/away, doubles and blanks).
     """
-    model, features = model_bundle["model"], model_bundle["features"]
+    features = model_bundle["features"]
 
     els = pd.DataFrame({
         "element": [e["id"] for e in elements],
@@ -117,9 +117,11 @@ def predict_gameweeks(
     crowd = ownership_features(pd.DataFrame({
         "element": [e["id"] for e in elements],
         "gw": next_gw,
+        "position": [POSITIONS[e["element_type"] - 1] if 1 <= e["element_type"] <= 4 else None for e in elements],
         "selected": [float(e.get("selected_by_percent") or 0) for e in elements],
-        "transfers_balance": [int(e.get("transfers_in_event") or 0) - int(e.get("transfers_out_event") or 0)
-                              for e in elements],
+        "transfers_in": [int(e.get("transfers_in_event") or 0) for e in elements],
+        "transfers_out": [int(e.get("transfers_out_event") or 0) for e in elements],
+        "value_delta": [float(e.get("cost_change_event") or 0) for e in elements],
     })).drop(columns=["gw"])
     frame = frame.merge(crowd, on="element", how="left")
     frame = attach_fixture_features(frame, tform_now.assign(gw=next_gw))
@@ -135,7 +137,7 @@ def predict_gameweeks(
     out: Dict[int, Dict[int, float]] = {int(e): {gw: 0.0 for gw in target_gws} for e in els["element"]}
     if frame.empty:
         return out
-    frame["pred"] = model.predict(frame[features].astype(float))
+    frame["pred"] = predict_points(model_bundle, frame[features].astype(float))
     per_gw = frame.groupby(["element", "fixture_gw"])["pred"].sum()
     for (el, gw), v in per_gw.items():
         out[int(el)][int(gw)] = max(0.0, float(v))

@@ -23,11 +23,11 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 
 from app.ml.features import (
     CORE_STATS, EXTRA_STATS, FEATURES, POSITIONS, add_position_code, attach_fixture_features,
-    ownership_features, player_form, prior_season, team_form,
+    ownership_features, player_form, predict_points, prior_season, team_form,
 )
 
 SEASONS = ["2022-23", "2023-24", "2024-25", "2025-26"]
@@ -60,15 +60,19 @@ def load_season(data_dir: Path, season: str) -> tuple[pd.DataFrame, pd.DataFrame
     present_extra = [c for c in EXTRA_STATS if c in raw.columns]
     stats = CORE_STATS + present_extra
     raw[stats] = raw[stats].fillna(0)
-    for c in ("selected", "transfers_balance"):
+    for c in ("selected", "transfers_in", "transfers_out"):
         if c not in raw:
             raw[c] = np.nan
 
     player_gw = (raw.groupby(["element", "gw"])
                  .agg(team=("team", "last"), position=("position", "last"), value=("value", "last"),
-                      selected=("selected", "last"), transfers_balance=("transfers_balance", "last"),
+                      selected=("selected", "last"), transfers_in=("transfers_in", "last"),
+                      transfers_out=("transfers_out", "last"),
                       n_fixtures=("fixture", "nunique"), **{c: (c, "sum") for c in stats})
                  .reset_index())
+    # Price change since the previous gameweek the player's team played
+    player_gw = player_gw.sort_values(["element", "gw"])
+    player_gw["value_delta"] = player_gw["value"] - player_gw.groupby("element")["value"].shift(1)
     for c in EXTRA_STATS:
         if c not in present_extra:
             player_gw[c] = np.nan   # stat not recorded that season (not zero)
@@ -97,12 +101,22 @@ def load_season(data_dir: Path, season: str) -> tuple[pd.DataFrame, pd.DataFrame
     return rows, player_gw, fixtures
 
 
+_HGB = dict(max_iter=300, learning_rate=0.05, max_leaf_nodes=31, min_samples_leaf=100,
+            l2_regularization=1.0, categorical_features=[FEATURES.index("position_code")], random_state=0)
+
+
 def make_model() -> HistGradientBoostingRegressor:
-    return HistGradientBoostingRegressor(
-        max_iter=300, learning_rate=0.05, max_leaf_nodes=31, min_samples_leaf=100,
-        l2_regularization=1.0, categorical_features=[FEATURES.index("position_code")],
-        random_state=0,
-    )
+    return HistGradientBoostingRegressor(**_HGB)
+
+
+def fit_bundle(train: pd.DataFrame) -> dict:
+    """Points regressor plus a P(60+ minutes) classifier; see features.predict_points."""
+    X = train[FEATURES]
+    return {
+        "model": make_model().fit(X, train["total_points"]),
+        "p60": HistGradientBoostingClassifier(**_HGB).fit(X, (train["minutes"] >= 60).astype(int)),
+        "features": FEATURES,
+    }
 
 
 def _spearman(a: pd.Series, b: pd.Series) -> float:
@@ -194,9 +208,9 @@ def main() -> None:
               "features": FEATURES, "seasons": {}}
     for test_season in TEST_SEASONS:
         train = pd.concat([seasons[s] for s in SEASONS if s < test_season])
-        model = make_model().fit(train[FEATURES], train["total_points"])
+        bundle = fit_bundle(train)
         test = seasons[test_season].copy()
-        test["pred"] = model.predict(test[FEATURES])
+        test["pred"] = predict_points(bundle, test[FEATURES])
         report["seasons"][test_season] = {
             "trained_on": [s for s in SEASONS if s < test_season],
             "metrics": evaluate(test),
@@ -204,9 +218,8 @@ def main() -> None:
         print(test_season, json.dumps(report["seasons"][test_season]["metrics"], indent=1))
 
     full = pd.concat(seasons.values())
-    model = make_model().fit(full[FEATURES], full["total_points"])
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    joblib.dump({"model": model, "features": FEATURES, "trained_on": SEASONS}, OUT_DIR / "model.joblib")
+    joblib.dump({**fit_bundle(full), "trained_on": SEASONS}, OUT_DIR / "model.joblib")
     # Priors for the season after the last one trained on (i.e. the live season)
     prior_season(pd.read_csv(args.data / f"players_raw_{SEASONS[-1]}.csv")).to_csv(
         OUT_DIR / "prior_season.csv", index=False)

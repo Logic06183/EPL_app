@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.ml.features import CORE_STATS, EXTRA_STATS, FEATURES, prior_season
+from app.ml.features import CORE_STATS, EXTRA_STATS, FEATURES, predict_points, prior_season
 from app.services.prediction_service import PredictionService
 from app.services.xp_service import (
     ML_DIR, XPService, availability, fixtures_frame, player_gw_frame, predict_gameweeks,
@@ -65,7 +65,8 @@ def season(tmp_path_factory):
                 "defensive_contribution": int(rng.integers(0, 3)), "saves": int(rng.integers(0, 5)),
                 "expected_goals_conceded": round(float(rng.random()) * 2, 2),
                 # Ownership and net transfers for this gameweek (pre-deadline numbers)
-                "selected": 1000 * (p["id"] % 9 + 1) + f["event"], "transfers_balance": (p["id"] * 7 + f["event"]) % 500 - 250,
+                "selected": 1000 * (p["id"] % 9 + 1) + f["event"],
+                "transfers_in": (p["id"] * 7 + f["event"]) % 500, "transfers_out": (p["id"] * 3 + f["event"]) % 400,
                 "team_h_score": f["team_h_score"], "team_a_score": f["team_a_score"],
             })
     pd.DataFrame(rows).to_csv(d / f"merged_{SEASON}.csv", index=False)
@@ -92,7 +93,7 @@ def test_serving_matches_training(season, bundle):
     target = 6
     rows, _, _ = load_season(d, SEASON)
     t = rows[rows["gw"] == target].copy()
-    t["pred"] = bundle["model"].predict(t[FEATURES])
+    t["pred"] = predict_points(bundle, t[FEATURES])
     expected = t.groupby("element")["pred"].sum().clip(lower=0)
 
     raw = pd.read_csv(d / f"merged_{SEASON}.csv")
@@ -107,8 +108,10 @@ def test_serving_matches_training(season, bundle):
     elements = [{"id": p["id"], "code": p["code"], "team": p["team"],
                  "element_type": POS.index(p["pos"]) + 1, "now_cost": 50 + p["id"] % 7,
                  "selected_by_percent": str(tgt.loc[p["id"], "selected"] / 1000),
-                 "transfers_in_event": int(max(tgt.loc[p["id"], "transfers_balance"], 0)),
-                 "transfers_out_event": int(max(-tgt.loc[p["id"], "transfers_balance"], 0))}
+                 "transfers_in_event": int(tgt.loc[p["id"], "transfers_in"]),
+                 "transfers_out_event": int(tgt.loc[p["id"], "transfers_out"]),
+                 # value is constant per player in the synthetic season, so no price change
+                 "cost_change_event": 0}
                 for p in players]
     live = {gw: _live(raw, gw) for gw in range(1, target)}
     pgw = player_gw_frame(elements, live, fx)
