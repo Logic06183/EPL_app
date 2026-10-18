@@ -291,6 +291,21 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 .tid-input:focus{border-color:var(--gold);}
 .tid-input::placeholder{color:var(--text3);}
 .team-card{background:var(--card);border:1px solid var(--b1);border-radius:var(--r);padding:16px;margin-bottom:16px;}
+/* First-visit hero: the one thing a new visitor should see and do */
+#hero{border:1px solid var(--b2);padding:32px 28px 24px;margin-bottom:20px;
+  background:linear-gradient(135deg,rgba(201,168,76,.10),var(--card) 45%,var(--card));}
+#hero .import-title{font-size:44px;line-height:.95;letter-spacing:1.5px;margin-bottom:10px;}
+#hero .import-sub{font-size:15px;color:var(--text);max-width:600px;line-height:1.5;}
+#hero .tid-input{height:50px;font-size:16px;padding:0 14px;}
+#hero .btn{height:50px;font-size:15px;padding:0 24px;}
+#hero .trust{font-size:12px;color:var(--text2);margin-top:10px;}
+@media(max-width:560px){
+  #hero{padding:24px 18px 18px;}
+  #hero .import-title{font-size:32px;}
+  #hero .import-sub{font-size:14px;}
+  #hero .irow{flex-direction:column;}
+  #hero .btn{width:100%;justify-content:center;}
+}
 .tc-top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;}
 .tc-name{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;}
 .tc-mgr{font-size:12px;color:var(--text2);}
@@ -690,14 +705,15 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 <section class="tab active" id="tab-predict">
   <div class="import-box" id="hero" style="display:none;text-align:left">
     <div class="import-title">YOUR GAMEWEEK PLAN IN 10 SECONDS</div>
-    <div class="import-sub" style="margin-bottom:12px">Captain, the transfers worth making (and whether a −4 hit pays), chip timing,
-      and what your mini-league rivals own that you don't. Free this season.</div>
+    <div class="import-sub" style="margin-bottom:16px">Captain, the transfers worth making, chip timing,
+      and what your mini-league rivals own that you don't.</div>
     <div class="irow" style="margin:0;max-width:520px">
       <input type="text" inputmode="numeric" class="tid-input" id="hero-tid" aria-label="FPL team ID or link" placeholder="Paste your FPL link or team ID" autocomplete="off"
         onkeydown="if(event.key==='Enter')heroImport()">
       <button class="btn" onclick="heroImport()">Get my plan</button>
     </div>
-    <details style="margin-top:10px;font-size:12px;color:var(--text2)"><summary style="cursor:pointer">Where's my team ID?</summary>
+    <div class="trust">Free this season · No login · We only read your public team</div>
+    <details style="margin-top:8px;font-size:12px;color:var(--text2)"><summary style="cursor:pointer">Where's my team ID?</summary>
       <div style="margin-top:6px;line-height:1.6">On the FPL site open <b>Points</b>: the address is
         <span style="font-family:'DM Mono',monospace">fantasy.premierleague.com/entry/<b>1234567</b>/event/8</span>.
         Paste the whole link or just the number. No login needed; we only read your public team.</div></details>
