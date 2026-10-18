@@ -37,6 +37,13 @@ ruff check . && pytest
 - Frontend: push to `main` touching `frontend/` → `deploy-frontend.yml`
   (needs the `FIREBASE_TOKEN` secret), or `cd frontend && firebase deploy --only hosting`.
 
+After any deploy, check the live site end to end (model built from live FPL
+data, sane predictions, optimiser, calendar, track record):
+
+```sh
+pip install httpx && python scripts/smoke_test.py https://epl-prediction-app.web.app
+```
+
 ## Paywall and PayFast
 
 - `LAUNCH_FREE_UNTIL` (UTC date). Before it, everyone gets Pro and signed-in

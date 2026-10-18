@@ -81,14 +81,8 @@ jobs:
             exit 1
           fi
 
-      - name: Test Predictions Endpoint
+      - name: Smoke test the live site
         run: |
-          API_URL="${{ steps.get-url.outputs.url }}"
-          RESPONSE=$(curl -s "$API_URL/api/players/predictions/enhanced?top_n=5")
-          if echo "$RESPONSE" | jq -e '.predictions | length > 0' > /dev/null; then
-            echo "✅ Predictions endpoint working"
-          else
-            echo "❌ Predictions endpoint returned unexpected response"
-            exit 1
-          fi
+          pip install httpx==0.28.1
+          python scripts/smoke_test.py https://epl-prediction-app.web.app
 

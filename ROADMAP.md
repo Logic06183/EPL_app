@@ -43,7 +43,7 @@ personal weekly briefing for *your* team.
 
 - Rotate PayFast credentials (were committed in the old `cloudbuild.yaml`) and set them on `epl-backend`; set the same passphrase in the PayFast dashboard
 - Copy `docs/proposed-workflows/*.yml` into `.github/workflows/` (the Claude GitHub App can't push workflow files). **Do this before merging**: the current backend deploy wipes PAYFAST_* env vars
-- Merge `claude/loving-allen-fd1rpb` → `main` to deploy
+- Merge `claude/loving-allen-fd1rpb` → `main` to deploy, then run `python scripts/smoke_test.py` (README)
 - Delete the retired Cloud Run services `epl-api` and `epl-backend-sa` if they still exist
 - Archive the old `EPL_Fantasy_Optimizer` repo
 - Set `ADMIN_EMAILS` on `epl-backend` to read the funnel
@@ -65,3 +65,4 @@ personal weekly briefing for *your* team.
 - 2026-10-18 — fix: 403 upgrade_required from require_pro now opens the upgrade modal (was 'Access denied'); gating switches documented in docs/pricing.md
 - 2026-10-18 — first-visit hero (team import from Predictions tab), team ID field accepts pasted FPL links
 - 2026-10-18 — accessibility: axe-core WCAG 2 A/AA clean on all tabs (contrast token, control labels, live-region toasts)
+- 2026-10-18 — post-deploy smoke test (`scripts/smoke_test.py`), wired into the proposed deploy workflow
