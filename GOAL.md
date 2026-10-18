@@ -15,7 +15,7 @@ Branch with all the work so far: `claude/loving-allen-fd1rpb`.
 
 ## Definition of done
 
-- [ ] The site is live from `main`, and `python scripts/smoke_test.py` passes against it
+- [x] The site is live from `main`, and `python scripts/smoke_test.py` passes against it (2026-10-18)
 - [ ] Predictions are snapshotted before every deadline and scored after (Track record tab fills up each gameweek)
 - [ ] Someone can pay, by PayFast in ZAR and by card in GBP/USD, and gets Pro automatically
 - [ ] A Mac app is installed from a signed download and sign-in works in it
@@ -29,14 +29,20 @@ Branch with all the work so far: `claude/loving-allen-fd1rpb`.
 
 The Claude GitHub App couldn't push workflow files, so these steps are manual.
 
-- [ ] **Craig:** copy `docs/proposed-workflows/*.yml` over `.github/workflows/`, delete `docs/proposed-workflows/`, commit.
-      **Do this before merging**: the current backend deploy wipes the service's env vars.
-- [ ] **Craig:** merge `claude/loving-allen-fd1rpb` → `main` (deploys backend + frontend).
-      If the frontend workflow lacks `FIREBASE_TOKEN`: `cd frontend && firebase deploy --only hosting`.
-- [ ] **Claude:** `python scripts/smoke_test.py https://epl-prediction-app.web.app` → all PASS.
-      This is the first time the xP model runs on real FPL data. If "model built" fails,
-      check the Cloud Run logs for `xP refresh failed` and fix it in `app/services/xp_service.py`.
-- [ ] **Claude:** open the site, import a real team ID, then check the briefing, Transfer plan, chips, mini-league and share card.
+- [x] copy `docs/proposed-workflows/*.yml` over `.github/workflows/`, delete `docs/proposed-workflows/`, commit.
+      Done 2026-10-18 from the Mac (`9ec7fe5`); the `gh` token there has the `workflow` scope.
+- [x] merge `claude/loving-allen-fd1rpb` → `main`. Merged as PR #1 on 2026-10-18.
+      GitHub Actions is locked on the account (billing) and the repo has no Actions secrets, so deploys run from the Mac:
+      `gcloud run deploy epl-backend --source . --region us-central1 --project epl-prediction-app --update-env-vars ENVIRONMENT=production`
+      and `cd frontend && firebase deploy --only hosting --project epl-prediction-app`.
+- [ ] **Craig:** unlock GitHub Actions (github.com → Settings → Billing) and add repo secrets `GCP_SA_KEY`, `GOOGLE_API_KEY`,
+      `FIREBASE_TOKEN` so a push to `main` deploys itself. Until then, deploy from the Mac as above.
+- [x] **Claude:** `python scripts/smoke_test.py https://epl-prediction-app.web.app` → all PASS (2026-10-18).
+      The xP model built from live data: GW8, 667 players, 6 GWs of history. One fix was needed:
+      the predictions endpoint gated on the stored plan instead of the effective plan (`d12c874`).
+- [x] **Claude:** open the site, import a real team ID, then check the briefing, Transfer plan, chips, mini-league and share card.
+      Checked with team 1 on 2026-10-18: all render. Fixed the blank GW header bar (loader never called) and a
+      `null` points gap in the mini-league rivals row (`c40769a`).
 
 ## M2 — Make the track record run itself  (Craig sets secrets, Claude checks)
 

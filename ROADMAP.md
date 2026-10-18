@@ -38,12 +38,12 @@ personal weekly briefing for *your* team.
 
 - [x] Mini-league view: league effective ownership, threats / under-covered / differentials by next-GW swing
 - [x] Shareable GW plan card
+- [ ] Mid-gameweek: the briefing and header bar describe the current GW ("deadline passed") while the plan and share card target the next GW; both should talk about the next deadline once a GW has kicked off
 
 ## Needs Craig
 
 - Rotate PayFast credentials (were committed in the old `cloudbuild.yaml`) and set them on `epl-backend`; set the same passphrase in the PayFast dashboard
-- Copy `docs/proposed-workflows/*.yml` into `.github/workflows/` (the Claude GitHub App can't push workflow files). **Do this before merging**: the current backend deploy wipes PAYFAST_* env vars
-- Merge `claude/loving-allen-fd1rpb` → `main` to deploy, then run `python scripts/smoke_test.py` (README)
+- Unlock GitHub Actions (account billing lock) and add repo secrets `GCP_SA_KEY`, `GOOGLE_API_KEY`, `FIREBASE_TOKEN`; until then deploy from the Mac (GOAL.md M1)
 - Delete the retired Cloud Run services `epl-api` and `epl-backend-sa` if they still exist
 - Archive the old `EPL_Fantasy_Optimizer` repo
 - Set `ADMIN_EMAILS` on `epl-backend` to read the funnel
@@ -66,3 +66,4 @@ personal weekly briefing for *your* team.
 - 2026-10-18 — first-visit hero (team import from Predictions tab), team ID field accepts pasted FPL links
 - 2026-10-18 — accessibility: axe-core WCAG 2 A/AA clean on all tabs (contrast token, control labels, live-region toasts)
 - 2026-10-18 — post-deploy smoke test (`scripts/smoke_test.py`), wired into the proposed deploy workflow
+- 2026-10-18 — M1 shipped from the Mac: workflows applied (`9ec7fe5`), PR #1 merged, backend + frontend deployed, smoke test all PASS on GW8 live data. Fixes: predictions limit used stored plan (`d12c874`); GW header bar never loaded, league gap `null` (`c40769a`). GitHub Actions is billing-locked; no repo secrets
