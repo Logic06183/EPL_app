@@ -3,7 +3,6 @@ FPL AI Pro - Production FastAPI Application
 Consolidated API with multi-model predictions, xG/xA analytics, and Gemini AI
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import Optional
 from contextlib import asynccontextmanager
@@ -15,8 +14,7 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .utils.logging import setup_logging, get_logger
 from .utils.cache import get_cache_manager
-from .schemas.common import HealthResponse, ErrorResponse
-from .api import players, predictions, teams, payments, fpl_team, users
+from .api import calendar, events, players, predictions, teams, payments, fpl_team, users
 
 # Setup logging
 setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
@@ -44,25 +42,22 @@ async def lifespan(app: FastAPI):
     app_state["cache"] = cache_manager
     logger.info("Cache manager initialized")
 
-    # Pre-warm FPL bootstrap cache and train ML models so first user request is fast.
-    # Without this, the first dashboard hit pays a ~25s RF training cost.
+    # Pre-warm the FPL bootstrap cache and compute expected points so the first
+    # user request is fast.
     app_state["models_loaded"] = False
     try:
-        import asyncio
         from .services.data_service import get_data_service
-        from .services.prediction_service import get_prediction_service
+        from .services.xp_service import get_xp_service
 
         data_service = get_data_service()
         bootstrap = await data_service.get_bootstrap_data()
         elements = bootstrap.get("elements", [])
         logger.info(f"Bootstrap cache pre-warmed: {len(elements)} players loaded")
 
-        prediction_service = get_prediction_service()
-        # train() is CPU-bound (sklearn .fit) — run in a worker thread so the
-        # event loop stays responsive to health probes during startup.
-        await asyncio.to_thread(prediction_service.train, elements)
-        app_state["models_loaded"] = prediction_service._trained
-        logger.info(f"Models pre-trained: {app_state['models_loaded']}")
+        xp_service = get_xp_service()
+        await xp_service.refresh(data_service)
+        app_state["models_loaded"] = xp_service.ready
+        logger.info(f"Expected points ready: {app_state['models_loaded']}")
     except Exception as e:
         logger.warning(f"Startup pre-warm failed (non-fatal, will train lazily): {e}")
 
@@ -201,6 +196,24 @@ app.include_router(
     tags=["Users"],
 )
 
+app.include_router(
+    events.router,
+    prefix=f"{settings.API_PREFIX}/events",
+    tags=["Analytics"],
+)
+
+app.include_router(
+    calendar.router,
+    prefix=f"{settings.API_PREFIX}/calendar",
+    tags=["Calendar"],
+)
+
+app.include_router(
+    events.admin_router,
+    prefix=f"{settings.API_PREFIX}/admin",
+    tags=["Admin"],
+)
+
 
 # Gameweek and Fixtures endpoints (directly under /api/)
 from .services.data_service import get_data_service
@@ -282,9 +295,50 @@ async def get_models_performance(
     info = await prediction_service.get_model_info()
     return {
         "models": info.get("models", {}),
-        "recommendation": "ensemble",
-        "note": "Ensemble combines all available models for best accuracy",
+        "recommendation": info.get("recommendation"),
+        "track_record": info.get("track_record"),
+        "note": info.get("track_record_note"),
     }
+
+
+@app.get(f"{settings.API_PREFIX}/models/track-record", tags=["Models"])
+async def get_track_record():
+    """
+    How good are the predictions? The walk-forward backtest on past seasons,
+    plus this season's gameweeks scored against actual points.
+    """
+    from .auth.firebase_auth import get_db
+    from .services import track_record
+    from .services.data_service import get_data_service
+    from .services.xp_service import get_xp_service
+
+    cache = app_state.get("cache")
+    cached = cache.get("track_record") if cache else None
+    if cached is not None:
+        return cached
+
+    xp = get_xp_service()
+    live = {"season": None, "gameweeks": [], "summary": None}
+    try:
+        db = get_db()
+        if db is not None:
+            live = await track_record.live_record(get_data_service(), db)
+    except Exception as e:
+        logger.warning(f"Track record load failed: {e}")
+
+    payload = {
+        "backtest": xp.backtest,
+        "live": live,
+        "method": (
+            "Predictions are saved before each deadline and scored once the gameweek "
+            "finishes, against the same players and metrics as the backtest: players "
+            "averaging 30+ minutes over their last 6 gameweeks. 'Season average' is each "
+            "player's points per game so far this season."
+        ),
+    }
+    if cache:
+        cache.set("track_record", payload)
+    return payload
 
 
 # Development endpoints

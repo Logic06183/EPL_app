@@ -4,17 +4,23 @@ Fetch a user's live FPL team by team ID, suggest optimal transfers, and
 build a personalised briefing card for the user's squad.
 """
 
+import asyncio
 import logging
 import os
+from typing import Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..services.data_service import FPLDataService, get_data_service
+from ..services.optimizer import (
+    candidates_from_elements, chip_advice, chips_available, estimate_free_transfers, optimise,
+)
+from ..services.league import league_view
 from ..services.prediction_service import PredictionService, get_prediction_service
 from ..services import gemini_service
 from ..utils.cache import get_cache_manager
 from ..auth.firebase_auth import (
-    get_current_user, require_pro, get_effective_plan, _in_grace_period, get_db,
+    get_current_user, get_effective_plan, get_db,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,13 +94,19 @@ async def get_fpl_team(
 
         return {
             "team_name":        team_meta.get("name", f"Team {team_id}"),
+            # Private classic leagues (league_type "x"), for the mini-league view
+            "leagues": [
+                {"id": lg["id"], "name": lg.get("name", ""), "rank": lg.get("entry_rank")}
+                for lg in team_meta.get("leagues", {}).get("classic", [])
+                if lg.get("league_type") == "x"
+            ],
             "manager_name":     f"{team_meta.get('player_first_name','')} {team_meta.get('player_last_name','')}".strip(),
             "overall_points":   team_meta.get("summary_overall_points", 0),
             "overall_rank":     team_meta.get("summary_overall_rank", 0),
             "gameweek_points":  team_meta.get("summary_event_points", 0),
             "bank":             team_meta.get("last_deadline_bank", 0) / 10,
             "team_value":       team_meta.get("last_deadline_value", 0) / 10,
-            "free_transfers":   picks_data.get("entry_history", {}).get("event_transfers", 0),
+            "transfers_this_gw": picks_data.get("entry_history", {}).get("event_transfers", 0),
             "active_chip":      picks_data.get("active_chip"),
             "picks":            enriched,
             "gameweek":         gw_id,
@@ -134,11 +146,10 @@ async def suggest_transfers(
         teams_map = {t["id"]: t for t in bootstrap.get("teams", [])}
         pos_map   = {p["id"]: p for p in bootstrap.get("element_types", [])}
 
-        if not prediction_service._trained:
-            prediction_service.train(elements)
+        await prediction_service.ensure_ready(data_service)
 
         # Build prediction map for all players (single vectorised pass)
-        _preds = prediction_service.predict_batch(elements, "random_forest")
+        _preds = prediction_service.predict_batch(elements, "xp")
         pred_map = {p["id"]: max(0.0, v) for p, v in zip(elements, _preds)}
 
         squad_ids = {p["id"] for p in picks}
@@ -219,6 +230,200 @@ async def suggest_transfers(
         raise HTTPException(status_code=500, detail="Transfer suggestion failed")
 
 
+@router.get("/{team_id}/plan")
+async def plan_transfers(
+    team_id:        int,
+    free_transfers: Optional[int] = Query(None, ge=0, le=5,
+                                          description="Free transfers available; estimated from history if omitted"),
+    max_transfers:  int = Query(3, ge=0, le=5),
+    data_service:   FPLDataService    = Depends(get_data_service),
+    prediction_service: PredictionService = Depends(get_prediction_service),
+    user:           dict              = Depends(get_current_user),
+):
+    """
+    Best transfers to make now for the next 3 gameweeks, including whether a
+    -4 hit pays for itself, versus holding. Also picks XI and captain per GW.
+    """
+    team_data = await get_fpl_team(team_id, data_service=data_service, user=user)
+    try:
+        bootstrap = await data_service.get_bootstrap_data()
+        elements  = bootstrap.get("elements", [])
+        by_id     = {e["id"]: e for e in elements}
+        teams_map = {t["id"]: t for t in bootstrap.get("teams", [])}
+        await prediction_service.ensure_ready(data_service)
+
+        history = None
+        try:
+            client = await data_service._get_client()
+            resp = await client.get(f"https://fantasy.premierleague.com/api/entry/{team_id}/history/")
+            resp.raise_for_status()
+            history = resp.json()
+        except Exception as e:
+            logger.warning(f"History fetch failed for {team_id}: {e}")
+
+        estimated = free_transfers is None
+        if estimated:
+            free_transfers = estimate_free_transfers(history) if history else 1
+
+        current = [p["id"] for p in team_data["picks"]]
+        # Current players valued at today's price (selling prices aren't public)
+        budget = sum(by_id[i]["now_cost"] for i in current if i in by_id) / 10 + team_data.get("bank", 0.0)
+        cands = candidates_from_elements(elements, prediction_service, keep=set(current))
+        owned = {c.id for c in cands}
+        missing = [i for i in current if i not in owned]
+        if missing:
+            raise HTTPException(status_code=422, detail="Squad contains players no longer in the game")
+
+        next_gw = prediction_service.xp.next_gw
+        chips = chips_available(history or {}, next_gw) if (history and next_gw) else []
+        best, hold, wildcard = await asyncio.gather(
+            asyncio.to_thread(optimise, cands, budget, current, free_transfers, max_transfers),
+            asyncio.to_thread(optimise, cands, budget, current, free_transfers, 0),
+            # Wildcard: unlimited free transfers
+            asyncio.to_thread(optimise, cands, budget, current, 15, 15)
+            if "wildcard" in chips else asyncio.sleep(0, result=None),
+        )
+        horizon = len(best.lineups)
+        xp_of = {c.id: list(c.xp) for c in cands}
+        chip_tips = chip_advice(
+            best, hold, wildcard.expected_points if wildcard else None,
+            [next_gw + i for i in range(horizon)] if next_gw else list(range(1, horizon + 1)),
+            {e["id"]: e["team"] for e in elements},
+            prediction_service.xp.fixture_counts,
+            xp_of,
+            chips,
+        )
+
+        def player(pid: int) -> dict:
+            el = by_id[pid]
+            return {
+                "id":   pid,
+                "name": el.get("web_name", ""),
+                "team_name": teams_map.get(el.get("team", 0), {}).get("short_name", ""),
+                "position": el.get("element_type"),
+                "price": el["now_cost"] / 10,
+                "predicted_next_3": prediction_service.horizon(pid),
+            }
+
+        gain = round(best.expected_points - hold.expected_points, 2)
+        if not best.transfers_in:
+            advice = "Hold: no transfer improves your next 3 gameweeks enough. Roll the free transfer."
+        elif best.hits:
+            advice = (f"Make {len(best.transfers_in)} transfers (-{4 * best.hits} hit): "
+                      f"+{gain} expected points over 3 gameweeks after the hit.")
+        else:
+            advice = f"Make {len(best.transfers_in)} free transfer(s): +{gain} expected points over 3 gameweeks."
+
+        return {
+            "team_id":        team_id,
+            "gameweek":       prediction_service.xp.next_gw,
+            "advice":         advice,
+            "free_transfers": free_transfers,
+            "free_transfers_estimated": estimated,
+            "chips": chip_tips,
+            "gain":           gain,
+            "hits":           best.hits,
+            "transfers_out":  [player(p) for p in best.transfers_out],
+            "transfers_in":   [player(p) for p in best.transfers_in],
+            "expected_points": {"with_transfers": best.expected_points, "hold": hold.expected_points},
+            "per_gameweek":   [
+                {"lineup": lineup, "captain": cap, "points": pts,
+                 "captain_name": by_id[cap].get("web_name", ""),
+                 "captain_xp": round(xp_of[cap][g], 2)}
+                for g, (lineup, cap, pts) in enumerate(zip(best.lineups, best.captains, best.per_gw_points))
+            ],
+            "assumptions": (
+                f"{free_transfers} free transfer(s); current players valued at today's price "
+                "(your selling price may be lower); bench points weighted 0.1."
+            ),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Transfer plan error for team {team_id}: {e}")
+        raise HTTPException(status_code=500, detail="Transfer planning failed")
+
+
+@router.get("/{team_id}/league/{league_id}")
+async def mini_league(
+    team_id:   int,
+    league_id: int,
+    rivals:    int = Query(20, ge=1, le=50, description="How many top rivals to compare against"),
+    data_service:  FPLDataService     = Depends(get_data_service),
+    prediction_service: PredictionService = Depends(get_prediction_service),
+    user:      dict = Depends(get_current_user),
+):
+    """
+    Your team vs your mini-league: effective ownership among the top rivals
+    (their latest locked picks), and the players that swing the race next GW.
+    """
+    gw_info = await data_service.get_gameweek_info()
+    cur = gw_info.get("current")
+    if not cur:
+        raise HTTPException(status_code=400, detail="Rivals' teams are visible after the first deadline")
+    gw = cur["id"]
+    client = await data_service._get_client()
+    base = "https://fantasy.premierleague.com/api"
+
+    resp = await client.get(f"{base}/leagues-classic/{league_id}/standings/")
+    if resp.status_code == 404:
+        raise HTTPException(status_code=404, detail="League not found")
+    resp.raise_for_status()
+    standings = resp.json()
+    results = standings.get("standings", {}).get("results", [])
+    me = next((r for r in results if r["entry"] == team_id), None)
+    others = [r for r in results if r["entry"] != team_id][:rivals]
+
+    cache = get_cache_manager()
+    sem = asyncio.Semaphore(8)
+
+    async def picks_for(entry: int) -> list:
+        key = f"picks:{entry}:{gw}"
+        hit = cache.get(key)
+        if hit is not None:
+            return hit
+        async with sem:
+            r = await client.get(f"{base}/entry/{entry}/event/{gw}/picks/")
+        if r.status_code != 200:
+            return []
+        picks = r.json().get("picks", [])
+        cache.set(key, picks)
+        return picks
+
+    mine, *rival_picks = await asyncio.gather(picks_for(team_id), *(picks_for(r["entry"]) for r in others))
+    rival_picks = [p for p in rival_picks if p]
+    if not mine:
+        raise HTTPException(status_code=404, detail="Could not load your picks")
+
+    await prediction_service.ensure_ready(data_service)
+    bootstrap = await data_service.get_bootstrap_data()
+    by_id = {e["id"]: e for e in bootstrap.get("elements", [])}
+    teams_map = {t["id"]: t for t in bootstrap.get("teams", [])}
+    xp_next = {el: prediction_service.xp.next_xp(el) or 0.0 for el in by_id}
+
+    view = league_view(mine, rival_picks, xp_next)
+    for section in ("threats", "undercovered", "differentials"):
+        for row in view[section]:
+            el = by_id.get(row["id"], {})
+            row["name"] = el.get("web_name", "")
+            row["team_name"] = teams_map.get(el.get("team"), {}).get("short_name", "")
+
+    return {
+        "league": {"id": league_id, "name": standings.get("league", {}).get("name", "")},
+        "gameweek_picks": gw,
+        "you": {"rank": me.get("rank") if me else None, "total": me.get("total") if me else None},
+        "rivals": [
+            {"entry": r["entry"], "name": r.get("entry_name", ""), "manager": r.get("player_name", ""),
+             "rank": r.get("rank"), "total": r.get("total"),
+             "gap": (r.get("total", 0) - me.get("total", 0)) if me else None}
+            for r in others
+        ],
+        **view,
+        "method": "Effective ownership = average pick multiplier among these rivals (captain counts 2). "
+                  "Swing = next-GW xP x (your multiplier - league EO).",
+    }
+
+
 # ── Briefing ──────────────────────────────────────────────────────────────────
 
 # Squad alert categories returned in the briefing.
@@ -267,14 +472,17 @@ def _has_unlimited_briefings(user: dict) -> bool:
     return get_effective_plan(user) in ("pro", "founder")
 
 
-def _briefing_meter_check_and_increment(user: dict, gw_id: int) -> tuple[bool, int]:
+def _briefing_meter_check_and_increment(
+    user: dict, gw_id: int, team_id: int
+) -> tuple[bool, int]:
     """
     Returns (allowed, used_count) for this user/gameweek.
 
     Anonymous users post-grace: not allowed (must sign in to use the meter).
-    Signed-in free users post-grace: allowed up to _FREE_BRIEFINGS_PER_GW per GW.
-    Increments the counter on success — cache hits in the parent endpoint should
-    bypass this entirely so they don't burn the meter.
+    Signed-in free users post-grace: up to _FREE_BRIEFINGS_PER_GW distinct
+    teams per GW. Re-opening a team already briefed this GW is free, so the
+    meter counts teams rather than page loads. Runs in a Firestore transaction
+    so parallel requests can't both slip under the limit.
     """
     if _has_unlimited_briefings(user):
         return (True, 0)
@@ -291,16 +499,25 @@ def _briefing_meter_check_and_increment(user: dict, gw_id: int) -> tuple[bool, i
         return (True, 0)
 
     try:
+        from firebase_admin import firestore
+
         doc_ref = db.collection("users").document(uid)
-        snapshot = doc_ref.get()
-        data = snapshot.to_dict() if snapshot.exists else {}
-        usage = (data.get("briefing_usage") or {})
-        used = int(usage.get(str(gw_id), 0))
-        if used >= _FREE_BRIEFINGS_PER_GW:
-            return (False, used)
-        usage[str(gw_id)] = used + 1
-        doc_ref.set({"briefing_usage": usage}, merge=True)
-        return (True, used + 1)
+
+        @firestore.transactional
+        def _txn(transaction) -> tuple[bool, int]:
+            snapshot = doc_ref.get(transaction=transaction)
+            data = snapshot.to_dict() if snapshot.exists else {}
+            teams_by_gw = data.get("briefing_teams") or {}
+            teams = [int(t) for t in teams_by_gw.get(str(gw_id), [])]
+            if team_id in teams:
+                return (True, len(teams))
+            if len(teams) >= _FREE_BRIEFINGS_PER_GW:
+                return (False, len(teams))
+            teams_by_gw[str(gw_id)] = teams + [team_id]
+            transaction.set(doc_ref, {"briefing_teams": teams_by_gw}, merge=True)
+            return (True, len(teams) + 1)
+
+        return _txn(db.transaction())
     except Exception as e:
         logger.warning(f"Briefing meter Firestore op failed: {e} — failing open")
         return (True, 0)
@@ -356,14 +573,11 @@ async def get_team_briefing(
         raise HTTPException(status_code=404, detail="Team not found")
 
     gw_id = team_data["gameweek"]
-    cache_key = f"briefing:{team_id}:{gw_id}"
-    cached = cache.get(cache_key)
-    if cached is not None:
-        # Cache hits are free — they don't consume the user's briefing meter.
-        return cached
 
-    # Meter check (post-grace only) — gate fresh fetches behind the free limit
-    allowed, used = _briefing_meter_check_and_increment(user, gw_id)
+    # Meter check (post-grace only) runs before the cache: the cache is shared
+    # across users, so a hit must not let a free user read someone else's
+    # briefing for nothing.
+    allowed, used = _briefing_meter_check_and_increment(user, gw_id, team_id)
     if not allowed:
         # Return a 200 with a paywall payload so the frontend renders an
         # upgrade card cleanly, not a generic error.
@@ -385,16 +599,20 @@ async def get_team_briefing(
             "upgrade_plan_id": "pro",
         }
 
+    cache_key = f"briefing:{team_id}:{gw_id}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     picks = team_data["picks"]
 
     # Build prediction map for the XI in one batched call (vectorised).
     bootstrap = await data_service.get_bootstrap_data()
     elements_by_id = {p["id"]: p for p in bootstrap.get("elements", [])}
-    if not prediction_service._trained:
-        prediction_service.train(list(elements_by_id.values()))
+    await prediction_service.ensure_ready(data_service)
 
     starting_elements = [elements_by_id[p["id"]] for p in picks if p.get("is_starting") and p["id"] in elements_by_id]
-    starting_preds    = prediction_service.predict_batch(starting_elements, "ensemble")
+    starting_preds    = prediction_service.predict_batch(starting_elements, "xp")
     pred_map = {p["id"]: float(v) for p, v in zip(starting_elements, starting_preds)}
 
     # Alerts + price-drop overlay (price-drop pulled from the raw FPL element)

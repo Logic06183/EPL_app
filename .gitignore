@@ -199,3 +199,9 @@ models/
 *.temp
 .gstack/
 frontend/.firebase/
+.ruff_cache/
+
+# Shipped model artefacts (small; see ml/train.py)
+!app/ml/model.joblib
+!app/ml/prior_season.csv
+!app/ml/backtest.json

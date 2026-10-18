@@ -35,6 +35,7 @@ class FPLDataService:
         self._bootstrap_data: Optional[Dict] = None
         # Reusable client with proper headers and timeouts
         self._client: Optional[httpx.AsyncClient] = None
+        self._finished_live: Dict[int, Dict[str, Any]] = {}
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create a reusable httpx client with proper headers"""
@@ -223,6 +224,33 @@ class FPLDataService:
         except Exception as e:
             logger.error(f"Error fetching fixtures: {e}")
             return []
+
+    async def get_all_fixtures(self) -> List[Dict[str, Any]]:
+        """Every fixture this season, unfiltered (cached for the normal TTL)."""
+        cached = self.cache.get("fixtures_all")
+        if cached is not None:
+            return cached
+        client = await self._get_client()
+        response = await client.get(f"{self.base_url}/fixtures/")
+        response.raise_for_status()
+        fixtures = response.json()
+        self.cache.set("fixtures_all", fixtures)
+        return fixtures
+
+    async def get_event_live(self, gw: int, finished: bool) -> Dict[str, Any]:
+        """
+        Per-player stats for one gameweek. Finished gameweeks never change, so
+        they're kept for the life of the process.
+        """
+        if finished and gw in self._finished_live:
+            return self._finished_live[gw]
+        client = await self._get_client()
+        response = await client.get(f"{self.base_url}/event/{gw}/live/")
+        response.raise_for_status()
+        data = response.json()
+        if finished:
+            self._finished_live[gw] = data
+        return data
 
     async def get_gameweek_info(self) -> Dict[str, Any]:
         """Get current gameweek information"""

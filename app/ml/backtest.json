@@ -1,0 +1,170 @@
+{
+  "generated_at": "2026-10-17T20:12:29+00:00",
+  "features": [
+    "position_code",
+    "value",
+    "was_home",
+    "pts_l3",
+    "pts_l6",
+    "pts_season",
+    "mins_l3",
+    "mins_l6",
+    "starts_l6",
+    "xgi90_l6",
+    "xgi90_season",
+    "bps_l6",
+    "games_season",
+    "team_scored_l6",
+    "team_conceded_l6",
+    "opp_scored_l6",
+    "opp_conceded_l6",
+    "team_xg_for_l6",
+    "team_xg_against_l6",
+    "opp_xg_for_l6",
+    "opp_xg_against_l6",
+    "prev_pts90",
+    "prev_mins_pg",
+    "prev_xgi90"
+  ],
+  "seasons": {
+    "2024-25": {
+      "trained_on": [
+        "2022-23",
+        "2023-24"
+      ],
+      "metrics": {
+        "model": {
+          "gameweeks": 37,
+          "mae": 2.027,
+          "spearman": 0.4,
+          "captain_pts": 7.54,
+          "top11_pts": 5.61
+        },
+        "season_avg": {
+          "gameweeks": 37,
+          "mae": 2.129,
+          "spearman": 0.308,
+          "captain_pts": 9.14,
+          "top11_pts": 4.96
+        },
+        "form": {
+          "gameweeks": 37,
+          "mae": 2.21,
+          "spearman": 0.311,
+          "captain_pts": 7.84,
+          "top11_pts": 4.81
+        },
+        "fpl_xp": {
+          "gameweeks": 34,
+          "mae": 1.673,
+          "spearman": 0.653,
+          "captain_pts": 12.29,
+          "top11_pts": 7.89
+        },
+        "model_on_fpl_xp_gws": {
+          "gameweeks": 34,
+          "mae": 2.018,
+          "spearman": 0.396,
+          "captain_pts": 7.47,
+          "top11_pts": 5.51
+        },
+        "model_vs_season_avg": {
+          "captain_pts": {
+            "diff": -1.59,
+            "ci95": [
+              -4.33,
+              0.92
+            ],
+            "significant": false
+          },
+          "top3_pts": {
+            "diff": 0.29,
+            "ci95": [
+              -0.87,
+              1.52
+            ],
+            "significant": false
+          },
+          "top11_pts": {
+            "diff": 0.65,
+            "ci95": [
+              0.25,
+              1.12
+            ],
+            "significant": true
+          }
+        }
+      }
+    },
+    "2025-26": {
+      "trained_on": [
+        "2022-23",
+        "2023-24",
+        "2024-25"
+      ],
+      "metrics": {
+        "model": {
+          "gameweeks": 37,
+          "mae": 2.119,
+          "spearman": 0.362,
+          "captain_pts": 7.27,
+          "top11_pts": 4.72
+        },
+        "season_avg": {
+          "gameweeks": 37,
+          "mae": 2.301,
+          "spearman": 0.248,
+          "captain_pts": 6.22,
+          "top11_pts": 4.5
+        },
+        "form": {
+          "gameweeks": 37,
+          "mae": 2.404,
+          "spearman": 0.244,
+          "captain_pts": 5.49,
+          "top11_pts": 4.07
+        },
+        "fpl_xp": {
+          "gameweeks": 10,
+          "mae": 1.645,
+          "spearman": 0.673,
+          "captain_pts": 10.8,
+          "top11_pts": 8.16
+        },
+        "model_on_fpl_xp_gws": {
+          "gameweeks": 10,
+          "mae": 2.146,
+          "spearman": 0.32,
+          "captain_pts": 9.1,
+          "top11_pts": 4.37
+        },
+        "model_vs_season_avg": {
+          "captain_pts": {
+            "diff": 1.05,
+            "ci95": [
+              -0.51,
+              2.62
+            ],
+            "significant": false
+          },
+          "top3_pts": {
+            "diff": 0.55,
+            "ci95": [
+              -0.38,
+              1.5
+            ],
+            "significant": false
+          },
+          "top11_pts": {
+            "diff": 0.22,
+            "ci95": [
+              -0.23,
+              0.69
+            ],
+            "significant": false
+          }
+        }
+      }
+    }
+  }
+}

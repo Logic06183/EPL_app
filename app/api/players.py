@@ -7,7 +7,6 @@ differentials, price movers, and value analysis.
 import logging
 from typing import Optional
 
-import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..services.data_service import FPLDataService, get_data_service
@@ -20,7 +19,7 @@ router = APIRouter()
 POS_MAP = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 
 
-def _enrich(player, teams, positions, prediction_service=None, model_type="random_forest", pred=None):
+def _enrich(player, teams, positions, prediction_service=None, model_type="xp", pred=None):
     """Build a standardised player dict from raw FPL element.
 
     `pred` may be passed pre-computed (from predict_batch) to avoid per-player
@@ -45,7 +44,7 @@ def _enrich(player, teams, positions, prediction_service=None, model_type="rando
         "points_per_game":  float(player.get("points_per_game", 0)),
         "ict_index":        float(player.get("ict_index", 0)),
         "predicted_points": round(max(0.0, pred), 1) if pred is not None else None,
-        "confidence":       0.80,
+        "predicted_next_3": prediction_service.horizon(player["id"]) if prediction_service else [],
         "ai_enhanced":      False,
     }
 
@@ -66,8 +65,8 @@ async def _get_predictions_payload(
     teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
     positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
 
-    if model_type != "basic" and not prediction_service._trained:
-        prediction_service.train(elements)
+    if model_type != "basic":
+        await prediction_service.ensure_ready(data_service)
 
     candidates = [
         p for p in elements
@@ -102,7 +101,7 @@ async def _get_predictions_payload(
 async def get_player_predictions(
     top_n:       int            = Query(20, ge=1, le=100),
     position:    Optional[int]  = Query(None),
-    model_type:  str            = Query("basic"),
+    model_type:  str            = Query("xp"),
     data_service: FPLDataService   = Depends(get_data_service),
     prediction_service: PredictionService = Depends(get_prediction_service),
     user:        dict           = Depends(get_current_user),
@@ -121,7 +120,7 @@ async def get_player_predictions(
 async def get_enhanced_player_predictions(
     top_n:       int            = Query(20, ge=1, le=100),
     position:    Optional[int]  = Query(None),
-    model_type:  str            = Query("basic"),
+    model_type:  str            = Query("xp"),
     model:       Optional[str]  = Query(None),
     use_ai:      bool           = Query(False),
     use_gemini:  bool           = Query(False),
@@ -133,7 +132,7 @@ async def get_enhanced_player_predictions(
     try:
         selected_model = model or model_type
         if selected_model == "cnn":
-            selected_model = "deep_learning"
+            selected_model = "xp"
 
         return await _get_predictions_payload(
             top_n,
@@ -152,7 +151,7 @@ async def get_enhanced_player_predictions(
 @router.get("/predictions/{player_id}")
 async def get_player_prediction(
     player_id:   int,
-    model_type:  str = Query("basic"),
+    model_type:  str = Query("xp"),
     model:       Optional[str] = Query(None),
     data_service: FPLDataService = Depends(get_data_service),
     prediction_service: PredictionService = Depends(get_prediction_service),
@@ -163,12 +162,11 @@ async def get_player_prediction(
         raise HTTPException(status_code=404, detail="Player not found")
 
     bootstrap = await data_service.get_bootstrap_data()
-    elements  = bootstrap.get("elements", [])
     teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
     positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
     selected_model = model or model_type
-    if selected_model != "basic" and not prediction_service._trained:
-        prediction_service.train(elements)
+    if selected_model != "basic":
+        await prediction_service.ensure_ready(data_service)
 
     return _enrich(player, teams, positions, prediction_service, selected_model)
 
@@ -191,8 +189,7 @@ async def get_captain_picks(
         positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
         events    = bootstrap.get("events", [])
 
-        if not prediction_service._trained:
-            prediction_service.train(elements)
+        await prediction_service.ensure_ready(data_service)
 
         # Get current / next GW id
         cur_gw = next((e for e in events if e.get("is_current") or e.get("is_next")), {})
@@ -298,8 +295,7 @@ async def get_three_gw_picks(
         positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
         events    = bootstrap.get("events", [])
 
-        if not prediction_service._trained:
-            prediction_service.train(elements)
+        await prediction_service.ensure_ready(data_service)
 
         # Find next 3 upcoming GW ids
         upcoming = [e for e in events if not e.get("finished", True)][:3]
@@ -325,7 +321,7 @@ async def get_three_gw_picks(
                 "is_home": False, "opponent": teams.get(h, {}).get("short_name", "?"),
             })
 
-        # Difficulty multiplier: easy fixture boosts predicted points
+        # Difficulty multiplier — only used if the xP model isn't available
         diff_mult = {1: 1.30, 2: 1.15, 3: 1.00, 4: 0.85, 5: 0.70}
 
         picks = []
@@ -338,15 +334,22 @@ async def get_three_gw_picks(
             if float(player.get("minutes", 0)) == 0:
                 continue
 
-            base_pred   = prediction_service.predict(player, "ensemble")
+            base_pred   = prediction_service.predict(player, "xp")
             team_id     = player.get("team", 0)
             fixtures    = fix_map.get(team_id, [])
             fixtures    = sorted(fixtures, key=lambda x: x["gw"])[:3]
+            per_gw      = {}
+            for fx in fixtures:
+                per_gw[fx["gw"]] = per_gw.get(fx["gw"], 0) + 1
 
             gw_scores = []
             for fx in fixtures:
-                mult  = diff_mult.get(fx["difficulty"], 1.0)
-                score = max(0, base_pred * mult)
+                model_gw = prediction_service.gw_xp(player["id"], fx["gw"])
+                if model_gw is not None:
+                    # Model predicts the whole gw; split doubles across fixtures
+                    score = max(0, model_gw / per_gw[fx["gw"]])
+                else:
+                    score = max(0, base_pred * diff_mult.get(fx["difficulty"], 1.0))
                 gw_scores.append({
                     "gw":         fx["gw"],
                     "opponent":   fx["opponent"],
@@ -359,7 +362,7 @@ async def get_three_gw_picks(
             if not gw_scores:
                 continue
 
-            d = _enrich(player, teams, positions, prediction_service, "ensemble")
+            d = _enrich(player, teams, positions, prediction_service, "xp")
             d["three_gw_total"] = round(three_gw_total, 1)
             d["three_gw_avg"]   = round(three_gw_total / len(gw_scores), 1)
             d["fixtures"]       = gw_scores
@@ -440,8 +443,7 @@ async def get_differentials(
         teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
         positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
 
-        if not prediction_service._trained:
-            prediction_service.train(elements)
+        await prediction_service.ensure_ready(data_service)
 
         diffs = []
         for player in elements:
@@ -536,8 +538,7 @@ async def get_value_picks(
         teams     = {t["id"]: t for t in bootstrap.get("teams", [])}
         positions = {p["id"]: p for p in bootstrap.get("element_types", [])}
 
-        if not prediction_service._trained:
-            prediction_service.train(elements)
+        await prediction_service.ensure_ready(data_service)
 
         values = []
         for player in elements:

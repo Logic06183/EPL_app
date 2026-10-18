@@ -15,7 +15,6 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from functools import lru_cache
 from typing import Optional
 
 from fastapi import Header

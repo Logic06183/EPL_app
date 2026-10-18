@@ -8,8 +8,20 @@
 <meta name="apple-mobile-web-app-title" content="FPL AI Pro">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#050a0c">
-<meta name="description" content="FPL AI predictions, team import, squad optimization, FDR heatmap and injury alerts">
-<title>FPL AI Pro</title>
+<meta name="description" content="Fantasy Premier League expected points for every player, a transfer planner that weighs -4 hits, captain and chip advice, and a public track record of every prediction.">
+<title>FPL AI Pro: FPL predictions with a public track record</title>
+<link rel="canonical" href="https://epl-prediction-app.web.app/">
+<!-- Link previews (WhatsApp, X, Reddit, Slack). Image source: docs/og.html -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FPL AI Pro">
+<meta property="og:url" content="https://epl-prediction-app.web.app/">
+<meta property="og:title" content="FPL AI Pro: expected points, transfer plans, public track record">
+<meta property="og:description" content="Expected points for every player, a transfer planner that weighs -4 hits, captain and chip advice. Every prediction scored in public.">
+<meta property="og:image" content="https://epl-prediction-app.web.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://epl-prediction-app.web.app/og.png">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon.svg">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
@@ -23,7 +35,7 @@
   --b1:#152535; --b2:#1e3a50; --b3:#2a5270;
   --gold:#c9a84c; --goldb:#efc84a; --goldd:#7a5f22;
   --green:#35d967; --greend:#1a6635;
-  --text:#cce8de; --text2:#5f9880; --text3:#2a5040;
+  --text:#cce8de; --text2:#5f9880; --text3:#5a9580; /* text3 ≥4.5:1 on all backgrounds (WCAG AA) */
   --gk:#f59e0b; --def:#3b82f6; --mid:#10b981; --fwd:#ef4444;
   --red:#e05555; --orange:#f97316;
   --r:12px; --sh:0 8px 40px rgba(0,0,0,.7);
@@ -429,6 +441,19 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 
 /* ── EMPTY / ERROR / LOADING ── */
 .empty{text-align:center;padding:52px 20px;color:var(--text3);}
+/* Track record */
+.tr-link{display:flex;align-items:center;gap:8px;width:100%;margin:-4px 0 16px;padding:10px 14px;background:var(--bg3);
+  border:1px solid var(--b2);border-radius:var(--r);color:var(--text2);font-size:13px;cursor:pointer;text-align:left;}
+.tr-link b{color:var(--green);font-weight:700;margin-left:auto;white-space:nowrap;}
+.tr-card{background:var(--card);border:1px solid var(--b1);border-radius:var(--r);padding:16px;margin-bottom:16px;}
+.tr-card h3{font-size:14px;letter-spacing:.5px;margin-bottom:4px;}
+.tr-card p{color:var(--text2);font-size:13px;line-height:1.5;margin-bottom:12px;}
+.tr-tbl{width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:12px;}
+.tr-tbl th{color:var(--text2);font-weight:400;text-align:right;padding:6px 8px;border-bottom:1px solid var(--b1);}
+.tr-tbl td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--b1);}
+.tr-tbl th:first-child,.tr-tbl td:first-child{text-align:left;}
+.tr-tbl .win{color:var(--green);font-weight:700;}
+.tr-wrap{overflow-x:auto;}
 .eico{font-size:38px;margin-bottom:10px;opacity:.3;}
 .etxt{font-size:13px;}
 .loading{display:flex;flex-direction:column;align-items:center;gap:10px;padding:52px 20px;color:var(--text2);font-size:13px;}
@@ -579,7 +604,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 </style>
 </head>
 <body>
-<div id="toasts"></div>
+<div id="toasts" role="status" aria-live="polite"></div>
 
 <!-- STATUS BAR -->
 <div id="sbar">
@@ -656,35 +681,49 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <button class="ntab" data-tab="intel" onclick="showTab('intel')"><span class="ni">🚨</span>Intel<span class="badge" id="inj-badge" style="display:none">!</span></button>
   <button class="ntab" data-tab="search" onclick="showTab('search')"><span class="ni">🔍</span>Search</button>
   <button class="ntab" data-tab="gameweek" onclick="showTab('gameweek')"><span class="ni">🗓</span>Gameweek</button>
+  <button class="ntab" data-tab="record" onclick="showTab('record')"><span class="ni">📊</span>Track record</button>
 </nav>
 
 <main>
 
 <!-- ═══════════════ PREDICTIONS ═══════════════ -->
 <section class="tab active" id="tab-predict">
+  <div class="import-box" id="hero" style="display:none;text-align:left">
+    <div class="import-title">YOUR GAMEWEEK PLAN IN 10 SECONDS</div>
+    <div class="import-sub" style="margin-bottom:12px">Captain, the transfers worth making (and whether a −4 hit pays), chip timing,
+      and what your mini-league rivals own that you don't. Free this season.</div>
+    <div class="irow" style="margin:0;max-width:520px">
+      <input type="text" inputmode="numeric" class="tid-input" id="hero-tid" aria-label="FPL team ID or link" placeholder="Paste your FPL link or team ID" autocomplete="off"
+        onkeydown="if(event.key==='Enter')heroImport()">
+      <button class="btn" onclick="heroImport()">Get my plan</button>
+    </div>
+    <details style="margin-top:10px;font-size:12px;color:var(--text2)"><summary style="cursor:pointer">Where's my team ID?</summary>
+      <div style="margin-top:6px;line-height:1.6">On the FPL site open <b>Points</b>: the address is
+        <span style="font-family:'DM Mono',monospace">fantasy.premierleague.com/entry/<b>1234567</b>/event/8</span>.
+        Paste the whole link or just the number. No login needed; we only read your public team.</div></details>
+  </div>
   <!-- Captain Hub -->
   <div class="captain-strip" id="cap-strip">
     <h2 class="cap-title">🏅 CAPTAIN PICKS <span style="font-size:11px;color:var(--text3);font-weight:400;letter-spacing:0">this gameweek</span></h2>
     <div class="cap-row" id="cap-row"><div class="loading" style="padding:12px"><div class="spin"></div></div></div>
   </div>
+  <button class="tr-link" onclick="showTab('record')">📊 How accurate are these? Tested on seasons the model never saw<b>Track record →</b></button>
 
   <div class="ctrl">
     <div class="cg"><span class="cl">MODEL</span>
-      <div class="sw"><select id="pred-model" onchange="loadPred()">
-        <option value="basic">Form-Based</option>
-        <option value="random_forest">Random Forest ML</option>
-        <option value="deep_learning">Deep Learning CNN</option>
-        <option value="ensemble">AI Ensemble</option>
+      <div class="sw"><select id="pred-model" aria-label="Prediction model" onchange="loadPred()">
+        <option value="xp">Expected points (ML)</option>
+        <option value="basic">Form only</option>
       </select></div>
     </div>
     <div class="cg"><span class="cl">POSITION</span>
-      <div class="sw"><select id="pred-pos" onchange="renderPred()">
+      <div class="sw"><select id="pred-pos" aria-label="Position" onchange="renderPred()">
         <option value="">All</option><option value="GK">GK</option>
         <option value="DEF">DEF</option><option value="MID">MID</option><option value="FWD">FWD</option>
       </select></div>
     </div>
     <div class="cg"><span class="cl">TOP <span id="topnv" class="rv">20</span></span>
-      <input type="range" id="pred-topn" min="5" max="50" value="20"
+      <input type="range" id="pred-topn" aria-label="Number of players" min="5" max="50" value="20"
         oninput="document.getElementById('topnv').textContent=this.value" onchange="loadPred()">
     </div>
     <div class="cg" style="margin-left:auto">
@@ -726,7 +765,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
       <div class="import-sub">Enter your FPL team ID to get transfer suggestions and squad analysis.<br>
         Find it at: <a href="https://fantasy.premierleague.com/" target="_blank" rel="noopener noreferrer" class="ext-link">fantasy.premierleague.com</a>/entry/<strong>YOUR-ID</strong>/history</div>
       <div class="irow">
-        <input type="number" class="tid-input" id="tid-input" placeholder="e.g. 1234567" min="1">
+        <input type="text" inputmode="numeric" class="tid-input" id="tid-input" aria-label="FPL team ID or link" placeholder="Team ID or your FPL link" autocomplete="off">
         <button class="btn" onclick="loadTeam()">Load Team</button>
       </div>
     </div>
@@ -737,7 +776,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div id="squad-threegw" style="display:none">
     <div class="ctrl">
       <div class="cg"><span class="cl">POSITION</span>
-        <div class="sw"><select id="tgw-pos" onchange="loadThreeGW()">
+        <div class="sw"><select id="tgw-pos" aria-label="Position" onchange="loadThreeGW()">
           <option value="">All</option><option value="1">GK</option>
           <option value="2">DEF</option><option value="3">MID</option><option value="4">FWD</option>
         </select></div>
@@ -752,7 +791,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div id="squad-optimize" style="display:none">
     <div class="ctrl">
       <div class="cg"><span class="cl">BUDGET £<span id="budv" class="rv">100.0</span>m</span>
-        <input type="range" id="squad-budget" min="80" max="105" value="100" step="0.5" style="width:150px"
+        <input type="range" id="squad-budget" aria-label="Budget in millions" min="80" max="105" value="100" step="0.5" style="width:150px"
           oninput="document.getElementById('budv').textContent=parseFloat(this.value).toFixed(1)">
       </div>
       <button class="btn" id="opt-btn" onclick="optimizeSquad()">⚡ Optimize Squad</button>
@@ -774,7 +813,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div id="fix-list">
     <div class="ctrl">
       <div class="cg"><span class="cl">FILTER</span>
-        <div class="sw"><select id="fix-filter" onchange="loadFix()">
+        <div class="sw"><select id="fix-filter" aria-label="Fixture filter" onchange="loadFix()">
           <option value="upcoming">Upcoming</option>
           <option value="recent">Recent</option>
           <option value="live">Live</option>
@@ -848,6 +887,12 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div id="sres" class="pgrid"></div>
 </section>
 
+<!-- ═══════════════ TRACK RECORD ═══════════════ -->
+<section class="tab" id="tab-record">
+  <div class="sh"><h2 class="st">TRACK RECORD</h2><span class="ss">every prediction, scored</span></div>
+  <div id="record-content"><div class="loading"><div class="spin"></div><span>Loading track record…</span></div></div>
+</section>
+
 <!-- ═══════════════ GAMEWEEK ═══════════════ -->
 <section class="tab" id="tab-gameweek">
   <div id="gw-content"><div class="loading"><div class="spin"></div><span>Loading gameweek…</span></div></div>
@@ -892,12 +937,30 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "77913915885",
   appId:             "1:77913915885:web:d9387909bfe99bc8e927e4",
 };
-const FB_READY = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('REPLACE');
+// If the Firebase SDK fails to load (ad-blocker, CDN outage) the rest of the app
+// must still work — sign-in just becomes unavailable.
+const FB_READY = typeof firebase !== 'undefined' &&
+  FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('REPLACE');
 if(FB_READY) firebase.initializeApp(FIREBASE_CONFIG);
 
 // ── Auth state ────────────────────────────────────────
 let currentUser = null;  // Firebase User object
 let currentPlan = 'free';
+// Resolves once the signed-in state is known (Firebase restores sessions
+// asynchronously), so deep links don't fire requests without the ID token.
+let _authResolve;
+const authReady = new Promise(r => { _authResolve = r; });
+// Whether Pro features are unlocked: paid Pro, Founder, or everyone during the
+// launch free period. Comes from /users/me so it matches the server's gating.
+let hasPro = false;
+
+async function refreshPlan(){
+  try{
+    const d = await apiFetch('/users/me');
+    currentPlan = d.plan || 'free';
+    hasPro = currentPlan === 'pro' || currentPlan === 'founder' || !!(d.grace && d.grace.in_grace_period);
+  }catch{ currentPlan = 'free'; hasPro = false; }
+}
 
 async function getIdToken(){
   if(!FB_READY||!currentUser) return null;
@@ -907,22 +970,17 @@ async function getIdToken(){
 if(FB_READY){
   firebase.auth().onAuthStateChanged(async (user)=>{
     currentUser = user;
-    if(user){
-      try{
-        const d = await apiFetch('/users/me');
-        currentPlan = d.plan || 'free';
-      }catch{ currentPlan='free'; }
-    } else {
-      currentPlan = 'free';
-    }
+    await refreshPlan();
     updateAuthUI(user, currentPlan);
+    _authResolve();
     // Now we know the plan — load plan-aware components
     applyPlanUI();
     loadCaptain();
   });
 } else {
-  // Firebase not configured — show lock UI immediately for Pro sections
-  applyPlanUI();
+  // No Firebase (SDK blocked or not configured): anonymous access only.
+  // Deferred so the rest of the script has finished initialising.
+  setTimeout(async ()=>{ await refreshPlan(); _authResolve(); applyPlanUI(); loadCaptain(); }, 0);
 }
 
 function updateAuthUI(user, plan){
@@ -960,23 +1018,24 @@ function signInGoogle(){
   if(!FB_READY){ toast('Firebase not configured yet','error'); return; }
   const provider = new firebase.auth.GoogleAuthProvider();
   firebase.auth().signInWithPopup(provider)
-    .then(()=>{ closeModal('signin-modal'); toast('Signed in!','success'); })
+    .then(()=>{ closeModal('signin-modal'); toast('Signed in!','success'); track('sign_in'); })
     .catch(e=>{ toast('Sign-in failed: '+e.message,'error'); });
 }
 
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
 
 function goUpgrade(){
+  track('upgrade_click');
   closeModal('upgrade-modal');
   if(!currentUser){ document.getElementById('signin-modal').classList.remove('hidden'); return; }
   apiFetch('/payments/initialize',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({plan_id:'pro',email:currentUser.email||'',return_url:window.location.origin+'/?upgraded=1'})})
-    .then(d=>{ if(d.authorization_url) window.location.href=d.authorization_url; })
+    .then(d=>{ if(d.authorization_url){ track('checkout_start'); window.location.href=d.authorization_url; } })
     .catch(()=>toast('Could not start checkout — check PayFast config','error'));
 }
 
 // Show upgrade modal (called by locked features)
-function showUpgrade(){ document.getElementById('upgrade-modal').classList.remove('hidden'); }
+function showUpgrade(){ track('paywall_view'); document.getElementById('upgrade-modal').classList.remove('hidden'); }
 
 // ── Subscription management ───────────────────────────
 function handleBadgeClick(){
@@ -1045,9 +1104,21 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catc
 function toast(msg,type='info',ms=3200){
   const el=document.createElement('div');
   el.className=`toast ${type==='error'?'err':type==='success'?'ok':''}`;
-  el.innerHTML=`<span>${{error:'⚠',success:'✓',info:'ℹ'}[type]||''}</span><span>${msg}</span>`;
+  // Message as text, not HTML: it can carry server error text
+  const icon=document.createElement('span'); icon.textContent={error:'⚠',success:'✓',info:'ℹ'}[type]||'';
+  const text=document.createElement('span'); text.textContent=msg;
+  el.append(icon,text);
   document.getElementById('toasts').appendChild(el);
   setTimeout(()=>{el.style.transition='opacity .3s';el.style.opacity='0';setTimeout(()=>el.remove(),320);},ms);
+}
+
+// ── Analytics: anonymous event counts, no ids or cookies (see app/api/events.py) ──
+function track(name){
+  try{
+    const body=JSON.stringify({name});
+    if(navigator.sendBeacon) navigator.sendBeacon(API+'/events', new Blob([body],{type:'application/json'}));
+    else fetch(API+'/events',{method:'POST',headers:{'Content-Type':'application/json'},body,keepalive:true});
+  }catch{}
 }
 
 // ── Fetch helper (auth-aware) ─────────────────────────
@@ -1059,7 +1130,8 @@ async function apiFetch(path, opts={}){
   if(r.status===403){
     let body={};
     try{ body=await r.json(); }catch{}
-    if(body.detail==='upgrade_required'||body.error==='upgrade_required'){
+    // require_pro() returns {detail: {error: 'upgrade_required', ...}}
+    if(body.detail==='upgrade_required'||body.error==='upgrade_required'||body.detail?.error==='upgrade_required'){
       showUpgrade();
       throw new Error('Pro feature — upgrade to unlock');
     }
@@ -1110,6 +1182,7 @@ function showTab(id){
   if(id==='fixtures') loadFix();
   if(id==='gameweek') loadGW();
   if(id==='intel') loadIntel();
+  if(id==='record') loadRecord();
 }
 
 function showSubtab(tab,sub){
@@ -1241,7 +1314,7 @@ const PRO_LOCK_HTML = `
   </div>`;
 
 function applyPlanUI(){
-  const isPro = currentPlan === 'pro';
+  const isPro = hasPro;
   // Captain strip
   if(!isPro){
     document.getElementById('cap-row').innerHTML = PRO_LOCK_HTML;
@@ -1255,7 +1328,7 @@ function applyPlanUI(){
 
 // ── Captain picks ─────────────────────────────────────
 async function loadCaptain(){
-  if(currentPlan !== 'pro'){ applyPlanUI(); return; }
+  if(!hasPro){ applyPlanUI(); return; }
   try{
     const d=await apiFetch('/players/captain?top_n=6');
     const picks=d.captain_picks||[];
@@ -1284,13 +1357,31 @@ function sharePreds(){
   const top5=predData.slice(0,5);
   if(!top5.length){toast('Load predictions first','error');return;}
   const text=`🏆 FPL AI Top Picks\n\n${top5.map((p,i)=>`${i+1}. ${p.name} (${p.team_name}) — ${(p.predicted_points||0).toFixed(1)} pts predicted`).join('\n')}\n\nfpl-prediction-app.web.app`;
+  track('share');
   if(navigator.share){navigator.share({title:'FPL AI Predictions',text}).catch(()=>{});}
   else{navigator.clipboard.writeText(text).then(()=>toast('Copied to clipboard ✓','success'));}
 }
 
 // ── Squad / FPL Team Import ───────────────────────────
+// Accept a bare ID or any FPL link containing /entry/<id>/
+function parseTeamId(v){
+  v=String(v||'').trim();
+  const m=v.match(/entry\/(\d+)/)||v.match(/^(\d+)$/);
+  return m?m[1]:'';
+}
+
+// First-visit hero: one box, straight to the personal plan
+function heroImport(){
+  const id=parseTeamId(document.getElementById('hero-tid').value);
+  if(!id){ toast('Paste your FPL link or team ID','error'); return; }
+  document.getElementById('tid-input').value=id;
+  track('hero_import');
+  showTab('squad'); loadTeam();
+}
+
 async function loadTeam(){
-  const id=document.getElementById('tid-input').value.trim();
+  const id=parseTeamId(document.getElementById('tid-input').value);
+  if(id) document.getElementById('tid-input').value=id;
   if(!id){toast('Enter your team ID','error');return;}
   document.getElementById('team-content').innerHTML='<div class="loading"><div class="spin"></div><span>Loading your team…</span></div>';
   try{
@@ -1301,6 +1392,10 @@ async function loadTeam(){
       apiFetch(`/fpl-team/${id}/briefing`).catch(()=>null),
     ]);
     renderTeam(team,id,briefing);
+    try{ localStorage.setItem('fpl_team_id', id); }catch{}
+    document.getElementById('hero').style.display='none';
+    track('team_import');
+    if(briefing) track(briefing.paywall?'paywall_view':'briefing_view');
   }catch(e){
     document.getElementById('team-content').innerHTML=`<div class="err">⚠ ${e.message}. Check team ID is correct.</div>`;
     toast('Team not found','error');
@@ -1342,7 +1437,7 @@ function renderBriefing(b){
         <div class="brief-title" style="color:var(--gold)">Today — GW ${b.gameweek}</div>
         <span class="brief-deadline" style="color:var(--gold);border:1px solid rgba(201,168,76,.3)">⚡ Pro</span>
       </div>
-      <div class="brief-summary">${b.message}</div>
+      <div class="brief-summary">${escHtml(b.message)}</div>
       <div class="brief-section">
         <div class="brief-h">What you'd get</div>
         <div class="brief-row" style="border:none;padding:4px 0">→ Daily briefing refresh when team news drops</div>
@@ -1365,16 +1460,16 @@ function renderBriefing(b){
     <div class="brief-row">
       <span class="brief-tag ${flagClass(a.flag)}">${flagLabel(a.flag)}</span>
       <div style="flex:1;min-width:0">
-        <div class="brief-name">${a.name} <span style="color:var(--text3);font-weight:400">· ${a.team_name}</span></div>
-        ${a.news?`<div class="brief-meta">${a.news}</div>`:''}
-        ${a.reason?`<div class="brief-reason">${a.reason}</div>`:''}
+        <div class="brief-name">${escHtml(a.name)} <span style="color:var(--text3);font-weight:400">· ${escHtml(a.team_name)}</span></div>
+        ${a.news?`<div class="brief-meta">${escHtml(a.news)}</div>`:''}
+        ${a.reason?`<div class="brief-reason">${escHtml(a.reason)}</div>`:''}
       </div>
     </div>`).join('') : '<div class="brief-empty">No injury or price-drop concerns in your XI.</div>';
 
   let capBlock='';
   if(cap){
     const switchHint = !cap.currently_captained && cap.current_captain
-      ? ` <span style="color:var(--orange);font-size:11px">· consider switching from ${cap.current_captain.name} (${cap.current_captain.predicted_points})</span>`
+      ? ` <span style="color:var(--orange);font-size:11px">· consider switching from ${escHtml(cap.current_captain.name)} (${cap.current_captain.predicted_points})</span>`
       : '';
     capBlock=`
     <div class="brief-section">
@@ -1382,9 +1477,9 @@ function renderBriefing(b){
       <div class="brief-cap">
         <span style="font-size:18px">©</span>
         <div style="flex:1">
-          <span class="brief-cap-name">${cap.name}</span>
-          <span class="brief-meta"> · ${cap.team_name}</span>${switchHint}
-          ${cap.reason?`<div class="brief-reason">${cap.reason}</div>`:''}
+          <span class="brief-cap-name">${escHtml(cap.name)}</span>
+          <span class="brief-meta"> · ${escHtml(cap.team_name)}</span>${switchHint}
+          ${cap.reason?`<div class="brief-reason">${escHtml(cap.reason)}</div>`:''}
         </div>
         <span class="brief-cap-pred">${cap.predicted_points} pts</span>
       </div>
@@ -1398,23 +1493,23 @@ function renderBriefing(b){
       <div class="brief-h">Top transfer</div>
       <div class="brief-row" style="border-bottom:none">
         <div style="flex:1;min-width:0">
-          <div class="brief-name" style="color:var(--red)">↓ ${xfer.sell.name}</div>
+          <div class="brief-name" style="color:var(--red)">↓ ${escHtml(xfer.sell.name)}</div>
           <div class="brief-meta">£${xfer.sell.price.toFixed(1)}m · ${xfer.sell.predicted_points} pred</div>
         </div>
         <div class="brief-cap-pred" style="color:var(--green);font-size:13px">+${xfer.improvement}</div>
         <div style="flex:1;min-width:0;text-align:right">
-          <div class="brief-name" style="color:var(--green)">↑ ${xfer.buy.name}</div>
+          <div class="brief-name" style="color:var(--green)">↑ ${escHtml(xfer.buy.name)}</div>
           <div class="brief-meta">£${xfer.buy.price.toFixed(1)}m · ${xfer.buy.predicted_points} pred</div>
         </div>
       </div>
-      ${xfer.reason?`<div class="brief-reason" style="margin-top:4px">${xfer.reason}</div>`:''}
+      ${xfer.reason?`<div class="brief-reason" style="margin-top:4px">${escHtml(xfer.reason)}</div>`:''}
     </div>`;
   }
 
   const summary = b.summary
-    ? `<div class="brief-summary">${b.summary}</div>`
+    ? `<div class="brief-summary">${escHtml(b.summary)}</div>`
     : (alerts.length===0 && cap && !xfer
-        ? `<div class="brief-summary">Your XI looks settled. Captain ${cap.name} for the highest predicted return.</div>`
+        ? `<div class="brief-summary">Your XI looks settled. Captain ${escHtml(cap.name)} for the highest predicted return.</div>`
         : '');
 
   return `
@@ -1455,14 +1550,16 @@ function renderTeam(d,id,briefing){
 
   const rankFmt=r=>r?r.toLocaleString():'—';
 
+  _teamNames=Object.fromEntries((d.picks||[]).map(p=>[p.id,p.name]));
+  _lastTeamName=d.team_name||'';
   document.getElementById('team-content').innerHTML=`
   ${renderBriefing(briefing)}
   <div class="team-card">
     <div class="tc-top">
-      <div class="tc-name">${d.team_name}</div>
-      <button class="ghost" onclick="loadTransfers(${id})" style="font-size:11px">🔄 Suggest Transfers</button>
+      <div class="tc-name">${escHtml(d.team_name)}</div>
+      <button class="ghost" onclick="loadTransfers(${id})" style="font-size:11px">🔄 Plan Transfers</button>
     </div>
-    <div class="tc-mgr">${d.manager_name||''}</div>
+    <div class="tc-mgr">${escHtml(d.manager_name||'')}</div>
     <div class="tc-stats">
       <div class="tc-stat"><div class="tc-sl">GW POINTS</div><div class="tc-sv">${d.gameweek_points||0}</div></div>
       <div class="tc-stat"><div class="tc-sl">TOTAL POINTS</div><div class="tc-sv">${d.overall_points||0}</div></div>
@@ -1474,24 +1571,175 @@ function renderTeam(d,id,briefing){
   <div class="sbr"><div class="slist">${starting.map(pickRow).join('')}</div></div>
   <div class="sh" style="margin-top:12px"><h2 class="st">BENCH</h2></div>
   <div class="sbr"><div class="slist">${bench.map(pickRow).join('')}</div></div>
+  ${calendarLinks(id)}
+  ${(d.leagues||[]).length?`<div class="sh" style="margin-top:16px"><h2 class="st">MINI-LEAGUE</h2><span class="ss">what your rivals own that you don't</span></div>
+    <div class="ctrl"><div class="sw"><select id="league-sel" aria-label="Mini-league">${d.leagues.map(l=>`<option value="${l.id}">${escHtml(l.name)}${l.rank?` (#${l.rank})`:''}</option>`).join('')}</select></div>
+    <button class="btn" onclick="loadLeague(${id})">Compare</button></div>
+    <div id="league-content"></div>`:''}
   <div id="transfers-content"></div>`;
 }
 
+async function loadLeague(id){
+  const lid=document.getElementById('league-sel').value;
+  const el=document.getElementById('league-content');
+  el.innerHTML='<div class="loading" style="padding:24px"><div class="spin"></div><span>Reading your rivals\' teams…</span></div>';
+  try{
+    const d=await apiFetch(`/fpl-team/${id}/league/${encodeURIComponent(lid)}`);
+    track('league_view');
+    const list=(rows,empty,cls)=>rows.length?rows.map(r=>`<div style="display:flex;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px solid var(--b1)">
+        <span style="flex:1;font-weight:700">${escHtml(r.name)} <span style="color:var(--text3);font-weight:400">${escHtml(r.team_name)}</span></span>
+        <span style="color:var(--text2);font-family:'DM Mono',monospace">EO ${Math.round(r.league_eo*100)}%</span>
+        <span style="color:var(--text2);font-family:'DM Mono',monospace">${r.xp.toFixed(1)} xP</span>
+        <span style="min-width:52px;text-align:right;font-family:'DM Mono',monospace;color:var(${cls})">${r.swing>0?'+':''}${r.swing.toFixed(1)}</span></div>`).join('')
+      :`<div style="font-size:12px;color:var(--text3)">${empty}</div>`;
+    const near=d.rivals.slice(0,6).map(r=>`<span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);margin-right:12px">#${r.rank} ${escHtml(r.name)} ${r.gap>0?'+':''}${r.gap}</span>`).join('');
+    el.innerHTML=`<div class="tcard">
+      <div style="font-weight:700;margin-bottom:4px">${escHtml(d.league.name)}${d.you.rank?` · you're #${d.you.rank}`:''}</div>
+      <div style="margin-bottom:10px">${near}</div>
+      <div style="font-size:11px;color:var(--red);letter-spacing:.5px;margin:8px 0 4px">THREATS: THEY OWN, YOU DON'T</div>${list(d.threats,'None','--red')}
+      <div style="font-size:11px;color:var(--orange);letter-spacing:.5px;margin:12px 0 4px">UNDER-COVERED: THEY CAPTAIN OR OWN MORE</div>${list(d.undercovered,'None','--orange')}
+      <div style="font-size:11px;color:var(--green);letter-spacing:.5px;margin:12px 0 4px">YOUR DIFFERENTIALS</div>${list(d.differentials,'None','--green')}
+      <div style="font-size:10px;color:var(--text3);margin-top:10px">Compared with the top ${d.rivals_compared} rivals' GW${d.gameweek_picks} teams. ${escHtml(d.method)}</div>
+    </div>`;
+  }catch(e){
+    el.innerHTML=`<div class="err">⚠ Mini-league unavailable: ${escHtml(e.message)}</div>`;
+  }
+}
+
+// ── Deadline reminders: subscribable calendar (app/api/calendar.py) ──
+function calendarLinks(id){
+  const host = _isNative ? 'epl-prediction-app.web.app' : location.host;
+  const path = `/api/calendar/deadlines.ics${id?`?team=${encodeURIComponent(id)}`:''}`;
+  const webcal = `webcal://${host}${path}`;
+  const google = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
+  return `<div class="tr-link" style="cursor:default;margin-top:12px">📅 Never miss a deadline: reminders 24h and 2h before, linking to this briefing
+    <b><a href="${google}" target="_blank" rel="noopener" onclick="track('calendar_subscribe')" style="color:inherit">Google</a> ·
+    <a href="${webcal}" onclick="track('calendar_subscribe')" style="color:inherit">Apple/Outlook</a></b></div>`;
+}
+
 async function loadTransfers(id){
-  document.getElementById('transfers-content').innerHTML='<div class="loading" style="padding:24px"><div class="spin"></div><span>Analysing transfers…</span></div>';
+  const box=document.getElementById('transfers-content');
+  box.innerHTML='<div id="plan-content"></div><div id="sugg-content"></div>';
+  loadPlan(id);
+  document.getElementById('sugg-content').innerHTML='<div class="loading" style="padding:24px"><div class="spin"></div><span>Analysing transfers…</span></div>';
   try{
     const d=await apiFetch(`/fpl-team/${id}/transfers`);
     renderTransfers(d);
   }catch(e){
-    document.getElementById('transfers-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
+    document.getElementById('sugg-content').innerHTML=`<div class="err">⚠ ${escHtml(e.message)}</div>`;
   }
 }
 
+async function loadPlan(id){
+  const el=document.getElementById('plan-content');
+  // First load: let the server estimate free transfers from the manager's history
+  const ftSel=document.getElementById('plan-ft');
+  const ftq=ftSel?`?free_transfers=${encodeURIComponent(ftSel.value)}`:'';
+  el.innerHTML='<div class="loading" style="padding:24px"><div class="spin"></div><span>Solving your best transfers for the next 3 gameweeks…</span></div>';
+  try{
+    const d=await apiFetch(`/fpl-team/${id}/plan${ftq}`);
+    _lastPlan=d;
+    track('plan_view');
+    const ft=String(d.free_transfers);
+    const names={};
+    [...d.transfers_in,...d.transfers_out].forEach(p=>names[p.id]=p.name);
+    const row=(p,dir)=>`<div class="tplayer"><div class="tpn" style="color:var(${dir==='in'?'--green':'--red'})">${dir==='in'?'↑':'↓'} ${escHtml(p.name)}</div>
+      <div class="tpt">${escHtml(p.team_name)} · £${p.price.toFixed(1)}m</div>
+      <div class="tpp" style="color:var(--text3)">next 3: ${(p.predicted_next_3||[]).map(v=>v.toFixed(1)).join(' / ')||'—'}</div></div>`;
+    const ftOpts=[0,1,2,3,4,5].map(n=>`<option value="${n}" ${String(n)===ft?'selected':''}>${n}</option>`).join('');
+    el.innerHTML=`
+    <div class="sh" style="margin-top:16px"><h2 class="st">TRANSFER PLAN</h2><span class="ss">next 3 gameweeks · solved, not guessed</span></div>
+    <div class="tcard">
+      <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+        <div class="tcard-impr" style="font-size:15px">${escHtml(d.advice)}</div>
+        <label style="font-size:11px;color:var(--text2)">Free transfers${d.free_transfers_estimated?' (estimated)':''}
+          <select id="plan-ft" onchange="loadPlan(${id})" style="margin-left:4px">${ftOpts}</select></label>
+      </div>
+      ${d.transfers_in.length?`<div class="tarrow" style="margin-top:10px">
+        <div>${d.transfers_out.map(p=>row(p,'out')).join('')}</div><div class="tarr-icon">→</div>
+        <div>${d.transfers_in.map(p=>row(p,'in')).join('')}</div></div>`:''}
+      <div style="font-size:11px;color:var(--text2);margin-top:10px;font-family:'DM Mono',monospace">
+        Expected: ${d.expected_points.with_transfers.toFixed(1)} vs ${d.expected_points.hold.toFixed(1)} if you hold
+        · Captain: ${d.per_gameweek.map((g,i)=>`GW${(d.gameweek||0)+i} ${escHtml(names[g.captain]||capName(g.captain))}`).join(', ')}</div>
+      ${(d.chips||[]).length?`<div style="margin-top:12px;border-top:1px solid var(--b1);padding-top:10px">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:6px;letter-spacing:.5px">CHIPS</div>
+        ${d.chips.map(c=>`<div style="display:flex;gap:8px;align-items:baseline;font-size:12px;margin-bottom:4px">
+          <span style="min-width:110px;font-weight:700">${escHtml(c.label)}</span>
+          <span style="min-width:70px;font-family:'DM Mono',monospace;color:var(${c.play_now?'--green':c.play_in_horizon?'--gold':'--text3'})">${c.play_now?'PLAY NOW':c.play_in_horizon?'GW'+c.best_gameweek:'SAVE'}</span>
+          <span style="color:var(--text2)">${escHtml(c.reason)}</span></div>`).join('')}
+      </div>`:''}
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">${escHtml(d.assumptions)}</div>
+      <button class="ghost" style="margin-top:10px;font-size:12px" onclick="sharePlanCard()">📤 Share my GW plan</button>
+    </div>`;
+  }catch(e){
+    el.innerHTML=`<div class="err">⚠ Transfer plan unavailable: ${escHtml(e.message)}</div>`;
+  }
+}
+
+// ── Shareable plan card (drawn client-side; no server image rendering) ──
+let _lastPlan=null, _lastTeamName='';
+function drawPlanCard(d, teamName){
+  const W=1080,H=1080,c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d');
+  const g=x.createRadialGradient(900,150,50,900,150,700);g.addColorStop(0,'#103a22');g.addColorStop(1,'#050a0c');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  const font=(w,sz)=>`${w} ${sz}px "Helvetica Neue",Arial,sans-serif`;
+  const fit=(t,max,sz,w='700')=>{x.font=font(w,sz);while(x.measureText(t).width>max&&sz>20){sz-=2;x.font=font(w,sz);}return sz;};
+  x.fillStyle='#c9a84c';x.font=font('800',44);x.fillText('FPL AI',80,120);
+  x.fillStyle='#2a5040';x.font=font('700',22);x.fillText('PRO',250,120);
+  const gw=d.gameweek||'';
+  x.fillStyle='#e6f5ee';fit(`${teamName||'My team'}`,920,64);x.fillText(`${teamName||'My team'}`,80,230);
+  x.fillStyle='#5f9880';x.font=font('400',34);x.fillText(`Gameweek ${gw} plan`,80,285);
+  const g0=(d.per_gameweek||[])[0]||{};
+  const box=(y,h)=>{x.fillStyle='#0b161c';x.strokeStyle='#1e3a50';x.lineWidth=2;x.beginPath();x.roundRect(80,y,920,h,22);x.fill();x.stroke();};
+  box(340,170);
+  x.fillStyle='#5f9880';x.font=font('700',24);x.fillText('CAPTAIN',115,390);
+  x.fillStyle='#efc84a';fit(g0.captain_name||'—',640,64,'800');x.fillText(g0.captain_name||'—',115,470);
+  x.fillStyle='#35d967';x.font=font('800',44);x.textAlign='right';x.fillText(`${(g0.captain_xp||0).toFixed(1)} xP`,965,470);x.textAlign='left';
+  const outs=d.transfers_out||[],ins=d.transfers_in||[];
+  const rows=Math.max(1,Math.min(3,ins.length)), gainY=650+rows*58+20, boxEnd=gainY+30;
+  box(540,boxEnd-540);
+  x.fillStyle='#5f9880';x.font=font('700',24);x.fillText('TRANSFERS',115,590);
+  if(!ins.length){x.fillStyle='#cce8de';x.font=font('700',44);x.fillText('Hold, rolling the transfer',115,660);}
+  else{
+    ins.slice(0,3).forEach((p,i)=>{const y=650+i*58;
+      x.fillStyle='#e05555';fit(`↓ ${outs[i]?.name||''}`,400,40);x.fillText(`↓ ${outs[i]?.name||''}`,115,y);
+      x.fillStyle='#35d967';fit(`↑ ${p.name}`,400,40);x.fillText(`↑ ${p.name}`,560,y);});
+  }
+  x.fillStyle='#5f9880';x.font=font('400',28);
+  x.fillText(`${d.gain>=0?'+':''}${(d.gain||0).toFixed(1)} expected points over 3 GWs${d.hits?` (after -${4*d.hits})`:''}`,115,gainY);
+  const now=(d.chips||[]).filter(ch=>ch.play_now).map(ch=>ch.label);
+  x.fillStyle='#efc84a';x.font=font('800',36);
+  x.fillText(now.length?`Chip: play ${now.join(' + ')}`:'No chip this week',80,boxEnd+80);
+  x.fillStyle='#5f9880';x.font=font('400',28);x.fillText('epl-prediction-app.web.app · every prediction scored in public',80,1035);
+  return c;
+}
+async function sharePlanCard(){
+  if(!_lastPlan) return;
+  const c=drawPlanCard(_lastPlan,_lastTeamName);
+  const blob=await new Promise(r=>c.toBlob(r,'image/png'));
+  const url='https://epl-prediction-app.web.app/?ref=share';
+  const text=`My GW${_lastPlan.gameweek} FPL plan, via FPL AI Pro`;
+  track('share');
+  const file=new File([blob],`fpl-gw${_lastPlan.gameweek}-plan.png`,{type:'image/png'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file],text:`${text} ${url}`}); }catch{}
+    return;
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=file.name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  toast('Plan card downloaded — share it anywhere','success');
+}
+
+// Name lookup for captain ids that aren't in the transfer lists (squad players)
+let _teamNames={};
+function capName(id){ return _teamNames[id]||('#'+id); }
+
 function renderTransfers(d){
   const sug=d.suggestions||[];
-  if(!sug.length){document.getElementById('transfers-content').innerHTML='<div class="empty"><div class="eico">✓</div><div class="etxt">No obvious improvements found</div></div>';return;}
-  document.getElementById('transfers-content').innerHTML=`
-  <div class="sh" style="margin-top:16px"><h2 class="st">TRANSFER SUGGESTIONS</h2><span class="ss">ranked by predicted pts improvement</span></div>
+  if(!sug.length){document.getElementById('sugg-content').innerHTML='<div class="empty"><div class="eico">✓</div><div class="etxt">No obvious improvements found</div></div>';return;}
+  document.getElementById('sugg-content').innerHTML=`
+  <div class="sh" style="margin-top:16px"><h2 class="st">SINGLE SWAPS</h2><span class="ss">ranked by predicted pts improvement</span></div>
   <div class="tsugg">${sug.map(s=>`
     <div class="tcard">
       <div class="tcard-impr">+${s.improvement}</div>
@@ -1524,7 +1772,7 @@ async function optimizeSquad(){
   document.getElementById('squad-content').innerHTML='<div class="loading"><div class="spin"></div><span>Building optimal squad…</span></div>';
   try{
     const d=await apiFetch('/teams/optimize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({budget})});
-    renderSquad(d);toast('Squad optimized!','success');
+    renderSquad(d);toast('Squad optimized!','success');track('optimise');
   }catch(e){
     document.getElementById('squad-content').innerHTML=`<div class="err">⚠ ${e.message}</div>`;
     toast('Optimization failed','error');
@@ -1688,7 +1936,7 @@ async function loadInjuries(){
 }
 
 async function loadPriceMovers(){
-  if(currentPlan !== 'pro'){ document.getElementById('price-content').innerHTML=PRO_LOCK_HTML; return; }
+  if(!hasPro){ document.getElementById('price-content').innerHTML=PRO_LOCK_HTML; return; }
   document.getElementById('price-content').innerHTML='<div class="loading"><div class="spin"></div><span>Loading…</span></div>';
   try{
     const d=await apiFetch('/players/price-movers');
@@ -1723,7 +1971,7 @@ async function loadPriceMovers(){
 }
 
 async function loadValue(){
-  if(currentPlan !== 'pro'){ document.getElementById('value-grid').innerHTML=PRO_LOCK_HTML; return; }
+  if(!hasPro){ document.getElementById('value-grid').innerHTML=PRO_LOCK_HTML; return; }
   document.getElementById('value-grid').innerHTML=skelCards(6);
   try{
     const d=await apiFetch('/players/value?top_n=20');
@@ -1794,6 +2042,69 @@ async function doSearch(q){
 
 // ── Gameweek ──────────────────────────────────────────
 let cdTimer;
+// ── Track record ──────────────────────────────────────
+function escHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function trNum(v,dp){return v==null?'—':Number(v).toFixed(dp);}
+function trRows(m,b){
+  // [label, key, decimals, higherIsBetter]
+  return [['Rank correlation','spearman',2,true],['Avg error (pts)','mae',2,false],
+          ['Captain pick pts','captain_pts',1,true],['Top-11 pts per player','top11_pts',2,true]]
+    .map(([label,k,dp,up])=>{
+      const mv=m?.[k], bv=b?.[k];
+      const mw=mv!=null&&bv!=null&&(up?mv>bv:mv<bv), bw=mv!=null&&bv!=null&&(up?bv>mv:bv<mv);
+      return `<tr><td>${label}</td><td class="${mw?'win':''}">${trNum(mv,dp)}</td><td class="${bw?'win':''}">${trNum(bv,dp)}</td></tr>`;
+    }).join('');
+}
+function trTable(m,b){
+  return `<div class="tr-wrap"><table class="tr-tbl"><thead><tr><th></th><th>Our model</th><th>Season average</th></tr></thead>
+    <tbody>${trRows(m,b)}</tbody></table></div>`;
+}
+// Bootstrap 95% intervals for model minus season average (ml/train.py paired_differences)
+function trSig(d){
+  if(!d) return '';
+  const fmt=v=>(v>0?'+':'')+Number(v).toFixed(2);
+  const row=(label,m)=>m?`<div>${label}: ${fmt(m.diff)} pts (95% CI ${fmt(m.ci95[0])} to ${fmt(m.ci95[1])}) —
+    <span style="color:var(${m.significant?(m.diff>0?'--green':'--red'):'--text2'})">${m.significant?(m.diff>0?'model better':'season average better'):'too close to call'}</span></div>`:'';
+  return `<div style="font-size:11px;color:var(--text2);margin-top:8px;line-height:1.6;font-family:'DM Mono',monospace">
+    ${row('Captain',d.captain_pts)}${row('Top 3',d.top3_pts)}${row('Top 11',d.top11_pts)}</div>`;
+}
+
+async function loadRecord(){
+  track('track_record_view');
+  const el=document.getElementById('record-content');
+  try{
+    const d=await apiFetch('/models/track-record');
+    const live=d.live||{}, gws=live.gameweeks||[];
+    let h='';
+    if(gws.length){
+      h+=`<div class="tr-card"><h3>THIS SEASON (${escHtml(live.season)}) · ${gws.length} GAMEWEEK${gws.length>1?'S':''}</h3>
+        <p>Predictions are locked at each deadline and scored when the gameweek ends. Green = better.</p>
+        ${trTable(live.summary?.model,live.summary?.season_avg)}</div>
+        <div class="tr-card"><h3>GAMEWEEK BY GAMEWEEK</h3><div class="tr-wrap"><table class="tr-tbl">
+        <thead><tr><th>GW</th><th>Our captain</th><th>Predicted</th><th>Scored</th><th>Top-11 avg</th></tr></thead><tbody>
+        ${gws.slice().reverse().map(r=>`<tr><td>${r.gw}</td><td>${escHtml(r.captain?.name)}</td>
+          <td>${trNum(r.captain?.xp,1)}</td><td>${trNum(r.captain?.actual,0)}</td><td>${trNum(r.model?.top11_pts,2)}</td></tr>`).join('')}
+        </tbody></table></div></div>`;
+    } else {
+      h+=`<div class="tr-card"><h3>THIS SEASON</h3><p>Live scoring has just started: this gameweek's predictions are saved
+        before the deadline and will appear here, scored against real points, once the gameweek finishes.</p></div>`;
+    }
+    const seasons=Object.entries(d.backtest?.seasons||{});
+    if(seasons.length){
+      h+=`<div class="tr-card"><h3>BACKTEST ON PAST SEASONS</h3>
+        <p>Each season was predicted gameweek by gameweek by a model trained only on earlier seasons,
+        so it never saw the results it was tested on. Compared with each player's season points-per-game so far.</p>
+        ${seasons.map(([s,v])=>`<h3 style="margin-top:12px">${escHtml(s)}</h3>${trTable(v.metrics?.model,v.metrics?.season_avg)}${trSig(v.metrics?.model_vs_season_avg)}`).join('')}
+      </div>`;
+    }
+    h+=`<div class="tr-card"><h3>HOW WE MEASURE</h3><p>${escHtml(d.method)} Rank correlation: 1 = perfect order, 0 = random.
+      Captain pick pts: actual points of the player we ranked first. Top-11: average actual points of our 11 highest-ranked players.</p></div>`;
+    el.innerHTML=h;
+  }catch(e){
+    el.innerHTML='<div class="empty">Could not load the track record. Try again shortly.</div>';
+  }
+}
+
 async function loadGW(){
   document.getElementById('gw-content').innerHTML='<div class="loading"><div class="spin"></div><span>Loading gameweek…</span></div>';
   try{
@@ -1885,7 +2196,7 @@ async function loadGWBar(){
     }
     // Hot pick from predictions
     try{
-      const preds=await apiFetch('/players/predictions?top_n=1&model_type=ensemble');
+      const preds=await apiFetch('/players/predictions?top_n=1&model_type=xp');
       const top=(preds.predictions||[])[0];
       if(top) document.getElementById('gwb-hot').textContent=`${top.name} · ${top.predicted_points}pts`;
     }catch{}
@@ -1937,7 +2248,7 @@ async function loadTrending(){
 // ── 3-GW Fixture Planner ──────────────────────────────
 let tgwLoaded=false;
 async function loadThreeGW(){
-  if(currentPlan!=='pro'){
+  if(!hasPro){
     document.getElementById('tgw-content').innerHTML=PRO_LOCK_HTML;
     return;
   }
@@ -1994,11 +2305,30 @@ function shareCaptain(){
   const name=first.querySelector('.cap-name')?.textContent||'my captain';
   const pts=first.querySelector('.cap-pts')?.textContent?.trim()||'';
   const text=`🏆 My FPL captain pick this week: ${name} (${pts}) — via FPL AI Pro https://epl-prediction-app.web.app`;
+  track('share');
   if(navigator.share){ navigator.share({text}); }
   else{ navigator.clipboard.writeText(text).then(()=>toast('Captain pick copied!','success')); }
 }
 
 // ── Init ──────────────────────────────────────────────
+track('visit');
+{
+  // PayFast's cancel_url is the return_url plus &cancelled=1
+  const q=new URLSearchParams(location.search);
+  if(q.get('upgraded')==='1') track(q.get('cancelled')==='1'?'checkout_cancel':'checkout_return');
+  if(q.get('ref')==='share') track('share_visit');
+}
+// Deep link (?team=123, used by calendar reminders) or the last team loaded on this device
+(function(){
+  const q=new URLSearchParams(location.search).get('team');
+  let known=null; try{ known=localStorage.getItem('fpl_team_id'); }catch{}
+  if(!q&&!known) document.getElementById('hero').style.display='';
+  let saved=null; try{ saved=localStorage.getItem('fpl_team_id'); }catch{}
+  const id=(q&&/^\d+$/.test(q))?q:saved;
+  if(!id) return;
+  document.getElementById('tid-input').value=id;
+  if(q){ showTab('squad'); authReady.then(loadTeam); }
+})();
 checkStatus();
 loadPred();
 // Captain only auto-loads once we know the user's plan (see onAuthStateChanged)
