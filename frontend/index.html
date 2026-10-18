@@ -2120,19 +2120,23 @@ let cdTimer;
 // ── Track record ──────────────────────────────────────
 function escHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function trNum(v,dp){return v==null?'—':Number(v).toFixed(dp);}
-function trRows(m,b){
+function trRows(m,b,f){
   // [label, key, decimals, higherIsBetter]
+  // Columns: our model, season average and, when captured, FPL's own pre-deadline
+  // expected points (the free number on the FPL site). Best value per row is green.
+  const cols=[m,b,f].filter((c,i)=>i<2||c);
   return [['Rank correlation','spearman',2,true],['Avg error (pts)','mae',2,false],
           ['Captain pick pts','captain_pts',1,true],['Top-11 pts per player','top11_pts',2,true]]
     .map(([label,k,dp,up])=>{
-      const mv=m?.[k], bv=b?.[k];
-      const mw=mv!=null&&bv!=null&&(up?mv>bv:mv<bv), bw=mv!=null&&bv!=null&&(up?bv>mv:bv<mv);
-      return `<tr><td>${label}</td><td class="${mw?'win':''}">${trNum(mv,dp)}</td><td class="${bw?'win':''}">${trNum(bv,dp)}</td></tr>`;
+      const vals=cols.map(c=>c?.[k]);
+      const known=vals.filter(v=>v!=null);
+      const best=known.length>1?(up?Math.max(...known):Math.min(...known)):null;
+      return `<tr><td>${label}</td>${vals.map(v=>`<td class="${best!=null&&v===best?'win':''}">${trNum(v,dp)}</td>`).join('')}</tr>`;
     }).join('');
 }
-function trTable(m,b){
-  return `<div class="tr-wrap"><table class="tr-tbl"><thead><tr><th></th><th>Our model</th><th>Season average</th></tr></thead>
-    <tbody>${trRows(m,b)}</tbody></table></div>`;
+function trTable(m,b,f){
+  return `<div class="tr-wrap"><table class="tr-tbl"><thead><tr><th></th><th>Our model</th><th>Season average</th>${f?`<th>FPL's own xP${f.gameweeks?` (${f.gameweeks} GW)`:''}</th>`:''}</tr></thead>
+    <tbody>${trRows(m,b,f)}</tbody></table></div>`;
 }
 // Bootstrap 95% intervals for model minus season average (ml/train.py paired_differences)
 function trSig(d){
@@ -2154,7 +2158,7 @@ async function loadRecord(){
     if(gws.length){
       h+=`<div class="tr-card"><h3>THIS SEASON (${escHtml(live.season)}) · ${gws.length} GAMEWEEK${gws.length>1?'S':''}</h3>
         <p>Predictions are locked at each deadline and scored when the gameweek ends. Green = better.</p>
-        ${trTable(live.summary?.model,live.summary?.season_avg)}</div>
+        ${trTable(live.summary?.model,live.summary?.season_avg,live.summary?.fpl)}</div>
         <div class="tr-card"><h3>GAMEWEEK BY GAMEWEEK</h3><div class="tr-wrap"><table class="tr-tbl">
         <thead><tr><th>GW</th><th>Our captain</th><th>Predicted</th><th>Scored</th><th>Top-11 avg</th></tr></thead><tbody>
         ${gws.slice().reverse().map(r=>`<tr><td>${r.gw}</td><td>${escHtml(r.captain?.name)}</td>
