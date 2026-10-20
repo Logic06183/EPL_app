@@ -1,7 +1,7 @@
 """
 Payments API — PayFast integration (South Africa)
 Handles subscription initialisation, ITN webhooks, and cancellation.
-Subscriptions auto-renew monthly via PayFast recurring billing.
+Monthly plan auto-renews via PayFast recurring billing; the season pass is once-off.
 """
 
 import hashlib
@@ -51,22 +51,36 @@ PAYFAST_API = (
     else "https://api.payfast.co.za"
 )
 
+FEATURES = [
+    "Personal briefing every gameweek",
+    "Transfer planner with chips and hits",
+    "Squad optimiser and 3-GW planner",
+    "Mini-league view",
+]
+
+# "pro" stays the monthly id so older clients keep working.
 PLANS = {
     "pro": {
-        "name":     "FPL AI Pro",
-        "amount":   "199.00",    # ZAR monthly
-        "currency": "ZAR",
-        "features": [
-            "Captain recommendations",
-            "FDR heatmap",
-            "FPL team import & transfer suggestions",
-            "Price movers & value picks",
-            "Differentials radar",
-            "Unlimited predictions (all models)",
-            "3-GW fixture planner",
-        ],
+        "name":      "FPL AI Pro (monthly)",
+        "amount":    "79.00",     # ZAR, renews monthly
+        "currency":  "ZAR",
+        "recurring": True,
+        "features":  FEATURES,
+    },
+    "season": {
+        "name":      "FPL AI Season Pass",
+        "amount":    "449.00",    # ZAR once-off, valid to 31 May
+        "currency":  "ZAR",
+        "recurring": False,
+        "features":  FEATURES,
     },
 }
+
+
+def _season_end(now: datetime) -> datetime:
+    """31 May at the end of the season running on `now` (seasons start in August)."""
+    year = now.year + 1 if now.month >= 6 else now.year
+    return datetime(year, 5, 31, 23, 59, tzinfo=timezone.utc)
 
 
 # ── Signature helpers ──────────────────────────────────────────────────────────
@@ -224,13 +238,15 @@ async def initialize_payment(
         # Identify the user by uid in the webhook — never trust an email field
         "custom_str1":       request.plan_id,
         "custom_str2":       user["uid"],
-        # Recurring subscription — monthly, indefinite
-        "subscription_type": "1",
-        "billing_date":      today,       # must be explicit or PayFast adds its own
-        "recurring_amount":  plan["amount"],
-        "frequency":         "3",         # 3 = monthly
-        "cycles":            "0",         # 0 = unlimited
     }
+    if plan["recurring"]:
+        params.update({
+            "subscription_type": "1",
+            "billing_date":      today,   # must be explicit or PayFast adds its own
+            "recurring_amount":  plan["amount"],
+            "frequency":         "3",     # 3 = monthly
+            "cycles":            "0",     # 0 = unlimited
+        })
 
     sig = _payfast_signature(params, PAYFAST_PASSPHRASE)
 
@@ -309,7 +325,8 @@ async def handle_itn(request: Request):
 
         if uid:
             await _upgrade_user(
-                uid, plan_id, data.get("pf_payment_id", ""), data.get("token", "")
+                uid, "pro", data.get("pf_payment_id", ""), data.get("token", ""),
+                expires=None if plan["recurring"] else _season_end(datetime.now(timezone.utc)),
             )
 
         return {"status": "ok"}
@@ -393,7 +410,8 @@ async def _resolve_uid(ref: str) -> str:
     return fb_auth.get_user_by_email(ref).uid
 
 
-async def _upgrade_user(uid_or_email: str, plan: str, reference: str, token: str = ""):
+async def _upgrade_user(uid_or_email: str, plan: str, reference: str, token: str = "",
+                        expires: Optional[datetime] = None):
     """Set the user's plan + subscription token in Firestore."""
     from datetime import timedelta
 
@@ -404,7 +422,8 @@ async def _upgrade_user(uid_or_email: str, plan: str, reference: str, token: str
             return
         uid = await _resolve_uid(uid_or_email)
 
-        expires = datetime.now(timezone.utc) + timedelta(days=32)  # slight buffer over 30
+        if expires is None:
+            expires = datetime.now(timezone.utc) + timedelta(days=32)  # slight buffer over 30
         update  = {
             "plan":               plan,
             "plan_expires_at":    expires.isoformat(),

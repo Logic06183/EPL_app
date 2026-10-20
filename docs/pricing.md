@@ -1,6 +1,13 @@
-# Pricing: recommendation (for Craig to decide)
+# Pricing
 
-Nothing here is implemented; the live price is still R199/month (`app/api/payments.py`).
+**Decided 2026-10-20 (Craig delegated the call):**
+
+- This season (2026-27) is free. Everyone who signs in before the paywall is a founder and keeps Pro free for life.
+- Paywall on **1 August 2027** (`LAUNCH_FREE_UNTIL=2027-08-01` on `epl-backend`).
+- Season pass **R449** once-off, valid to 31 May; monthly **R79**, auto-renewing (`PLANS` in `app/api/payments.py`).
+- Free forever: predictions, captain picks, fixtures, track record. Pro: briefing, transfer planner, optimiser, mini-league.
+
+The rest of this page is the reasoning behind that.
 
 ## What competitors charge (checked October 2026)
 

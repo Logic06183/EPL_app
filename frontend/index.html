@@ -668,17 +668,16 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
   <div class="modal">
     <button class="modal-close" onclick="closeModal('upgrade-modal')">✕</button>
     <h2>Upgrade to Pro</h2>
-    <p>Unlock the full power of FPL AI — every feature, every insight, every edge.</p>
+    <p>Predictions, captain picks and the track record stay free. Pro is the personal layer.</p>
     <ul class="feat-list">
-      <li>Captain recommendations with fixture difficulty</li>
-      <li>FDR heatmap — easiest upcoming fixtures</li>
-      <li>FPL team import &amp; transfer suggestions</li>
-      <li>Price movers &amp; value picks</li>
-      <li>Differentials radar</li>
-      <li>Unlimited predictions (all models)</li>
+      <li>Your personal briefing every gameweek</li>
+      <li>Transfer planner with chips and hits</li>
+      <li>Squad optimiser and 3-GW planner</li>
+      <li>Mini-league view</li>
     </ul>
-    <button class="upgrade-cta" onclick="goUpgrade()">🚀 Upgrade Now — R199/mo</button>
-    <p style="font-size:10px;color:var(--text3);text-align:center;margin-top:8px;margin-bottom:0">Cancel anytime · Auto-renews monthly · Secured by PayFast</p>
+    <button class="upgrade-cta" onclick="goUpgrade('season')">Season pass — R449 to 31 May</button>
+    <button class="upgrade-cta" style="margin-top:8px;background:transparent;border:1px solid var(--goldb);color:var(--gold)" onclick="goUpgrade('pro')">Monthly — R79/mo</button>
+    <p style="font-size:10px;color:var(--text3);text-align:center;margin-top:8px;margin-bottom:0">Season pass is once-off, no renewal · Monthly cancels anytime · Secured by PayFast</p>
   </div>
 </div>
 
@@ -1094,12 +1093,12 @@ if(_isDesktop){
 
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
 
-function goUpgrade(){
+function goUpgrade(planId){
   track('upgrade_click');
   closeModal('upgrade-modal');
   if(!currentUser){ document.getElementById('signin-modal').classList.remove('hidden'); return; }
   apiFetch('/payments/initialize',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({plan_id:'pro',email:currentUser.email||'',return_url:window.location.origin+'/?upgraded=1'})})
+    body:JSON.stringify({plan_id:planId||'season',email:currentUser.email||'',return_url:window.location.origin+'/?upgraded=1'})})
     .then(d=>{ if(d.authorization_url){ track('checkout_start'); window.location.href=d.authorization_url; } })
     .catch(()=>toast('Could not start checkout — check PayFast config','error'));
 }
@@ -1124,18 +1123,19 @@ async function showManageModal(){
     const expires = sub.plan_expires_at
       ? new Date(sub.plan_expires_at).toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'})
       : '—';
-    const renewsOrExpires = cancelled ? 'Access until' : 'Next renewal';
+    const season = !sub.has_token;
+    const renewsOrExpires = (cancelled || season) ? 'Access until' : 'Next renewal';
     el.innerHTML = `
       <div class="sub-row"><span class="sub-lbl">Plan</span><span class="sub-val" style="color:var(--gold)">⚡ FPL AI Pro</span></div>
-      <div class="sub-row"><span class="sub-lbl">Billing</span><span class="sub-val">R199 / month</span></div>
+      <div class="sub-row"><span class="sub-lbl">Billing</span><span class="sub-val">${sub.has_token ? 'R79 / month' : 'Season pass'}</span></div>
       <div class="sub-row"><span class="sub-lbl">${renewsOrExpires}</span><span class="sub-val">${expires}</span></div>
       <div class="sub-row"><span class="sub-lbl">Status</span>
         <span class="sub-val" style="color:${cancelled?'var(--orange)':'var(--green)'}">
-          ${cancelled ? 'Cancelled (active until expiry)' : 'Active — auto-renews monthly'}
+          ${cancelled ? 'Cancelled (active until expiry)' : season ? 'Active — no renewal' : 'Active — auto-renews monthly'}
         </span>
       </div>
       <div class="sub-row"><span class="sub-lbl">Payment</span><span class="sub-val">Secured by PayFast</span></div>
-      ${!cancelled ? `
+      ${season ? '' : !cancelled ? `
       <button class="cancel-btn" id="cancel-sub-btn" onclick="cancelSubscription()">
         Cancel Subscription
       </button>
@@ -1380,7 +1380,7 @@ const PRO_LOCK_HTML = `
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px;max-width:280px;margin-left:auto;margin-right:auto;line-height:1.5">
       Upgrade to FPL AI Pro to unlock this feature.
     </div>
-    <button onclick="showUpgrade()" style="background:linear-gradient(135deg,var(--goldb),#7a5010);border:none;border-radius:10px;color:#000;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;padding:10px 24px;cursor:pointer;">⚡ Upgrade to Pro — R199/mo</button>
+    <button onclick="showUpgrade()" style="background:linear-gradient(135deg,var(--goldb),#7a5010);border:none;border-radius:10px;color:#000;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;padding:10px 24px;cursor:pointer;">⚡ Upgrade to Pro — from R79/mo</button>
   </div>`;
 
 function applyPlanUI(){

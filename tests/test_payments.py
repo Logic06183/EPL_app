@@ -60,7 +60,7 @@ def _signed_itn(**overrides):
         "payment_status": "COMPLETE",
         "item_name": "FPL AI Pro",
         "item_description": "",
-        "amount_gross": "199.00",
+        "amount_gross": "79.00",
         "custom_str1": "pro",
         "custom_str2": "uid-123",
         "custom_str3": "",
@@ -152,3 +152,21 @@ def test_cancelled_itn_marks_subscription(client):
     r = client.post("/api/payments/webhook", data=_signed_itn(payment_status="CANCELLED"))
     assert r.status_code == 200
     assert client.db.docs["uid-123"]["subscription_cancelled"] is True
+
+
+def test_season_pass_is_once_off(client):
+    _as(SIGNED_IN)
+    r = client.post("/api/payments/initialize",
+                    json={"plan_id": "season", "return_url": "https://epl-prediction-app.web.app/"})
+    q = parse_qs(urlparse(r.json()["authorization_url"]).query)
+    assert q["amount"] == ["449.00"]
+    assert "subscription_type" not in q
+
+
+def test_season_pass_itn_grants_pro_until_end_of_may(client):
+    r = client.post("/api/payments/webhook",
+                    data=_signed_itn(custom_str1="season", amount_gross="449.00", token=""))
+    assert r.status_code == 200, r.text
+    doc = client.db.docs["uid-123"]
+    assert doc["plan"] == "pro"
+    assert doc["plan_expires_at"][5:10] == "05-31"

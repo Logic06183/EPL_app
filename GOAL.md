@@ -89,11 +89,12 @@ Ideas in rough order of expected gain; each is one experiment, one commit if it 
 
 ## M3 — Take money  (Craig: accounts; Claude: code)
 
-- [ ] **Craig:** PayFast: set a passphrase in the dashboard. On `epl-backend` set `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`, `PAYFAST_PASSPHRASE`, with `PAYFAST_SANDBOX=true` first.
+- [ ] **Craig:** PayFast: make a free sandbox account (the shared test merchant 10000100 rejects every signed request, checked 2026-10-20), set a passphrase and turn on recurring billing. On `epl-backend` set `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`, `PAYFAST_PASSPHRASE`, with `PAYFAST_SANDBOX=true` first.
 - [ ] **Claude:** sandbox purchase end to end: Go Pro → PayFast sandbox → return → `/api/users/me` shows `pro`. Then **Craig** sets `PAYFAST_SANDBOX=false`.
 - [ ] **Craig:** Paddle or Lemon Squeezy account (merchant of record, handles UK/EU VAT); give Claude the API key and webhook secret.
 - [ ] **Claude:** GBP/USD checkout alongside PayFast, webhook signature verified, upgrade by uid, tests like `tests/test_payments.py`.
-- [ ] **Craig:** pricing from `docs/pricing.md` (recommended: season pass + monthly) and what sits behind the paywall. **Claude** applies the gating switches, prices and copy, and sets `LAUNCH_FREE_UNTIL`.
+- [x] Pricing decided 2026-10-20: free this season, founders free for life, paywall 1 Aug 2027, R449 season pass + R79/month (`docs/pricing.md`). Prices and copy applied; `LAUNCH_FREE_UNTIL=2027-08-01`.
+- [ ] **Claude:** before 1 Aug 2027 add `require_pro` to the Pro endpoints listed in `docs/pricing.md`.
 
 ## M4 — Everywhere  (mostly done)
 
