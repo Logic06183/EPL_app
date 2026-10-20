@@ -132,7 +132,8 @@ def evaluate(test: pd.DataFrame) -> dict:
     per_gw = (test.groupby(["gw", "element"])
               .agg(actual=("total_points", "sum"), model=("pred", "sum"), fpl_xp=("xP", "sum"),
                    season_avg=("pts_season", "first"), form=("pts_l6", "first"),
-                   n=("fixture", "nunique"), mins_l6=("mins_l6", "first"))
+                   n=("fixture", "nunique"), mins_l6=("mins_l6", "first"),
+                   **({"fpl_ep": ("ep_next", "first")} if "ep_next" in test else {}))
               .reset_index())
     # Naive baselines are per-fixture rates; scale to the gw's fixture count
     per_gw["season_avg"] = per_gw["season_avg"].fillna(0) * per_gw["n"]
@@ -174,6 +175,25 @@ def evaluate(test: pd.DataFrame) -> dict:
             "top11_pts": round(float(gws.apply(lambda g: g.nlargest(11, "model")["actual"].mean(), include_groups=False).mean()), 2),
         }
     out["model_vs_season_avg"] = paired_differences(pool)
+    if "fpl_ep" in pool:
+        # FPL's pre-deadline ep_next: the fair free benchmark, on the gameweeks captured
+        d = pool[pool["fpl_ep"].notna()]
+        gws = d.groupby("gw")
+        out["fpl_ep"] = {
+            "gameweeks": int(d["gw"].nunique()),
+            "mae": round(float((d["fpl_ep"] - d["actual"]).abs().mean()), 3),
+            "spearman": round(float(gws.apply(lambda g: _spearman(g["fpl_ep"], g["actual"]), include_groups=False).mean()), 3),
+            "captain_pts": round(float(gws.apply(lambda g: g.nlargest(1, "fpl_ep")["actual"].mean(), include_groups=False).mean()), 2),
+            "top11_pts": round(float(gws.apply(lambda g: g.nlargest(11, "fpl_ep")["actual"].mean(), include_groups=False).mean()), 2),
+        }
+        out["model_vs_fpl_ep"] = paired_differences(d, baseline="fpl_ep")
+        rho = gws.apply(lambda g: _spearman(g["model"], g["actual"]) - _spearman(g["fpl_ep"], g["actual"]),
+                        include_groups=False).to_numpy()
+        rng = np.random.default_rng(0)
+        lo, hi = np.percentile([rng.choice(rho, len(rho)).mean() for _ in range(5000)], [2.5, 97.5])
+        out["model_vs_fpl_ep"]["spearman"] = {"diff": round(float(rho.mean()), 3),
+                                              "ci95": [round(float(lo), 3), round(float(hi), 3)],
+                                              "significant": bool(lo > 0 or hi < 0)}
     out["fpl_xp_leak"] = xp_leak(per_gw)
     return out
 
@@ -197,9 +217,10 @@ def xp_leak(per_gw: pd.DataFrame) -> dict:
     }
 
 
-def paired_differences(pool: pd.DataFrame, n_boot: int = 5000, seed: int = 0) -> dict:
+def paired_differences(pool: pd.DataFrame, n_boot: int = 5000, seed: int = 0,
+                       baseline: str = "season_avg") -> dict:
     """
-    Per-gameweek model minus season-average difference for each pick metric,
+    Per-gameweek model minus baseline difference for each pick metric,
     with a bootstrap 95% interval over gameweeks. If the interval spans zero,
     the backtest can't tell the two apart on that metric.
     """
@@ -208,7 +229,7 @@ def paired_differences(pool: pd.DataFrame, n_boot: int = 5000, seed: int = 0) ->
     for metric, k in (("captain_pts", 1), ("top3_pts", 3), ("top11_pts", 11)):
         per_gw = pool.groupby("gw").apply(
             lambda g: g.nlargest(k, "captain" if k == 1 else "model")["actual"].mean()
-            - g.nlargest(k, "season_avg")["actual"].mean(),
+            - g.nlargest(k, baseline)["actual"].mean(),
             include_groups=False,
         ).to_numpy()
         boots = [rng.choice(per_gw, len(per_gw)).mean() for _ in range(n_boot)]
@@ -236,6 +257,10 @@ def main() -> None:
         bundle = fit_bundle(train)
         test = seasons[test_season].copy()
         test["pred"] = predict_points(bundle, test[FEATURES])
+        ep_path = args.data / f"ep_next_{test_season}.csv"   # from ml/ep_next.py
+        if ep_path.exists():
+            ep = pd.read_csv(ep_path)[["gw", "element", "ep_next"]]
+            test = test.merge(ep, on=["gw", "element"], how="left")
         report["seasons"][test_season] = {
             "trained_on": [s for s in SEASONS if s < test_season],
             "metrics": evaluate(test),
@@ -273,6 +298,13 @@ def scorecard(report: dict) -> str:
             ("top-11 +0.5 over season avg, significant", sig["top11_pts"]["significant"] and sig["top11_pts"]["diff"] >= 0.5,
              f"{m['top11_pts']:.2f} vs {base['top11_pts']:.2f} ({sig['top11_pts']['diff']:+.2f})"),
         ]
+        fpl = body["metrics"].get("model_vs_fpl_ep")
+        if fpl:
+            for k in ("spearman", "captain_pts", "top11_pts"):
+                checks.append((f"{k} beats FPL ep_next (CI > 0)", fpl[k]["significant"] and fpl[k]["diff"] > 0,
+                               f"{fpl[k]['diff']:+} CI {fpl[k]['ci95']}"))
+        else:
+            checks.append(("beats FPL ep_next", False, "no ep_next data: run python -m ml.ep_next"))
         lines.append(f"  {season}")
         lines += [f"    {'PASS' if ok else 'FAIL'}  {name}  — {detail}" for name, ok, detail in checks]
     return "\n".join(lines)

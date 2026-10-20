@@ -30,13 +30,16 @@ gameweeks (the decision-relevant set). Per gameweek, then averaged.
 | Spearman rank correlation, predicted vs actual points | Is the ranking of players right? | **0.451 / 0.451** (was 0.40 / 0.36 on 2026-10-18 morning; season-average baseline 0.31 / 0.25) | **≥ 0.45 on both seasons** (met 2026-10-18), and ≥ the pre-deadline FPL `ep_next` on the live record over any rolling 8 GWs |
 | Captain pick: actual points of the model's #1 | The headline feature. | 7.9 / 6.0; **not** better than the season-average pick (−1.2 / −0.2, CI ±1.3 to ±2.4). One pick per GW over 37 GWs is too noisy for a tight interval; top-3 is the measurable proxy (+0.1 / +0.8) | **Beats season-average captain, CI above zero, both seasons**; live: beats the most-owned captain in ≥ 55 % of GWs. Measure top-3 alongside |
 | Top-11 points: mean actual of the model's top 11 | Is the XI it recommends good? | 5.63 / 4.87 (baseline 4.96 / 4.50): +0.67 significant / +0.37 not | **+0.5 over baseline, significant, both seasons** |
+| **Beats FPL's own pre-deadline `ep_next`** (the free number every manager sees) | Why pay if the free number is as good? | **Met 2026-10-20 on both seasons, every gap significant:** Spearman 0.451 vs 0.407 / 0.451 vs 0.377; captain 9.8 vs 7.8 / 7.0 vs 5.1 pts/GW; top-11 5.63 vs 4.92 / 4.87 vs 4.43; MAE 1.87 vs 2.15 / 1.94 vs 2.26. `ep_next` from Randdalf/fplcache, 1–6 h before each deadline (`python -m ml.ep_next`) | Beat it on Spearman, captain and top-11 with CI > 0, both seasons; then on the live record |
 | MAE | Calibration for the optimiser and the −4 hit decision | 1.87 / 1.94 (was 2.03 / 2.12) | ≤ 1.85 |
 | Transfer plan realised gain | Does following the plan gain points vs holding? | not measured | measured live every GW; ≥ 0 on average over the season |
 
-The FPL column `xP` in the historical data scores 0.65, but it was scraped
-during or after each gameweek, so it is probably contaminated by lineup news.
-The fair comparison is FPL's own `ep_next` captured *before* the deadline,
-which the live snapshot must store from now on (M0).
+The FPL column `xP` in the historical data scores 0.65, but it was recorded
+after kick-off: week to week it moves with that week's own points (correlation
+0.40 / 0.59) and not with last week's (−0.06 / 0.09), which a forecast can't
+do (`train.xp_leak`). The fair comparison is FPL's `ep_next` captured before
+the deadline: archived copies for past seasons, and our own live snapshots
+from GW8 of 2026-27.
 
 **Stop rule for the model loop:** keep iterating until every Target column
 is met on the backtest, then hold for the live record. Every iteration is one

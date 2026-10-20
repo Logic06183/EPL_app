@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-20T09:15:49+00:00",
+  "generated_at": "2026-10-20T09:38:02+00:00",
   "features": [
     "position_code",
     "value",
@@ -112,6 +112,47 @@
             "significant": true
           }
         },
+        "fpl_ep": {
+          "gameweeks": 37,
+          "mae": 2.149,
+          "spearman": 0.407,
+          "captain_pts": 7.76,
+          "top11_pts": 4.92
+        },
+        "model_vs_fpl_ep": {
+          "captain_pts": {
+            "diff": 2.03,
+            "ci95": [
+              0.3,
+              3.86
+            ],
+            "significant": true
+          },
+          "top3_pts": {
+            "diff": -0.18,
+            "ci95": [
+              -1.32,
+              0.93
+            ],
+            "significant": false
+          },
+          "top11_pts": {
+            "diff": 0.71,
+            "ci95": [
+              0.29,
+              1.11
+            ],
+            "significant": true
+          },
+          "spearman": {
+            "diff": 0.044,
+            "ci95": [
+              0.026,
+              0.062
+            ],
+            "significant": true
+          }
+        },
         "fpl_xp_leak": {
           "corr_change_vs_this_gw": 0.401,
           "corr_change_vs_last_gw": -0.059
@@ -184,6 +225,47 @@
               0.85
             ],
             "significant": false
+          }
+        },
+        "fpl_ep": {
+          "gameweeks": 37,
+          "mae": 2.263,
+          "spearman": 0.377,
+          "captain_pts": 5.08,
+          "top11_pts": 4.43
+        },
+        "model_vs_fpl_ep": {
+          "captain_pts": {
+            "diff": 1.89,
+            "ci95": [
+              0.59,
+              3.3
+            ],
+            "significant": true
+          },
+          "top3_pts": {
+            "diff": 1.72,
+            "ci95": [
+              0.81,
+              2.6
+            ],
+            "significant": true
+          },
+          "top11_pts": {
+            "diff": 0.44,
+            "ci95": [
+              0.04,
+              0.86
+            ],
+            "significant": true
+          },
+          "spearman": {
+            "diff": 0.074,
+            "ci95": [
+              0.059,
+              0.09
+            ],
+            "significant": true
           }
         },
         "fpl_xp_leak": {

@@ -2153,17 +2153,18 @@ function trRows(m,b,f,leaky){
     }).join('');
 }
 function trTable(m,b,f,leaky){
-  return `<div class="tr-wrap"><table class="tr-tbl"><thead><tr><th></th><th>Our model</th><th>Season average</th>${f?`<th>FPL's own xP${leaky?'*':''}${f.gameweeks?` (${f.gameweeks} GW)`:''}</th>`:''}</tr></thead>
+  return `<div class="tr-wrap"><table class="tr-tbl"><thead><tr><th></th><th>Our model</th><th>Season average</th>${f?`<th>FPL's own xP${leaky?'*':' (pre-deadline)'}</th>`:''}</tr></thead>
     <tbody>${trRows(m,b,f,leaky)}</tbody></table></div>`;
 }
 // Bootstrap 95% intervals for model minus season average (ml/train.py paired_differences)
-function trSig(d){
+function trSig(d,vs){
   if(!d) return '';
+  vs=vs||'season average';
   const fmt=v=>(v>0?'+':'')+Number(v).toFixed(2);
-  const row=(label,m)=>m?`<div>${label}: ${fmt(m.diff)} pts (95% CI ${fmt(m.ci95[0])} to ${fmt(m.ci95[1])}) —
-    <span style="color:var(${m.significant?(m.diff>0?'--green':'--red'):'--text2'})">${m.significant?(m.diff>0?'model better':'season average better'):'too close to call'}</span></div>`:'';
+  const row=(label,m,u=' pts')=>m?`<div>${label}: ${fmt(m.diff)}${u} (95% CI ${fmt(m.ci95[0])} to ${fmt(m.ci95[1])}) —
+    <span style="color:var(${m.significant?(m.diff>0?'--green':'--red'):'--text2'})">${m.significant?(m.diff>0?'model better':vs+' better'):'too close to call'}</span></div>`:'';
   return `<div style="font-size:11px;color:var(--text2);margin-top:8px;line-height:1.6;font-family:'DM Mono',monospace">
-    ${row('Captain',d.captain_pts)}${row('Top 3',d.top3_pts)}${row('Top 11',d.top11_pts)}</div>`;
+    <div style="color:var(--text3)">vs ${escHtml(vs)}:</div>${row('Rank correlation',d.spearman,'')}${row('Captain',d.captain_pts)}${row('Top 3',d.top3_pts)}${row('Top 11',d.top11_pts)}</div>`;
 }
 
 // Why the historical FPL xP column can't be beaten fairly (ml/train.py xp_leak)
@@ -2202,9 +2203,15 @@ async function loadRecord(){
     if(seasons.length){
       h+=`<div class="tr-card"><h3>BACKTEST ON PAST SEASONS</h3>
         <p>Each season was predicted gameweek by gameweek by a model trained only on earlier seasons,
-        so it never saw the results it was tested on. Compared with each player's season points-per-game so far.</p>
-        ${seasons.map(([s,v])=>`<h3 style="margin-top:12px">${escHtml(s)}</h3>${trTable(v.metrics?.model,v.metrics?.season_avg,v.metrics?.fpl_xp,true)}${trSig(v.metrics?.model_vs_season_avg)}`).join('')}
-        ${trLeak(seasons)}
+        so it never saw the results it was tested on. Compared with each player's season points-per-game so far,
+        and with FPL's own expected points (ep_next) as published a few hours before each deadline.</p>
+        ${seasons.map(([s,v])=>{const m=v.metrics||{};const fair=m.fpl_ep;
+          return `<h3 style="margin-top:12px">${escHtml(s)}</h3>${trTable(m.model,m.season_avg,fair||m.fpl_xp,!fair)}
+          ${fair?trSig(m.model_vs_fpl_ep,"FPL's xP"):''}${trSig(m.model_vs_season_avg,'season average')}`;}).join('')}
+        ${seasons.every(([,v])=>v.metrics?.fpl_ep)?`<p style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.6">
+          FPL's numbers come from <a href="https://github.com/Randdalf/fplcache" target="_blank" rel="noopener" style="color:var(--text2)">an independent archive</a>
+          of the FPL site, taken 1 to 6 hours before each deadline. The xP column in the widely used historical dataset
+          is not used: it was recorded after kick-off and already contains part of the result.</p>`:trLeak(seasons)}
       </div>`;
     }
     h+=`<div class="tr-card"><h3>HOW WE MEASURE</h3><p>${escHtml(d.method)} Rank correlation: 1 = perfect order, 0 = random.
