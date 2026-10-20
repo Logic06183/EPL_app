@@ -80,9 +80,9 @@ PLANS = {
         "value":             True,
         "injuries_limit":    999,
     },
-    # Founder = same perks as Pro, granted free to anyone who signs in
-    # before LAUNCH_FREE_UNTIL. Lifetime — never expires. The reward for
-    # showing up early.
+    # Founder = anyone who signs in before LAUNCH_FREE_UNTIL. Pro is free for
+    # everyone until then; afterwards founders pay half price for life
+    # (founder_granted_at marks them; see payments.PLANS).
     "founder": {
         "label":             "Founder",
         "predictions_limit": 100,
@@ -122,9 +122,12 @@ def get_effective_plan(user: dict) -> str:
     the stored plan stands.
     """
     plan = user.get("plan", "free")
-    if plan in ("pro", "founder"):
+    if plan == "pro":
         return plan
-    return "pro" if _in_grace_period() else plan
+    if _in_grace_period():
+        return "founder" if plan == "founder" else "pro"
+    # After the paywall founders pay too, at the founder price (payments.py)
+    return "free"
 
 
 def plan_limits(plan: str) -> dict:

@@ -222,6 +222,10 @@ async def get_captain_picks(
             d["fixture_is_home"]  = team_fix.get("is_home", True)
             d["fixture_difficulty"] = team_fix.get("difficulty", 3)
             d["captain_score"] = round(prediction_service.captain_score(player["id"], gw_id), 2)
+            rate = prediction_service.captain_rate(player["id"], gw_id)
+            d["captain_rate"] = None if rate is None else round(rate, 2)
+            d["chance_of_playing"] = chance
+            d["predicted_points"] = round(prediction_service.gw_xp(player["id"], gw_id) or d["predicted_points"] or 0, 2)
             picks.append(d)
 
         # Ranked by captain_score (xP shrunk toward season rate), shown with xP
@@ -229,6 +233,7 @@ async def get_captain_picks(
         return {
             "captain_picks": picks[:top_n],
             "gameweek": gw_id,
+            "formula": "captain score = 0.6 × xP + 0.4 × season points per team fixture; both discounted by chance of playing",
         }
     except Exception as e:
         logger.error(f"Error fetching captain picks: {e}")

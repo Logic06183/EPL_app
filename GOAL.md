@@ -30,7 +30,7 @@ gameweeks (the decision-relevant set). Per gameweek, then averaged.
 | Spearman rank correlation, predicted vs actual points | Is the ranking of players right? | **0.451 / 0.451** (was 0.40 / 0.36 on 2026-10-18 morning; season-average baseline 0.31 / 0.25) | **≥ 0.45 on both seasons** (met 2026-10-18), and ≥ the pre-deadline FPL `ep_next` on the live record over any rolling 8 GWs |
 | Captain pick: actual points of the model's #1 | The headline feature. | 7.9 / 6.0; **not** better than the season-average pick (−1.2 / −0.2, CI ±1.3 to ±2.4). One pick per GW over 37 GWs is too noisy for a tight interval; top-3 is the measurable proxy (+0.1 / +0.8) | **Beats season-average captain, CI above zero, both seasons**; live: beats the most-owned captain in ≥ 55 % of GWs. Measure top-3 alongside |
 | Top-11 points: mean actual of the model's top 11 | Is the XI it recommends good? | 5.63 / 4.87 (baseline 4.96 / 4.50): +0.67 significant / +0.37 not | **+0.5 over baseline, significant, both seasons** |
-| **Beats FPL's own pre-deadline `ep_next`** (the free number every manager sees) | Why pay if the free number is as good? | **Met 2026-10-20 on both seasons, every gap significant:** Spearman 0.451 vs 0.407 / 0.451 vs 0.377; captain 9.8 vs 7.8 / 7.0 vs 5.1 pts/GW; top-11 5.63 vs 4.92 / 4.87 vs 4.43; MAE 1.87 vs 2.15 / 1.94 vs 2.26. `ep_next` from Randdalf/fplcache, 1–6 h before each deadline (`python -m ml.ep_next`) | Beat it on Spearman, captain and top-11 with CI > 0, both seasons; then on the live record |
+| **Beats FPL's own pre-deadline `ep_next`** (the free number every manager sees) | Why pay if the free number is as good? | **Spearman, top-11 and MAE met on both seasons (significant):** Spearman 0.451 vs 0.407 / 0.451 vs 0.377; top-11 5.63 vs 4.92 / 4.87 vs 4.43; MAE 1.87 vs 2.15 / 1.94 vs 2.26. **Captain** with the weight tuned out of sample: level in 2024-25 (+0.1, CI −2.5..2.8), +1.7 in 2025-26 (CI 0.5..3.1). `ep_next` from Randdalf/fplcache, 1–6 h before each deadline (`python -m ml.ep_next`) | Beat it on Spearman, captain and top-11 with CI > 0, both seasons; then on the live record |
 | MAE | Calibration for the optimiser and the −4 hit decision | 1.87 / 1.94 (was 2.03 / 2.12) | ≤ 1.85 |
 | Transfer plan realised gain | Does following the plan gain points vs holding? | not measured | measured live every GW; ≥ 0 on average over the season |
 
@@ -72,7 +72,8 @@ metrics getting worse.
 Ideas in rough order of expected gain; each is one experiment, one commit if it wins:
 
 - [x] **Minutes model.** A P(60+ minutes) classifier scales the prediction by sqrt(P60): MAE 1.99 → 1.87, Spearman +0.02 to +0.03 (2026-10-18). Full product and bucketed decompositions were no better.
-- [ ] **Use FPL's `ep_next` as a feature** (it is free, pre-deadline information). Cannot be backtested (the historical column is post-deadline); test it live once 8 GWs of snapshots exist.
+- [ ] **Use FPL's `ep_next` as a feature.** Backtested 2026-10-20 with archived pre-deadline `ep_next` (all four seasons): Spearman +0.019 / +0.016, MAE −0.016 / −0.013, but 2025-26 captain 6.97 → 6.92 and top-11 4.87 → 4.81, so it fails the stop rule. A tuned linear blend chose weight 0 on `ep_next`. Not shipped; revisit with more seasons.
+- [x] **Captain rule tuned out of sample** (2026-10-20): the blend weight for each test season is picked only on earlier seasons. 2024-25 then picks 1.0 (pure xP): captain 7.9, level with FPL (+0.1, CI −2.5..2.8). 2025-26 picks 0.5: +1.7 vs FPL, CI 0.5..3.1. Production weight 0.6, from all seasons.
 - [ ] **Team strength from results and xG** with time decay (Dixon-Coles or Elo), home/away split, giving per-fixture expected goals for and against; from that, clean-sheet and goal-involvement probabilities.
 - [ ] **Bookmaker odds**: tried 2026-10-18 with football-data.co.uk history; +0.005 Spearman on one season, nothing on the other, and it needs a live key (the-odds-api, free tier) plus a fallback. Parked.
 - [ ] Set-piece and penalty takers; double/blank gameweek handling checked. (Per-position models tried 2026-10-18: worse.)
@@ -96,7 +97,7 @@ Ideas in rough order of expected gain; each is one experiment, one commit if it 
 - [ ] **Claude:** sandbox purchase end to end: Go Pro → PayFast sandbox → return → `/api/users/me` shows `pro`. Then **Craig** sets `PAYFAST_SANDBOX=false`.
 - [ ] **Craig:** Paddle or Lemon Squeezy account (merchant of record, handles UK/EU VAT); give Claude the API key and webhook secret.
 - [ ] **Claude:** GBP/USD checkout alongside PayFast, webhook signature verified, upgrade by uid, tests like `tests/test_payments.py`.
-- [x] Pricing decided 2026-10-20: free this season, founders free for life, paywall 1 Aug 2027, R449 season pass + R79/month (`docs/pricing.md`). Prices and copy applied; `LAUNCH_FREE_UNTIL=2027-08-01`.
+- [x] Pricing decided 2026-10-20: free this season, founders half price for life (R225 / R39), paywall 1 Aug 2027, R449 season pass + R79/month (`docs/pricing.md`). Prices and copy applied; `LAUNCH_FREE_UNTIL=2027-08-01`.
 - [ ] **Claude:** before 1 Aug 2027 add `require_pro` to the Pro endpoints listed in `docs/pricing.md`.
 
 ## M4 — Everywhere  (mostly done)

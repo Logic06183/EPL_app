@@ -301,17 +301,25 @@ class XPService:
             return None
         return by_gw.get(self.next_gw, 0.0)
 
+    def captain_rate(self, element_id: int, gw: Optional[int] = None) -> float:
+        """Season points per team fixture (missed games count as 0) for `gw`'s fixtures,
+        discounted by chance of playing in the next gameweek, as xP is."""
+        gw = gw if gw is not None else self.next_gw
+        if gw is None:
+            return 0.0
+        nfix = self.fixture_counts.get((self.team_of.get(element_id), gw), 1)
+        rate = self.season_rate.get(element_id, 0.0) * nfix
+        if gw == self.next_gw:
+            rate *= self.avail.get(element_id, 1.0)
+        return rate
+
     def captain_score(self, element_id: int, gw: Optional[int] = None) -> float:
         """Ranking score for the captain pick in `gw` (default: next). See CAPTAIN_SHRINK."""
         gw = gw if gw is not None else self.next_gw
         if gw is None:
             return 0.0
         xp = self.xp.get(element_id, {}).get(gw, 0.0)
-        nfix = self.fixture_counts.get((self.team_of.get(element_id), gw), 1)
-        rate = self.season_rate.get(element_id, 0.0) * nfix
-        if gw == self.next_gw:   # xP already carries the chance of playing; the rate must too
-            rate *= self.avail.get(element_id, 1.0)
-        return CAPTAIN_SHRINK * xp + (1 - CAPTAIN_SHRINK) * rate
+        return CAPTAIN_SHRINK * xp + (1 - CAPTAIN_SHRINK) * self.captain_rate(element_id, gw)
 
     def captain_horizon(self, element_id: int) -> List[float]:
         """captain_score for each gameweek in the horizon (empty if not ready)."""

@@ -89,16 +89,17 @@ def generate_briefing_reasons(
 
     try:
         from google.genai import types
-        response = client.models.generate_content(
-            model=_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=_TEMPERATURE,
-                max_output_tokens=_MAX_OUTPUT_TOKENS,
-                thinking_config=types.ThinkingConfig(thinking_budget=_THINKING_BUDGET),
-            ),
+        config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=_TEMPERATURE,
+            max_output_tokens=_MAX_OUTPUT_TOKENS,
+            thinking_config=types.ThinkingConfig(thinking_budget=_THINKING_BUDGET),
         )
+        try:
+            response = client.models.generate_content(model=_MODEL, contents=prompt, config=config)
+        except Exception as e:   # 503 "high demand" is common and usually clears at once
+            logger.info(f"Gemini retry after: {e}")
+            response = client.models.generate_content(model=_MODEL, contents=prompt, config=config)
         text = (response.text or "").strip()
         if not text:
             return fallback

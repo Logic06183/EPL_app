@@ -2,7 +2,7 @@
 
 **Decided 2026-10-20 (Craig delegated the call):**
 
-- This season (2026-27) is free. Everyone who signs in before the paywall is a founder and keeps Pro free for life.
+- This season (2026-27) is free. Everyone who signs in before the paywall is a founder and pays half price for life: R225 season pass, R39/month (changed the same day from "free for life", which would have meant no early user ever pays; only 3 accounts existed).
 - Paywall on **1 August 2027** (`LAUNCH_FREE_UNTIL=2027-08-01` on `epl-backend`).
 - Season pass **R449** once-off, valid to 31 May; monthly **R79**, auto-renewing (`PLANS` in `app/api/payments.py`).
 - Free forever: predictions, captain picks, fixtures, track record. Pro: briefing, transfer planner, optimiser, mini-league.

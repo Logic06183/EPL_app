@@ -63,6 +63,9 @@ class PredictionService:
             return self.xp.captain_score(player_id, gw)
         return (self.gw_xp(player_id, gw) or 0.0) if gw is not None else 0.0
 
+    def captain_rate(self, player_id: int, gw: Optional[int] = None) -> Optional[float]:
+        return self.xp.captain_rate(player_id, gw) if self._trained else None
+
     def captain_horizon(self, player_id: int) -> List[float]:
         return self.xp.captain_horizon(player_id) if self._trained else []
 

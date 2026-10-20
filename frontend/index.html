@@ -659,7 +659,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
       <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
       Continue with Google
     </button>
-    <p style="font-size:11px;color:var(--text3);margin-top:12px;margin-bottom:0">Sign in before 1 Aug 2027 and Pro stays free for life · No card needed</p>
+    <p style="font-size:11px;color:var(--text3);margin-top:12px;margin-bottom:0">Free this season. Sign in before 1 Aug 2027 and Pro is half price for life · No card needed</p>
   </div>
 </div>
 
@@ -675,8 +675,8 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
       <li>Squad optimiser and 3-GW planner</li>
       <li>Mini-league view</li>
     </ul>
-    <button class="upgrade-cta" onclick="goUpgrade('season')">Season pass — R449 to 31 May</button>
-    <button class="upgrade-cta" style="margin-top:8px;background:transparent;border:1px solid var(--goldb);color:var(--gold)" onclick="goUpgrade('pro')">Monthly — R79/mo</button>
+    <button class="upgrade-cta" id="up-season" onclick="goUpgrade('season')">Season pass — R449 to 31 May</button>
+    <button class="upgrade-cta" style="margin-top:8px;background:transparent;border:1px solid var(--goldb);color:var(--gold)" id="up-month" onclick="goUpgrade('pro')">Monthly — R79/mo</button>
     <p style="font-size:10px;color:var(--text3);text-align:center;margin-top:8px;margin-bottom:0">Season pass is once-off, no renewal · Monthly cancels anytime · Secured by PayFast</p>
   </div>
 </div>
@@ -696,7 +696,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
 <div id="gw-bar">
   <div class="gwb-pill"><span class="lbl">GW</span><span class="val" id="gwb-gw">—</span></div>
   <div class="gwb-pill"><span class="lbl">DEADLINE</span><span class="cd" id="gwb-dl">—</span></div>
-  <div class="gwb-pill"><span>🔥</span><span class="lbl">HOT PICK</span><span class="hot" id="gwb-hot">—</span></div>
+  <div class="gwb-pill"><span>🔥</span><span class="lbl">TOP xP</span><span class="hot" id="gwb-hot">—</span></div>
   <div class="gwb-pill"><span>🏥</span><span class="warn" id="gwb-inj">Loading…</span></div>
   <div class="gwb-pill" id="gwb-trend-pill" style="display:none"><span>📈</span><span class="lbl">TRENDING IN</span><span class="hot" id="gwb-trend">—</span></div>
 </div>
@@ -991,7 +991,7 @@ async function refreshPlan(){
     const d = await apiFetch('/users/me');
     currentPlan = d.plan || 'free';
     inGrace = !!(d.grace && d.grace.in_grace_period);
-    hasPro = currentPlan === 'pro' || currentPlan === 'founder' || inGrace;
+    hasPro = currentPlan === 'pro' || inGrace;   // founders pay (half price) after the paywall
   }catch{ currentPlan = 'free'; hasPro = false; }
 }
 
@@ -1020,7 +1020,7 @@ if(FB_READY){
   setTimeout(async ()=>{ await refreshPlan(); _authResolve(); applyPlanUI(); loadCaptain(); }, 0);
 }
 
-// During the free season the offer is "sign in = Pro free for life", not a price.
+// During the free season the offer is "sign in = founder, half price for life", not a price.
 function goProClick(){
   if(inGrace && !currentUser){ track('founder_click'); document.getElementById('signin-modal').classList.remove('hidden'); return; }
   showUpgrade();
@@ -1029,10 +1029,10 @@ function goProClick(){
 function updateAuthUI(user, plan){
   const gp = document.getElementById('gopro-btn');
   if(gp){
-    const paid = plan==='pro' || plan==='founder';
-    gp.style.display = paid ? 'none' : '';
-    gp.textContent = inGrace ? 'Free Pro for life' : 'Go Pro';
-    gp.title = inGrace ? 'Sign in before the paywall (1 Aug 2027) and Pro stays free for life' : '';
+    const covered = plan==='pro' || (plan==='founder' && inGrace);
+    gp.style.display = covered ? 'none' : '';
+    gp.textContent = inGrace ? 'Founder: half price for life' : 'Go Pro';
+    gp.title = inGrace ? 'Pro is free this season. Sign in before 1 Aug 2027 and it stays half price for life' : '';
   }
   const btn   = document.getElementById('auth-btn');
   const badge = document.getElementById('plan-badge');
@@ -1119,7 +1119,14 @@ function goUpgrade(planId){
 }
 
 // Show upgrade modal (called by locked features)
-function showUpgrade(){ track('paywall_view'); document.getElementById('upgrade-modal').classList.remove('hidden'); }
+function showUpgrade(){
+  track('paywall_view');
+  // Founders are charged half price automatically (payments.py)
+  const f = currentPlan==='founder';
+  document.getElementById('up-season').textContent = f ? 'Founder season pass — R225 to 31 May' : 'Season pass — R449 to 31 May';
+  document.getElementById('up-month').textContent = f ? 'Founder monthly — R39/mo' : 'Monthly — R79/mo';
+  document.getElementById('upgrade-modal').classList.remove('hidden');
+}
 
 // ── Subscription management ───────────────────────────
 function handleBadgeClick(){
@@ -1142,7 +1149,7 @@ async function showManageModal(){
     const renewsOrExpires = (cancelled || season) ? 'Access until' : 'Next renewal';
     el.innerHTML = `
       <div class="sub-row"><span class="sub-lbl">Plan</span><span class="sub-val" style="color:var(--gold)">⚡ FPL AI Pro</span></div>
-      <div class="sub-row"><span class="sub-lbl">Billing</span><span class="sub-val">${sub.has_token ? 'R79 / month' : 'Season pass'}</span></div>
+      <div class="sub-row"><span class="sub-lbl">Billing</span><span class="sub-val">${sub.has_token ? 'Monthly' : 'Season pass'}</span></div>
       <div class="sub-row"><span class="sub-lbl">${renewsOrExpires}</span><span class="sub-val">${expires}</span></div>
       <div class="sub-row"><span class="sub-lbl">Status</span>
         <span class="sub-val" style="color:${cancelled?'var(--orange)':'var(--green)'}">
@@ -1424,8 +1431,8 @@ async function loadCaptain(){
         <div class="cap-num">${i===0?'👑 CAPTAIN PICK':`#${i+1} OPTION`}</div>
         <div class="cap-name">${p.name}</div>
         <div class="cap-team">${p.team_name}</div>
-        <div class="cap-pts" title="Ranking score: 60% next-GW prediction, 40% season points per game">${(p.captain_score??p.predicted_points??0).toFixed(1)}<span style="font-size:14px;color:var(--text3)"> score</span></div>
-        <div style="font-size:11px;color:var(--text3)">xP ${(p.predicted_points||0).toFixed(1)} · ${(p.points_per_game||0).toFixed(1)} pts/game</div>
+        <div class="cap-pts" title="${escHtml(d.formula||'')}">${(p.captain_score??p.predicted_points??0).toFixed(2)}<span style="font-size:14px;color:var(--text3)"> score</span></div>
+        <div style="font-size:11px;color:var(--text3)" title="${escHtml(d.formula||'')}">0.6 × ${(p.predicted_points||0).toFixed(2)} xP + 0.4 × ${(p.captain_rate??0).toFixed(2)} season pts/fixture${p.chance_of_playing!=null&&p.chance_of_playing<100?` · ${p.chance_of_playing}% fit`:''}</div>
         <div class="cap-fix">
           <span class="fdr-dot" style="background:${fdrCol(p.fixture_difficulty||3)}"></span>
           <span style="color:var(--text2)">${p.fixture_opponent||'TBC'} ${home}</span>
@@ -1560,7 +1567,7 @@ function renderBriefing(b){
   let capBlock='';
   if(cap){
     const switchHint = !cap.currently_captained && cap.current_captain
-      ? ` <span style="color:var(--orange);font-size:11px">· consider switching from ${escHtml(cap.current_captain.name)} (${cap.current_captain.predicted_points})</span>`
+      ? ` <span style="color:var(--orange);font-size:11px">· switch from ${escHtml(cap.current_captain.name)}${cap.captain_score!=null&&cap.current_captain.captain_score!=null?` (captain score ${cap.captain_score.toFixed(2)} vs ${cap.current_captain.captain_score.toFixed(2)})`:` (${cap.current_captain.predicted_points} xP)`}</span>`
       : '';
     capBlock=`
     <div class="brief-section">
@@ -1572,7 +1579,7 @@ function renderBriefing(b){
           <span class="brief-meta"> · ${escHtml(cap.team_name)}${cap.after_transfer?' · after your transfer':''}</span>${switchHint}
           ${cap.reason?`<div class="brief-reason">${escHtml(cap.reason)}</div>`:''}
         </div>
-        <span class="brief-cap-pred">${cap.predicted_points} pts</span>
+        <span class="brief-cap-pred">${cap.predicted_points} xP</span>
       </div>
     </div>`;
   }
@@ -2204,7 +2211,9 @@ async function loadRecord(){
       h+=`<div class="tr-card"><h3>BACKTEST ON PAST SEASONS</h3>
         <p>Each season was predicted gameweek by gameweek by a model trained only on earlier seasons,
         so it never saw the results it was tested on. Compared with each player's season points-per-game so far,
-        and with FPL's own expected points (ep_next) as published a few hours before each deadline.</p>
+        and with FPL's own expected points (ep_next) as published a few hours before each deadline.
+        The captain pick blends xP with season points per fixture; that blend weight is chosen using only
+        seasons before the one being tested.</p>
         ${seasons.map(([s,v])=>{const m=v.metrics||{};const fair=m.fpl_ep;
           return `<h3 style="margin-top:12px">${escHtml(s)}</h3>${trTable(m.model,m.season_avg,fair||m.fpl_xp,!fair)}
           ${fair?trSig(m.model_vs_fpl_ep,"FPL's xP"):''}${trSig(m.model_vs_season_avg,'season average')}`;}).join('')}

@@ -730,6 +730,11 @@ async def get_team_briefing(
         plan_advice = plan["advice"]
         top_transfer = _plan_top_transfer(plan, elements_by_id)
         captain = _plan_captain(plan, picks, pred_map, elements_by_id, captain)
+        if captain:
+            captain["captain_score"] = round(prediction_service.captain_score(captain["player_id"]), 2)
+            if captain.get("current_captain"):
+                cc = captain["current_captain"]
+                cc["captain_score"] = round(prediction_service.captain_score(cc["player_id"]), 2)
     except HTTPException as e:
         logger.info(f"Briefing plan skipped (status {e.status_code})")
     except Exception as e:
@@ -845,5 +850,9 @@ async def get_team_briefing(
         "data_fetched_at":  datetime.now(timezone.utc).isoformat(),
     }
 
+    if not payload["summary"]:
+        # AI text failed: say what to do in plain words, and don't cache, so the next load retries
+        payload["summary"] = plan_advice or ""
+        return payload
     cache.set(cache_key, payload)
     return payload

@@ -19,6 +19,16 @@ class FakeDoc:
     def set(self, data, merge=False):
         self.store.setdefault(self.key, {}).update(data)
 
+    def get(self):
+        return self
+
+    @property
+    def exists(self):
+        return self.key in self.store
+
+    def to_dict(self):
+        return dict(self.store.get(self.key, {}))
+
 
 class FakeDB:
     def __init__(self):
@@ -170,3 +180,29 @@ def test_season_pass_itn_grants_pro_until_end_of_may(client):
     doc = client.db.docs["uid-123"]
     assert doc["plan"] == "pro"
     assert doc["plan_expires_at"][5:10] == "05-31"
+
+
+def test_founder_is_charged_half_price(client):
+    client.db.docs["uid-123"] = {"founder_granted_at": "2026-10-20T00:00:00"}
+    _as(SIGNED_IN)
+    r = client.post("/api/payments/initialize",
+                    json={"plan_id": "season", "return_url": "https://epl-prediction-app.web.app/"})
+    q = parse_qs(urlparse(r.json()["authorization_url"]).query)
+    assert q["amount"] == ["225.00"] and q["custom_str1"] == ["season_founder"]
+
+
+def test_founder_price_refused_for_non_founder(client):
+    _as(SIGNED_IN)
+    r = client.post("/api/payments/initialize",
+                    json={"plan_id": "pro_founder", "return_url": "https://epl-prediction-app.web.app/"})
+    assert r.status_code == 403
+
+
+def test_founder_pays_after_paywall(monkeypatch):
+    from app.auth import firebase_auth as fa
+    monkeypatch.setattr(fa, "_in_grace_period", lambda now=None: False)
+    assert fa.get_effective_plan({"plan": "founder"}) == "free"
+    assert fa.get_effective_plan({"plan": "pro"}) == "pro"
+    monkeypatch.setattr(fa, "_in_grace_period", lambda now=None: True)
+    assert fa.get_effective_plan({"plan": "founder"}) == "founder"
+    assert fa.get_effective_plan({"plan": "free"}) == "pro"

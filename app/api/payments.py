@@ -75,6 +75,17 @@ PLANS = {
         "features":  FEATURES,
     },
 }
+# Half price for life for anyone who signed in before the paywall (founder_granted_at)
+PLANS["pro_founder"] = {**PLANS["pro"], "name": "FPL AI Pro (monthly, founder)", "amount": "39.00", "founder": True}
+PLANS["season_founder"] = {**PLANS["season"], "name": "FPL AI Season Pass (founder)", "amount": "225.00", "founder": True}
+
+
+def _is_founder(uid: str) -> bool:
+    db = get_db()
+    if db is None:
+        return False
+    doc = db.collection("users").document(uid).get()
+    return doc.exists and bool((doc.to_dict() or {}).get("founder_granted_at"))
 
 
 def _season_end(now: datetime) -> datetime:
@@ -212,9 +223,15 @@ async def initialize_payment(
     if not user["uid"]:
         raise HTTPException(status_code=401, detail="Sign in to upgrade")
 
-    plan = PLANS.get(request.plan_id)
-    if not plan:
+    plan_id = request.plan_id
+    if plan_id not in PLANS:
         raise HTTPException(status_code=404, detail="Plan not found")
+    founder = _is_founder(user["uid"])
+    if PLANS[plan_id].get("founder") and not founder:
+        raise HTTPException(status_code=403, detail="Founder price is for accounts created before the paywall")
+    if founder and not PLANS[plan_id].get("founder"):
+        plan_id = f"{plan_id}_founder"
+    plan = PLANS[plan_id]
 
     if not PAYFAST_MERCHANT_ID or not PAYFAST_MERCHANT_KEY:
         raise HTTPException(status_code=503, detail="Payment service not configured")
@@ -236,7 +253,7 @@ async def initialize_payment(
         "amount":            plan["amount"],
         "item_name":         plan["name"],
         # Identify the user by uid in the webhook — never trust an email field
-        "custom_str1":       request.plan_id,
+        "custom_str1":       plan_id,
         "custom_str2":       user["uid"],
     }
     if plan["recurring"]:

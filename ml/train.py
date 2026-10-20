@@ -124,11 +124,8 @@ def _spearman(a: pd.Series, b: pd.Series) -> float:
     return float(a.rank().corr(b.rank()))
 
 
-def evaluate(test: pd.DataFrame) -> dict:
-    """
-    Compare predictors on one held-out season, per gameweek, then averaged.
-    Predictions are summed per player-gameweek (double gameweeks) first.
-    """
+def per_gameweek(test: pd.DataFrame, shrink: float = CAPTAIN_SHRINK) -> pd.DataFrame:
+    """One row per player-gameweek (double gameweeks summed), with each predictor."""
     per_gw = (test.groupby(["gw", "element"])
               .agg(actual=("total_points", "sum"), model=("pred", "sum"), fpl_xp=("xP", "sum"),
                    season_avg=("pts_season", "first"), form=("pts_l6", "first"),
@@ -139,7 +136,32 @@ def evaluate(test: pd.DataFrame) -> dict:
     per_gw["season_avg"] = per_gw["season_avg"].fillna(0) * per_gw["n"]
     per_gw["form"] = per_gw["form"].fillna(0) * per_gw["n"]
     # The production captain ranking (xp_service.captain_score)
-    per_gw["captain"] = CAPTAIN_SHRINK * per_gw["model"] + (1 - CAPTAIN_SHRINK) * per_gw["season_avg"]
+    per_gw["captain"] = shrink * per_gw["model"] + (1 - shrink) * per_gw["season_avg"]
+    return per_gw
+
+
+SHRINK_GRID = [round(0.1 * i, 1) for i in range(11)]
+
+
+def captain_pts_by_shrink(test: pd.DataFrame) -> dict:
+    """Mean captain points per gameweek for each shrink weight, on one season."""
+    per_gw = per_gameweek(test)
+    pool = per_gw[per_gw["mins_l6"].fillna(0) >= 30]
+    out = {}
+    for w in SHRINK_GRID:
+        score = w * pool["model"] + (1 - w) * pool["season_avg"]
+        top = pool.assign(score=score).groupby("gw").apply(
+            lambda g: g.nlargest(1, "score")["actual"].mean(), include_groups=False)
+        out[w] = float(top.mean())
+    return out
+
+
+def evaluate(test: pd.DataFrame, shrink: float = CAPTAIN_SHRINK) -> dict:
+    """
+    Compare predictors on one held-out season, per gameweek, then averaged.
+    `shrink` is the captain blend weight, chosen without looking at this season.
+    """
+    per_gw = per_gameweek(test, shrink)
 
     # FPL's xP is missing for many 2025-26 gameweeks; only score it where present
     xp_ok = per_gw.groupby("gw")["fpl_xp"].transform(lambda s: (s != 0).mean() > 0.3)
@@ -252,18 +274,36 @@ def main() -> None:
 
     report = {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
               "features": FEATURES, "seasons": {}}
+    # Captain blend weight, tuned only on seasons before each test season:
+    # every season after the first is predicted by a model trained on the ones before it
+    by_shrink = {}
+    for val in SEASONS[1:]:
+        v = seasons[val].copy()
+        v["pred"] = predict_points(fit_bundle(pd.concat([seasons[s] for s in SEASONS if s < val])), v[FEATURES])
+        by_shrink[val] = captain_pts_by_shrink(v)
+
+    def tuned(before: str) -> float:
+        vals = [by_shrink[v] for v in by_shrink if v < before]
+        return max(SHRINK_GRID, key=lambda w: np.mean([c[w] for c in vals]))
+
+    report["captain_shrink"] = {
+        "by_season": {v: {str(w): round(p, 2) for w, p in c.items()} for v, c in by_shrink.items()},
+        "production": max(SHRINK_GRID, key=lambda w: np.mean([c[w] for c in by_shrink.values()])),
+    }
     for test_season in TEST_SEASONS:
         train = pd.concat([seasons[s] for s in SEASONS if s < test_season])
         bundle = fit_bundle(train)
         test = seasons[test_season].copy()
         test["pred"] = predict_points(bundle, test[FEATURES])
+        shrink = tuned(test_season)
         ep_path = args.data / f"ep_next_{test_season}.csv"   # from ml/ep_next.py
         if ep_path.exists():
             ep = pd.read_csv(ep_path)[["gw", "element", "ep_next"]]
             test = test.merge(ep, on=["gw", "element"], how="left")
         report["seasons"][test_season] = {
             "trained_on": [s for s in SEASONS if s < test_season],
-            "metrics": evaluate(test),
+            "captain_shrink": shrink,
+            "metrics": evaluate(test, shrink),
         }
         print(test_season, json.dumps(report["seasons"][test_season]["metrics"], indent=1))
 
@@ -276,6 +316,9 @@ def main() -> None:
     (OUT_DIR / "backtest.json").write_text(json.dumps(report, indent=2) + "\n")
     print("wrote", OUT_DIR / "model.joblib", OUT_DIR / "backtest.json")
     print(scorecard(report))
+    print(f"captain shrink: production {report['captain_shrink']['production']} "
+          f"(xp_service.CAPTAIN_SHRINK = {CAPTAIN_SHRINK}); per test season "
+          + ", ".join(f"{k} {v['captain_shrink']}" for k, v in report["seasons"].items()))
 
 
 # The bar from GOAL.md ("Is it good at predictions?"), checked on every test season.
