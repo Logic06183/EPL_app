@@ -306,7 +306,11 @@ async def plan_transfers(
             }
 
         gain = round(best.expected_points - hold.expected_points, 2)
-        if not best.transfers_in:
+        wc_now = next((c for c in chip_tips if c["chip"] == "wildcard" and c["play_now"]), None)
+        if wc_now:
+            advice = (f"Play your Wildcard: a rebuild beats the best transfer plan by "
+                      f"{wc_now['value']} expected points over 3 gameweeks.")
+        elif not best.transfers_in:
             advice = "Hold: no transfer improves your next 3 gameweeks enough. Roll the free transfer."
         elif best.hits:
             advice = (f"Make {len(best.transfers_in)} transfers (-{4 * best.hits} hit): "
@@ -437,11 +441,9 @@ _FREE_BRIEFINGS_PER_GW = int(os.getenv("FREE_BRIEFINGS_PER_GW", "1"))
 
 
 def _squad_alerts(picks: list[dict]) -> list[dict]:
-    """Extract injury/doubt/price-drop alerts for the user's XI only."""
+    """Injury/doubt alerts for the squad, XI first; bench alerts are marked."""
     alerts: list[dict] = []
-    for p in picks:
-        if not p.get("is_starting"):
-            continue
+    for p in sorted(picks, key=lambda p: not p.get("is_starting")):
         chance = p.get("chance_of_playing")
         news   = (p.get("news") or "").strip()
 
@@ -460,6 +462,7 @@ def _squad_alerts(picks: list[dict]) -> list[dict]:
                 "flag":          flag,
                 "chance":        chance,
                 "news":          news,
+                "bench":         not p.get("is_starting"),
             })
 
     # Price-drop risk uses the raw element field, fetched separately by caller.
@@ -542,6 +545,60 @@ def _captain_pick(picks: list[dict], pred_map: dict[int, float],
         "team_name":           best.get("team_name", ""),
         "predicted_points":    round(pred_map.get(best["id"], 0.0), 1),
         "currently_captained": bool(best.get("is_captain")),
+        "current_captain": (
+            None if current is None else {
+                "player_id":        current["id"],
+                "name":             current["name"],
+                "predicted_points": round(pred_map.get(current["id"], 0.0), 1),
+            }
+        ),
+    }
+
+
+def _plan_top_transfer(plan: dict, elements_by_id: dict) -> dict | None:
+    """The plan's first swap (same position) in the briefing's sell/buy shape."""
+    outs, ins = plan.get("transfers_out") or [], plan.get("transfers_in") or []
+    for o in outs:
+        i = next((p for p in ins if p["position"] == o["position"]), None)
+        if i is None:
+            continue
+        def side(p: dict) -> dict:
+            e = elements_by_id.get(p["id"], {})
+            return {
+                "id": p["id"], "name": p["name"], "price": p["price"],
+                "predicted_points": round((p.get("predicted_next_3") or [0])[0], 1),
+                "team_name": p["team_name"],
+                "form": float(e.get("form", 0) or 0),
+                "ownership": float(e.get("selected_by_percent", 0) or 0),
+            }
+        sell, buy = side(o), side(i)
+        return {
+            "sell": sell, "buy": buy,
+            "improvement": round(sum(i.get("predicted_next_3") or []) - sum(o.get("predicted_next_3") or []), 1),
+            "horizon": "next 3 GWs",
+            "of_plan": len(ins),
+        }
+    return None
+
+
+def _plan_captain(plan: dict, picks: list[dict], pred_map: dict, elements_by_id: dict,
+                  fallback: dict | None) -> dict | None:
+    """The plan's GW1 captain, which accounts for the transfers it recommends."""
+    gws = plan.get("per_gameweek") or []
+    if not gws:
+        return fallback
+    cap_id = gws[0]["captain"]
+    pick = next((p for p in picks if p["id"] == cap_id), None)
+    current = next((p for p in picks if p.get("is_starting") and p.get("is_captain")), None)
+    e = elements_by_id.get(cap_id, {})
+    return {
+        "player_id":           cap_id,
+        "name":                gws[0].get("captain_name") or e.get("web_name", ""),
+        "team_name":           pick.get("team_name", "") if pick else next(
+            (p["team_name"] for p in plan.get("transfers_in") or [] if p["id"] == cap_id), ""),
+        "predicted_points":    round(gws[0].get("captain_xp", 0.0), 1),
+        "currently_captained": bool(pick and pick.get("is_captain")),
+        "after_transfer":      pick is None,
         "current_captain": (
             None if current is None else {
                 "player_id":        current["id"],
@@ -661,23 +718,37 @@ async def get_team_briefing(
 
     captain = _captain_pick(picks, pred_map, {p["id"]: prediction_service.captain_score(p["id"]) for p in picks})
 
-    # One transfer suggestion — reuse the existing logic, take the top.
+    # Captain and top transfer come from the transfer plan, so the briefing and
+    # the Transfer plan tab never disagree. The one-swap heuristic is only a fallback.
     top_transfer = None
+    plan_advice = None
     try:
-        transfers = await suggest_transfers(
-            team_id, max_hits=0,
-            data_service=data_service,
-            prediction_service=prediction_service,
-            user=user,
+        plan = await plan_transfers(
+            team_id, free_transfers=None, max_transfers=3,
+            data_service=data_service, prediction_service=prediction_service, user=user,
         )
-        sugg = (transfers or {}).get("suggestions") or []
-        if sugg:
-            top_transfer = sugg[0]
+        plan_advice = plan["advice"]
+        top_transfer = _plan_top_transfer(plan, elements_by_id)
+        captain = _plan_captain(plan, picks, pred_map, elements_by_id, captain)
     except HTTPException as e:
-        # Pro-only or other gating shouldn't kill the briefing
-        logger.info(f"Briefing transfer fetch skipped (status {e.status_code})")
+        logger.info(f"Briefing plan skipped (status {e.status_code})")
     except Exception as e:
-        logger.warning(f"Briefing transfer fetch failed: {e}")
+        logger.warning(f"Briefing plan failed: {e}")
+    if plan_advice is None:
+        try:
+            transfers = await suggest_transfers(
+                team_id, max_hits=0,
+                data_service=data_service,
+                prediction_service=prediction_service,
+                user=user,
+            )
+            sugg = (transfers or {}).get("suggestions") or []
+            if sugg:
+                top_transfer = sugg[0]
+        except HTTPException as e:
+            logger.info(f"Briefing transfer fetch skipped (status {e.status_code})")
+        except Exception as e:
+            logger.warning(f"Briefing transfer fetch failed: {e}")
 
     # The gameweek this advice is for: the next deadline, not the one that just passed
     gw_info = await data_service.get_gameweek_info()
@@ -769,6 +840,7 @@ async def get_team_briefing(
         "alerts":           alerts,
         "captain":          captain,
         "top_transfer":     top_transfer,
+        "plan_advice":      plan_advice,
         "ai_reasons":       gemini_service.is_available(),
         "data_fetched_at":  datetime.now(timezone.utc).isoformat(),
     }

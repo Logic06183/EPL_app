@@ -54,9 +54,6 @@ class FPLDataService:
         This contains all players, teams, and gameweek information.
         Cached for 5 minutes by default.
         """
-        if not force_refresh and self._bootstrap_data:
-            return self._bootstrap_data
-
         cache_key = "bootstrap_static"
         cached = self.cache.get(cache_key)
 
@@ -83,14 +80,11 @@ class FPLDataService:
             logger.info("Bootstrap data fetched and cached")
             return data
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"FPL API HTTP error: {e.response.status_code} - {e}")
-            raise
-        except httpx.TimeoutException as e:
-            logger.error(f"FPL API timeout: {e}")
-            raise
         except Exception as e:
             logger.error(f"Error fetching bootstrap data: {e}")
+            if self._bootstrap_data:
+                logger.warning("Serving last good bootstrap data")
+                return self._bootstrap_data
             raise
 
     async def get_all_players(self) -> List[Dict[str, Any]]:

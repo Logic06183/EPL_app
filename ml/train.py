@@ -29,6 +29,7 @@ from app.ml.features import (
     CORE_STATS, EXTRA_STATS, FEATURES, POSITIONS, add_position_code, attach_fixture_features,
     ownership_features, player_form, predict_points, prior_season, team_form,
 )
+from app.services.xp_service import CAPTAIN_SHRINK
 
 SEASONS = ["2022-23", "2023-24", "2024-25", "2025-26"]
 PRIOR = {"2022-23": "2021-22", "2023-24": "2022-23", "2024-25": "2023-24", "2025-26": "2024-25"}
@@ -136,6 +137,8 @@ def evaluate(test: pd.DataFrame) -> dict:
     # Naive baselines are per-fixture rates; scale to the gw's fixture count
     per_gw["season_avg"] = per_gw["season_avg"].fillna(0) * per_gw["n"]
     per_gw["form"] = per_gw["form"].fillna(0) * per_gw["n"]
+    # The production captain ranking (xp_service.captain_score)
+    per_gw["captain"] = CAPTAIN_SHRINK * per_gw["model"] + (1 - CAPTAIN_SHRINK) * per_gw["season_avg"]
 
     # FPL's xP is missing for many 2025-26 gameweeks; only score it where present
     xp_ok = per_gw.groupby("gw")["fpl_xp"].transform(lambda s: (s != 0).mean() > 0.3)
@@ -149,7 +152,8 @@ def evaluate(test: pd.DataFrame) -> dict:
         if d.empty:
             continue
         gws = d.groupby("gw")
-        top1 = gws.apply(lambda g: g.nlargest(1, name)["actual"].mean(), include_groups=False)
+        cap = "captain" if name == "model" else name
+        top1 = gws.apply(lambda g: g.nlargest(1, cap)["actual"].mean(), include_groups=False)
         top11 = gws.apply(lambda g: g.nlargest(11, name)["actual"].mean(), include_groups=False)
         out[name] = {
             "gameweeks": int(d["gw"].nunique()),
@@ -166,11 +170,31 @@ def evaluate(test: pd.DataFrame) -> dict:
             "gameweeks": int(d["gw"].nunique()),
             "mae": round(float((d["model"] - d["actual"]).abs().mean()), 3),
             "spearman": round(float(gws.apply(lambda g: _spearman(g["model"], g["actual"]), include_groups=False).mean()), 3),
-            "captain_pts": round(float(gws.apply(lambda g: g.nlargest(1, "model")["actual"].mean(), include_groups=False).mean()), 2),
+            "captain_pts": round(float(gws.apply(lambda g: g.nlargest(1, "captain")["actual"].mean(), include_groups=False).mean()), 2),
             "top11_pts": round(float(gws.apply(lambda g: g.nlargest(11, "model")["actual"].mean(), include_groups=False).mean()), 2),
         }
     out["model_vs_season_avg"] = paired_differences(pool)
+    out["fpl_xp_leak"] = xp_leak(per_gw)
     return out
+
+
+def xp_leak(per_gw: pd.DataFrame) -> dict:
+    """
+    Was the historical FPL xP set before the deadline? A pre-deadline forecast
+    can update on last week's points but not this week's. If the week-to-week
+    change in xP tracks this week's points, the column saw the result.
+    """
+    d = per_gw.sort_values(["element", "gw"]).copy()
+    g = d.groupby("element")
+    d["d_xp"] = d["fpl_xp"] - g["fpl_xp"].shift(1)
+    d["prev_actual"] = g["actual"].shift(1)
+    d = d[(d["fpl_xp"] != 0) & (g["fpl_xp"].shift(1) != 0)].dropna(subset=["d_xp", "prev_actual"])
+    if len(d) < 100:
+        return {}
+    return {
+        "corr_change_vs_this_gw": round(float(d["d_xp"].corr(d["actual"])), 3),
+        "corr_change_vs_last_gw": round(float(d["d_xp"].corr(d["prev_actual"])), 3),
+    }
 
 
 def paired_differences(pool: pd.DataFrame, n_boot: int = 5000, seed: int = 0) -> dict:
@@ -183,7 +207,8 @@ def paired_differences(pool: pd.DataFrame, n_boot: int = 5000, seed: int = 0) ->
     out = {}
     for metric, k in (("captain_pts", 1), ("top3_pts", 3), ("top11_pts", 11)):
         per_gw = pool.groupby("gw").apply(
-            lambda g: g.nlargest(k, "model")["actual"].mean() - g.nlargest(k, "season_avg")["actual"].mean(),
+            lambda g: g.nlargest(k, "captain" if k == 1 else "model")["actual"].mean()
+            - g.nlargest(k, "season_avg")["actual"].mean(),
             include_groups=False,
         ).to_numpy()
         boots = [rng.choice(per_gw, len(per_gw)).mean() for _ in range(n_boot)]

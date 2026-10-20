@@ -191,7 +191,8 @@ def test_briefing_squad_alerts_classify_correctly():
     assert 1 not in by_id, "healthy player should not be alerted"
     assert by_id[2]["flag"] == _FLAG_INJURED
     assert by_id[3]["flag"] == _FLAG_DOUBT
-    assert 4 not in by_id, "bench player should not be alerted"
+    assert by_id[4]["bench"] is True, "flagged bench player is alerted and marked bench"
+    assert by_id[2]["bench"] is False
     assert by_id[5]["flag"] == _FLAG_DOUBT
 
 

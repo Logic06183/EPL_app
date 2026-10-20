@@ -182,3 +182,17 @@ def test_captain_score_shrinks_toward_season_rate():
     assert xp.captain_horizon(1)[1] == pytest.approx(CAPTAIN_SHRINK * 7.0 + (1 - CAPTAIN_SHRINK) * 4.0 * 2)
     svc = PredictionService(xp=xp)
     assert svc.captain_score(2) == xp.captain_score(2)
+
+
+def test_captain_score_discounts_season_rate_by_availability():
+    from app.services.xp_service import XPService, CAPTAIN_SHRINK
+    s = XPService()
+    s.next_gw = 8
+    s.xp = {1: {8: 0.0}}
+    s.season_rate = {1: 8.0}
+    s.team_of = {1: 10}
+    s.fixture_counts = {(10, 8): 1}
+    s.avail = {1: 0.0}
+    assert s.captain_score(1) == 0.0
+    s.avail = {1: 1.0}
+    assert s.captain_score(1) == (1 - CAPTAIN_SHRINK) * 8.0

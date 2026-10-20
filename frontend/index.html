@@ -645,7 +645,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
     <span id="gwbadge"></span>
     <button id="plan-badge" type="button" class="plan-badge free" onclick="handleBadgeClick()">Free</button>
     <button class="auth-btn" id="auth-btn" onclick="handleAuthClick()">Sign in</button>
-    <button class="auth-btn" onclick="showUpgrade()" style="border-color:var(--goldd);color:var(--gold)">Go Pro</button>
+    <button class="auth-btn" id="gopro-btn" onclick="goProClick()" style="border-color:var(--goldd);color:var(--gold)">Go Pro</button>
   </div>
 </div>
 
@@ -659,7 +659,7 @@ a.ext-link:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border
       <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
       Continue with Google
     </button>
-    <p style="font-size:11px;color:var(--text3);margin-top:12px;margin-bottom:0">Free account · No credit card needed</p>
+    <p style="font-size:11px;color:var(--text3);margin-top:12px;margin-bottom:0">Sign in before 1 Aug 2027 and Pro stays free for life · No card needed</p>
   </div>
 </div>
 
@@ -984,12 +984,14 @@ const authReady = new Promise(r => { _authResolve = r; });
 // Whether Pro features are unlocked: paid Pro, Founder, or everyone during the
 // launch free period. Comes from /users/me so it matches the server's gating.
 let hasPro = false;
+let inGrace = false;
 
 async function refreshPlan(){
   try{
     const d = await apiFetch('/users/me');
     currentPlan = d.plan || 'free';
-    hasPro = currentPlan === 'pro' || currentPlan === 'founder' || !!(d.grace && d.grace.in_grace_period);
+    inGrace = !!(d.grace && d.grace.in_grace_period);
+    hasPro = currentPlan === 'pro' || currentPlan === 'founder' || inGrace;
   }catch{ currentPlan = 'free'; hasPro = false; }
 }
 
@@ -1018,7 +1020,20 @@ if(FB_READY){
   setTimeout(async ()=>{ await refreshPlan(); _authResolve(); applyPlanUI(); loadCaptain(); }, 0);
 }
 
+// During the free season the offer is "sign in = Pro free for life", not a price.
+function goProClick(){
+  if(inGrace && !currentUser){ track('founder_click'); document.getElementById('signin-modal').classList.remove('hidden'); return; }
+  showUpgrade();
+}
+
 function updateAuthUI(user, plan){
+  const gp = document.getElementById('gopro-btn');
+  if(gp){
+    const paid = plan==='pro' || plan==='founder';
+    gp.style.display = paid ? 'none' : '';
+    gp.textContent = inGrace ? 'Free Pro for life' : 'Go Pro';
+    gp.title = inGrace ? 'Sign in before the paywall (1 Aug 2027) and Pro stays free for life' : '';
+  }
   const btn   = document.getElementById('auth-btn');
   const badge = document.getElementById('plan-badge');
   if(user){
@@ -1409,7 +1424,8 @@ async function loadCaptain(){
         <div class="cap-num">${i===0?'👑 CAPTAIN PICK':`#${i+1} OPTION`}</div>
         <div class="cap-name">${p.name}</div>
         <div class="cap-team">${p.team_name}</div>
-        <div class="cap-pts">${(p.predicted_points||0).toFixed(1)}<span style="font-size:14px;color:var(--text3)"> pts</span></div>
+        <div class="cap-pts" title="Ranking score: 60% next-GW prediction, 40% season points per game">${(p.captain_score??p.predicted_points??0).toFixed(1)}<span style="font-size:14px;color:var(--text3)"> score</span></div>
+        <div style="font-size:11px;color:var(--text3)">xP ${(p.predicted_points||0).toFixed(1)} · ${(p.points_per_game||0).toFixed(1)} pts/game</div>
         <div class="cap-fix">
           <span class="fdr-dot" style="background:${fdrCol(p.fixture_difficulty||3)}"></span>
           <span style="color:var(--text2)">${p.fixture_opponent||'TBC'} ${home}</span>
@@ -1535,11 +1551,11 @@ function renderBriefing(b){
     <div class="brief-row">
       <span class="brief-tag ${flagClass(a.flag)}">${flagLabel(a.flag)}</span>
       <div style="flex:1;min-width:0">
-        <div class="brief-name">${escHtml(a.name)} <span style="color:var(--text3);font-weight:400">· ${escHtml(a.team_name)}</span></div>
+        <div class="brief-name">${escHtml(a.name)} <span style="color:var(--text3);font-weight:400">· ${escHtml(a.team_name)}${a.bench?' · bench':''}</span></div>
         ${a.news?`<div class="brief-meta">${escHtml(a.news)}</div>`:''}
         ${a.reason?`<div class="brief-reason">${escHtml(a.reason)}</div>`:''}
       </div>
-    </div>`).join('') : '<div class="brief-empty">No injury or price-drop concerns in your XI.</div>';
+    </div>`).join('') : '<div class="brief-empty">No injury or price-drop concerns in your squad.</div>';
 
   let capBlock='';
   if(cap){
@@ -1553,7 +1569,7 @@ function renderBriefing(b){
         <span style="font-size:18px">©</span>
         <div style="flex:1">
           <span class="brief-cap-name">${escHtml(cap.name)}</span>
-          <span class="brief-meta"> · ${escHtml(cap.team_name)}</span>${switchHint}
+          <span class="brief-meta"> · ${escHtml(cap.team_name)}${cap.after_transfer?' · after your transfer':''}</span>${switchHint}
           ${cap.reason?`<div class="brief-reason">${escHtml(cap.reason)}</div>`:''}
         </div>
         <span class="brief-cap-pred">${cap.predicted_points} pts</span>
@@ -1565,13 +1581,14 @@ function renderBriefing(b){
   if(xfer){
     xferBlock=`
     <div class="brief-section">
-      <div class="brief-h">Top transfer</div>
+      <div class="brief-h">Top transfer${xfer.of_plan>1?` · 1 of ${xfer.of_plan} in your plan`:''}</div>
+      ${b.plan_advice?`<div class="brief-meta" style="margin-bottom:6px">${escHtml(b.plan_advice)}</div>`:''}
       <div class="brief-row" style="border-bottom:none">
         <div style="flex:1;min-width:0">
           <div class="brief-name" style="color:var(--red)">↓ ${escHtml(xfer.sell.name)}</div>
           <div class="brief-meta">£${xfer.sell.price.toFixed(1)}m · ${xfer.sell.predicted_points} pred</div>
         </div>
-        <div class="brief-cap-pred" style="color:var(--green);font-size:13px">+${xfer.improvement}</div>
+        <div class="brief-cap-pred" style="color:var(--green);font-size:13px">+${xfer.improvement}${xfer.horizon?`<div style="font-size:9px;color:var(--text3)">${escHtml(xfer.horizon)}</div>`:''}</div>
         <div style="flex:1;min-width:0;text-align:right">
           <div class="brief-name" style="color:var(--green)">↑ ${escHtml(xfer.buy.name)}</div>
           <div class="brief-meta">£${xfer.buy.price.toFixed(1)}m · ${xfer.buy.predicted_points} pred</div>
@@ -1730,6 +1747,7 @@ async function loadPlan(id){
         <label style="font-size:11px;color:var(--text2)">Free transfers${d.free_transfers_estimated?' (estimated)':''}
           <select id="plan-ft" onchange="loadPlan(${id})" style="margin-left:4px">${ftOpts}</select></label>
       </div>
+      ${d.transfers_in.length&&(d.chips||[]).some(c=>c.chip==='wildcard'&&c.play_now)?`<div style="font-size:11px;color:var(--text2);margin-top:10px">If you keep the Wildcard, the best transfers are:</div>`:''}
       ${d.transfers_in.length?`<div class="tarrow" style="margin-top:10px">
         <div>${d.transfers_out.map(p=>row(p,'out')).join('')}</div><div class="tarr-icon">→</div>
         <div>${d.transfers_in.map(p=>row(p,'in')).join('')}</div></div>`:''}
@@ -2120,7 +2138,7 @@ let cdTimer;
 // ── Track record ──────────────────────────────────────
 function escHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function trNum(v,dp){return v==null?'—':Number(v).toFixed(dp);}
-function trRows(m,b,f){
+function trRows(m,b,f,leaky){
   // [label, key, decimals, higherIsBetter]
   // Columns: our model, season average and, when captured, FPL's own pre-deadline
   // expected points (the free number on the FPL site). Best value per row is green.
@@ -2129,14 +2147,14 @@ function trRows(m,b,f){
           ['Captain pick pts','captain_pts',1,true],['Top-11 pts per player','top11_pts',2,true]]
     .map(([label,k,dp,up])=>{
       const vals=cols.map(c=>c?.[k]);
-      const known=vals.filter(v=>v!=null);
+      const known=vals.filter((v,i)=>v!=null&&!(leaky&&i===2));
       const best=known.length>1?(up?Math.max(...known):Math.min(...known)):null;
-      return `<tr><td>${label}</td>${vals.map(v=>`<td class="${best!=null&&v===best?'win':''}">${trNum(v,dp)}</td>`).join('')}</tr>`;
+      return `<tr><td>${label}</td>${vals.map((v,i)=>leaky&&i===2?`<td style="color:var(--text3)">${trNum(v,dp)}*</td>`:`<td class="${best!=null&&v===best?'win':''}">${trNum(v,dp)}</td>`).join('')}</tr>`;
     }).join('');
 }
-function trTable(m,b,f){
-  return `<div class="tr-wrap"><table class="tr-tbl"><thead><tr><th></th><th>Our model</th><th>Season average</th>${f?`<th>FPL's own xP${f.gameweeks?` (${f.gameweeks} GW)`:''}</th>`:''}</tr></thead>
-    <tbody>${trRows(m,b,f)}</tbody></table></div>`;
+function trTable(m,b,f,leaky){
+  return `<div class="tr-wrap"><table class="tr-tbl"><thead><tr><th></th><th>Our model</th><th>Season average</th>${f?`<th>FPL's own xP${leaky?'*':''}${f.gameweeks?` (${f.gameweeks} GW)`:''}</th>`:''}</tr></thead>
+    <tbody>${trRows(m,b,f,leaky)}</tbody></table></div>`;
 }
 // Bootstrap 95% intervals for model minus season average (ml/train.py paired_differences)
 function trSig(d){
@@ -2146,6 +2164,18 @@ function trSig(d){
     <span style="color:var(${m.significant?(m.diff>0?'--green':'--red'):'--text2'})">${m.significant?(m.diff>0?'model better':'season average better'):'too close to call'}</span></div>`:'';
   return `<div style="font-size:11px;color:var(--text2);margin-top:8px;line-height:1.6;font-family:'DM Mono',monospace">
     ${row('Captain',d.captain_pts)}${row('Top 3',d.top3_pts)}${row('Top 11',d.top11_pts)}</div>`;
+}
+
+// Why the historical FPL xP column can't be beaten fairly (ml/train.py xp_leak)
+function trLeak(seasons){
+  const l=seasons.map(([,v])=>v.metrics?.fpl_xp_leak).find(x=>x&&x.corr_change_vs_this_gw!=null);
+  if(!l) return '';
+  return `<p style="font-size:11px;color:var(--text2);margin-top:10px;line-height:1.6">* FPL's xP in the public
+    historical data was recorded after kick-off, so it already knows part of the result. The test: a real forecast can react
+    to last week's points but not this week's. Week to week, that column moves with <b>this</b> week's points
+    (correlation ${l.corr_change_vs_this_gw.toFixed(2)}) and hardly with last week's (${l.corr_change_vs_last_gw.toFixed(2)}).
+    So it is shown for reference, not as a target. The fair test is FPL's number captured before each deadline,
+    which we save and score live from GW8 of 2026-27, in the table above.</p>`;
 }
 
 async function loadRecord(){
@@ -2173,7 +2203,8 @@ async function loadRecord(){
       h+=`<div class="tr-card"><h3>BACKTEST ON PAST SEASONS</h3>
         <p>Each season was predicted gameweek by gameweek by a model trained only on earlier seasons,
         so it never saw the results it was tested on. Compared with each player's season points-per-game so far.</p>
-        ${seasons.map(([s,v])=>`<h3 style="margin-top:12px">${escHtml(s)}</h3>${trTable(v.metrics?.model,v.metrics?.season_avg)}${trSig(v.metrics?.model_vs_season_avg)}`).join('')}
+        ${seasons.map(([s,v])=>`<h3 style="margin-top:12px">${escHtml(s)}</h3>${trTable(v.metrics?.model,v.metrics?.season_avg,v.metrics?.fpl_xp,true)}${trSig(v.metrics?.model_vs_season_avg)}`).join('')}
+        ${trLeak(seasons)}
       </div>`;
     }
     h+=`<div class="tr-card"><h3>HOW WE MEASURE</h3><p>${escHtml(d.method)} Rank correlation: 1 = perfect order, 0 = random.

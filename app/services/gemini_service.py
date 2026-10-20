@@ -153,6 +153,10 @@ DATA:
 WRITE THESE REASONS — every reason must add INSIGHT, not paraphrase the input.
 
 GOLDEN RULE: never just restate fields. If you can only restate, use "" (empty).
+CONSISTENCY: the captain and transfer are final decisions from the solver. Never
+advise against them. If an alert is about the captain, say what to watch for
+(e.g. "check team news before the deadline"), not "bench" or "replace as captain".
+The transfer improvement is over the next 3 gameweeks.
 
 EXAMPLES:
   alert news: "Knock - 75% chance of playing"

@@ -130,6 +130,7 @@ async def root():
 
 # Health check endpoint - compatible with both old and new frontend
 @app.get("/health")
+@app.get("/api/health")
 async def health_check():
     """Health check endpoint for monitoring"""
     return {

@@ -405,6 +405,8 @@ async def get_injuries(
             news   = player.get("news", "")
             if not news and (chance is None or chance >= 100):
                 continue
+            if player.get("status") == "u":   # left the club / on loan: not an injury
+                continue
 
             d = _enrich(player, teams, positions)
             d["news"]               = news

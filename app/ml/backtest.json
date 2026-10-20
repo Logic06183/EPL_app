@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-18T15:12:13+00:00",
+  "generated_at": "2026-10-20T09:15:49+00:00",
   "features": [
     "position_code",
     "value",
@@ -55,7 +55,7 @@
           "gameweeks": 37,
           "mae": 1.874,
           "spearman": 0.451,
-          "captain_pts": 7.89,
+          "captain_pts": 9.78,
           "top11_pts": 5.63
         },
         "season_avg": {
@@ -83,15 +83,15 @@
           "gameweeks": 34,
           "mae": 1.866,
           "spearman": 0.446,
-          "captain_pts": 7.97,
+          "captain_pts": 10.0,
           "top11_pts": 5.43
         },
         "model_vs_season_avg": {
           "captain_pts": {
-            "diff": -1.24,
+            "diff": 0.65,
             "ci95": [
-              -3.62,
-              1.19
+              -0.11,
+              1.62
             ],
             "significant": false
           },
@@ -111,6 +111,10 @@
             ],
             "significant": true
           }
+        },
+        "fpl_xp_leak": {
+          "corr_change_vs_this_gw": 0.401,
+          "corr_change_vs_last_gw": -0.059
         }
       }
     },
@@ -125,7 +129,7 @@
           "gameweeks": 37,
           "mae": 1.94,
           "spearman": 0.451,
-          "captain_pts": 6.03,
+          "captain_pts": 6.97,
           "top11_pts": 4.87
         },
         "season_avg": {
@@ -153,17 +157,17 @@
           "gameweeks": 10,
           "mae": 1.974,
           "spearman": 0.413,
-          "captain_pts": 6.3,
+          "captain_pts": 7.6,
           "top11_pts": 4.58
         },
         "model_vs_season_avg": {
           "captain_pts": {
-            "diff": -0.19,
+            "diff": 0.76,
             "ci95": [
-              -1.59,
-              1.22
+              0.03,
+              1.62
             ],
-            "significant": false
+            "significant": true
           },
           "top3_pts": {
             "diff": 0.86,
@@ -181,6 +185,10 @@
             ],
             "significant": false
           }
+        },
+        "fpl_xp_leak": {
+          "corr_change_vs_this_gw": 0.585,
+          "corr_change_vs_last_gw": 0.089
         }
       }
     }

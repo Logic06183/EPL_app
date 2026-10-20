@@ -169,6 +169,7 @@ class XPService:
         # Season points per fixture so far and team per player, for captain_score
         self.season_rate: Dict[int, float] = {}
         self.team_of: Dict[int, int] = {}
+        self.avail: Dict[int, float] = {}
         self.updated_at: Optional[datetime] = None
         self._failed_at: Optional[datetime] = None
         self._lock = asyncio.Lock()
@@ -239,6 +240,7 @@ class XPService:
             # Chance of playing applies to the next gw only; later gws assume fit
             for el, by_gw in raw.items():
                 by_gw[next_gw] = by_gw.get(next_gw, 0.0) * avail.get(el, 1.0)
+            self.avail = avail
             self.xp = raw
             self.next_gw = next_gw
             counts = pd.concat([fixtures[["team_h", "gw"]].rename(columns={"team_h": "team"}),
@@ -306,7 +308,10 @@ class XPService:
             return 0.0
         xp = self.xp.get(element_id, {}).get(gw, 0.0)
         nfix = self.fixture_counts.get((self.team_of.get(element_id), gw), 1)
-        return CAPTAIN_SHRINK * xp + (1 - CAPTAIN_SHRINK) * self.season_rate.get(element_id, 0.0) * nfix
+        rate = self.season_rate.get(element_id, 0.0) * nfix
+        if gw == self.next_gw:   # xP already carries the chance of playing; the rate must too
+            rate *= self.avail.get(element_id, 1.0)
+        return CAPTAIN_SHRINK * xp + (1 - CAPTAIN_SHRINK) * rate
 
     def captain_horizon(self, element_id: int) -> List[float]:
         """captain_score for each gameweek in the horizon (empty if not ready)."""
