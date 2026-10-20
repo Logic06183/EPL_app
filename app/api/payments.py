@@ -46,10 +46,9 @@ ALLOWED_RETURN_ORIGINS = [
     ).split(",") if o.strip()
 ]
 
-PAYFAST_API = (
-    "https://api.sandbox.payfast.co.za" if PAYFAST_SANDBOX
-    else "https://api.payfast.co.za"
-)
+# One API host for both; sandbox calls add ?testing=true
+PAYFAST_API = "https://api.payfast.co.za"
+PAYFAST_API_QUERY = "?testing=true" if PAYFAST_SANDBOX else ""
 
 FEATURES = [
     "Personal briefing every gameweek",
@@ -386,7 +385,7 @@ async def cancel_subscription(user: dict = Depends(get_current_user)):
         headers = _payfast_api_headers()
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.put(
-                f"{PAYFAST_API}/subscriptions/{token}/cancel",
+                f"{PAYFAST_API}/subscriptions/{token}/cancel{PAYFAST_API_QUERY}",
                 headers=headers,
             )
         if resp.status_code not in (200, 204):
